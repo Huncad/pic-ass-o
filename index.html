@@ -1140,6 +1140,14 @@
   /* drawing size slider: clearly visible and always grabbable */
   #screen-fulldraw .fd-toolbar{ touch-action:auto; }
   .fd-size-group{ position:relative; z-index:2; }
+  /* v2.84: on phones the colour picker + size slider get a row of their own;
+     before, the slider shared the row with the tools and was squeezed to
+     nothing (only its knob was left) */
+  @media (max-width:859px) and (orientation:portrait){
+    .fd-toolbar .fd-size-group{ flex:1 1 calc(100% - 90px); min-width:160px; display:flex; align-items:center; }
+    .fd-toolbar .fd-size-group input[type=range]{ width:100%; flex:1 1 auto; min-width:0; }
+  }
+  .fd-size-group input[type=range]{ min-width:120px; }
   .fd-size-group input[type=range]{
     -webkit-appearance:none; appearance:none; touch-action:auto; height:34px; background:transparent; cursor:pointer;
   }
@@ -8098,6 +8106,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.84', changes:[
+      'Javítva: telefonon a vonalvastagság-csúszka összenyomódott, csak a fogantyúja látszott. Most a színválasztóval együtt saját sort kap, teljes szélességben; az eszközgombok egy sorba férnek alatta.'
+    ]},
     { version:'2.83', changes:[
       'Javítva: a vonalvastagság-csúszka telefonon nem mozdult. Most nagyobb, jól látható sárga fogantyúja van.',
       'A visszaszámláló a felső sáv közepére került, a rajzolónál és a tippelőknél is; a rajzolandó szó alatta, saját sorban látszik.',
