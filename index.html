@@ -1770,7 +1770,15 @@ try{
 // v2.51: the game rooms themselves go back to Nostr — they worked there on
 // PCs, while joining over BitTorrent in v2.50 got stuck at "Csatlakozás…".
 // BitTorrent stays only for the room LIST (where phones had nothing).
-const roomJoin = joinRoom;
+// v2.79: the game rooms move to MQTT too (when it loaded). The volunteer
+// Nostr relays often never delivered the host to a phone on mobile data —
+// the guest waited 45 s with zero errors and zero peers, i.e. the two never
+// even met. MQTT is the network that reliably works for the room list, and
+// on a phone the room now shares that ONE connection pool instead of opening
+// a second one (two pools are exactly what iOS Safari struggles with).
+// Every device must run v2.79+: an older one would still look on Nostr.
+const ROOM_NET = TrysteroMqtt ? 'mqtt' : 'nostr';
+const roomJoin = TrysteroMqtt ? TrysteroMqtt.joinRoom : joinRoom;
 
 // =====================================================================
 // "Add to Home Screen" support (single file, so no separate manifest.json
@@ -4723,7 +4731,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         clearRoomActions();
         pendingLateSnapshot = null;
         setConnStatus('connecting', 'Kapcsolódás a hálózathoz…');
-        room = roomJoin(TRYSTERO_CFG, code, {
+        room = roomJoin(ROOM_NET === 'mqtt' ? MQTT_CFG : TRYSTERO_CFG, code, {
           handshakeTimeoutMs: HANDSHAKE_TIMEOUT_MS,
           onJoinError: (d)=>{
             roomConnErrors++;
@@ -5355,7 +5363,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(roomCode){
       let peers = 0;
       try{ peers = room && typeof room.getPeers === 'function' ? Object.keys(room.getPeers() || {}).length : 0; }catch(e){}
-      lines.push(`Szoba: ${roomCode} · ${isHost ? 'szobanyitó' : 'vendég'} · kapcsolódott társak: ${peers} · sikertelen kapcsolatépítések a szobában: ${roomConnErrors}`);
+      lines.push(`Szoba: ${roomCode} (hálózat: ${ROOM_NET}) · ${isHost ? 'szobanyitó' : 'vendég'} · kapcsolódott társak: ${peers} · sikertelen kapcsolatépítések a szobában: ${roomConnErrors}`);
     }
     recentConnErrors.forEach(e=>lines.push('Hiba: ' + e));
     if(IS_APPLE_WEBKIT) lines.push(`Apple böngészőmotor: igen${IS_IN_APP_BROWSER ? ' (beépített böngésző — pl. Messenger)' : ''} · helyi-cím javítás: ${appleNetUnlocked ? 'bekapcsolva' : 'nincs bekapcsolva'}`);
@@ -7967,6 +7975,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.79', changes:[
+      'A játékszobák is az MQTT hálózatot használják (eddig a sokszor akadozó Nostr-t). Mobilnetről csatlakozó telefon eddig gyakran meg sem találta a szobanyitót. Fontos: minden eszközön frissíteni kell az oldalt, mert a régebbi verzió még a régi hálózaton keresi a szobát.'
+    ]},
     { version:'2.78', changes:[
       'Javítva: lassú hálózaton (pl. mobilnetről) a csatlakozás gyakran csak a 3. próbálkozásra sikerült, mert a játék 12 másodpercenként megszakította és újrakezdte a majdnem kész kapcsolatot. Most egyetlen folyamatos próbálkozás tart legfeljebb 45 másodpercig, élő másodpercszámlálóval.'
     ]},
