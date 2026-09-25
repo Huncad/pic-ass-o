@@ -434,6 +434,13 @@
   .fd-word-label{ font-size:.8rem; color:var(--chalk-dim); font-weight:700; }
   .fd-word-text{ font-family:'Kalam',cursive; font-size:1.7rem; line-height:1.1; color:var(--yellow); text-shadow:0 2px 0 rgba(0,0,0,0.3); }
   .fd-word-bar .tier-badge{ margin:0; padding:2px 11px; font-size:.7rem; }
+  /* v2.82: the drawer doesn't need the difficulty label; a word too long for
+     the bar slides slowly back and forth instead of being cut off */
+  #fd-tier-badge{ display:none !important; }
+  #fd-word-text{ overflow:hidden; white-space:nowrap; text-overflow:clip !important; min-width:0; max-width:100%; }
+  #fd-word-text .fdw-inner{ display:inline-block; will-change:transform; }
+  #fd-word-text.scrolling .fdw-inner{ animation:fdwScroll var(--fdw-dur, 4s) ease-in-out infinite alternate; }
+  @keyframes fdwScroll{ 0%,18%{ transform:translateX(0); } 82%,100%{ transform:translateX(var(--fdw-shift, 0px)); } }
   .leave-btn{ white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
   .leave-btn .leave-ico{ font-size:1.05rem; line-height:1; }
   #fd-canvas-wrap{flex:1;position:relative;overflow:hidden;}
@@ -554,19 +561,21 @@
     /* tools: 3 tight rows — colours / tools & actions / own colour & size */
     /* v2.81: the bottom row (size slider) is lifted well clear of the
        home-indicator strip, where an upward swipe leaves the app */
-    .fd-toolbar{ display:flex; flex-wrap:wrap; gap:6px 8px; padding:7px 10px; padding-bottom:max(26px, calc(env(safe-area-inset-bottom, 0px) + 18px)); justify-content:space-between; }
+    /* v2.82: the size slider moved to the MIDDLE row (a swipe on it is the
+       risky gesture), the tool buttons go to the bottom, plus more room */
+    .fd-toolbar{ display:flex; flex-wrap:wrap; gap:6px 8px; padding:7px 10px; padding-bottom:max(40px, calc(env(safe-area-inset-bottom, 0px) + 28px)); justify-content:space-between; }
     .fd-toolbar .swatches{ order:1; flex:1 1 100%; flex-wrap:nowrap; justify-content:space-between; gap:3px; }
     .fd-toolbar .swatch{ width:27px; height:27px; flex-shrink:0; }
-    #fd-tools{ order:2; padding:3px; gap:3px; }
+    #fd-tools{ order:4; padding:3px; gap:3px; }
     #fd-tools .fd-tool{ padding:5px 8px; font-size:1rem; }
-    .fd-act{ order:3; padding:0; width:40px; height:34px; font-size:0 !important; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
+    .fd-act{ order:5; padding:0; width:40px; height:34px; font-size:0 !important; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
     .fd-act::before{ font-size:1.05rem; }
     #fd-btn-eraser::before{ content:"🧽"; }
     #fd-btn-undo::before{ content:"↶"; font-size:1.3rem; font-weight:800; }
     #fd-btn-clear::before{ content:"🗑️"; }
-    .fd-color-group{ order:4; padding:3px 6px; }
+    .fd-color-group{ order:2; padding:3px 6px; }
     .fd-color-group input[type=color]{ width:30px; height:26px; }
-    .fd-size-group{ order:5; flex:1 1 0; min-width:0; padding:3px 10px; }
+    .fd-size-group{ order:3; flex:1 1 0; min-width:0; padding:3px 10px; }
     .fd-size-group input[type=range]{ flex:1; min-width:0; width:auto; }
     .fd-size-label{ display:none; }
 
@@ -1384,7 +1393,7 @@
       </div>
     </div>
     <div style="text-align:center;margin-top:10px;">
-      <p class="center-note" style="margin-bottom:6px;">Akartok még egy partit?</p>
+      <p class="center-note" id="rematch-question" style="margin-bottom:6px;">Akartok még egy partit?</p>
       <div id="rematch-vote-buttons" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
         <button class="big" id="btn-rematch-yes" style="background:var(--green);">🔁 Igen, játszom tovább</button>
         <button class="big secondary" id="btn-rematch-no">🚪 Nem, kilépek</button>
@@ -1392,7 +1401,7 @@
       <p class="center-note hidden" id="gameend-waiting-note"></p>
       <p class="center-note hidden" id="gameend-alone-note" style="color:var(--red);"></p>
       <button class="big hidden" id="btn-restart" style="margin-top:6px;">Új parti indítása 🚀</button>
-      <p class="center-note" style="margin-top:10px;">
+      <p class="center-note" id="leave-to-home-wrap" style="margin-top:10px;">
         <a href="#" id="link-leave-to-home" style="color:var(--chalk-dim);">Kilépés az egész szobából</a>
       </p>
     </div>
@@ -6462,7 +6471,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     renderRosters();
     // The drawer keeps seeing the word while drawing (set BEFORE the canvas is
     // measured below, so the aspect ratio sent to the watchers includes the bar).
-    document.getElementById('fd-word-text').textContent = rd.word || '';
+    const fdWordEl = document.getElementById('fd-word-text');
+    fdWordEl.innerHTML = '';
+    const fdWordInner = document.createElement('span');
+    fdWordInner.className = 'fdw-inner';
+    fdWordInner.textContent = rd.word || '';
+    fdWordEl.appendChild(fdWordInner);
+    requestAnimationFrame(fitFdWord);
     const fdTier = TIER_INFO[rd.tier] || TIER_INFO.konnyu;
     const fdTierEl = document.getElementById('fd-tier-badge');
     fdTierEl.textContent = fdTier.label; fdTierEl.style.background = fdTier.color;
@@ -7733,7 +7748,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const warn = document.getElementById('rematch-warning');
     const hostGone = !!hostPeerId && !activePlayerIds.has(hostPeerId);
 
+    const question = document.getElementById('rematch-question');
+    const leaveWrap = document.getElementById('leave-to-home-wrap');
     if(!canRematch || hostGone){
+      // v2.82: no rematch possible → no rematch question either
+      question.classList.add('hidden');
+      leaveWrap.classList.remove('hidden');
       voteWrap.classList.add('hidden');
       waitNote.classList.add('hidden');
       restartBtn.classList.add('hidden');
@@ -7764,6 +7784,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const iVoted = rematchYesVotes.has(selfId);
 
     voteWrap.classList.toggle('hidden', iVoted || allYes);
+    // v2.82: the question only while it can still be answered; the extra
+    // "leave" link only when the "Nem, kilépek" button isn't already there
+    question.classList.toggle('hidden', iVoted || allYes);
+    leaveWrap.classList.toggle('hidden', !(iVoted || allYes));
     waitNote.classList.remove('hidden');
     waitNote.textContent = allYes
       ? (isHost ? '✅ Mindenki igent mondott — indítsd az új partit!' : '✅ Mindenki igent mondott — várd meg, míg a szobanyitó elindítja az új partit!')
@@ -8042,6 +8066,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.82', changes:[
+      'Rajzolóként a túl hosszú szó lassan oda-vissza gördül, így végig olvasható; a nehézségi címke (Könnyű/Közepes) a rajzolói sávról kikerült.',
+      'Telefonon a vonalvastagság-állító a középső sorba került, az eszközgombok alulra, és az alsó szél is több helyet kapott.',
+      'Játék végén az „Akartok még egy partit?” kérdés csak akkor látszik, ha még van kivel játszani és még lehet rá válaszolni.',
+      'A „Kilépés az egész szobából” link nem jelenik meg duplán a „Nem, kilépek” gomb mellett.'
+    ]},
     { version:'2.81', changes:[
       'Rajzolás közben a rajzlapon kívüli véletlen húzás már nem görgeti a képernyőt.',
       'Telefonon a vonalvastagság-állító feljebb került, távol az alsó sávtól, ahonnan véletlenül ki lehetett lépni az alkalmazásból.',
@@ -8691,8 +8721,21 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ if(isHost) withdrawMyRoom(); }catch(e){}
   };
 
+  // v2.82: long word on the drawer's bar → slow back-and-forth scroll
+  function fitFdWord(){
+    const el = document.getElementById('fd-word-text');
+    const inner = el && el.querySelector('.fdw-inner');
+    if(!inner) return;
+    const over = inner.scrollWidth - el.clientWidth;
+    if(over > 2){
+      el.style.setProperty('--fdw-shift', -(over + 6) + 'px');
+      el.style.setProperty('--fdw-dur', Math.max(2.5, (over + 6) / 30).toFixed(1) + 's');
+      el.classList.add('scrolling');
+    } else el.classList.remove('scrolling');
+  }
   let watchResizeTimer = null;
   function handleViewportChange(){
+    try{ fitFdWord(); }catch(e){}
     if(!document.getElementById('screen-fulldraw').classList.contains('hidden')){
       // the drawing itself is stored in relative (0–1) coordinates, so a
       // resize or rotation only needs a re-measure and a repaint
