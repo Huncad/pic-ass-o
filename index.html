@@ -6051,22 +6051,31 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     joinOrderIds = [selfId];
     lobbyPlayers = { [selfId]: myName };
 
-    // The very first peer-to-peer handshake (relay handshake + WebRTC/ICE
-    // negotiation) can sometimes take longer than a single short timeout,
-    // especially on mobile networks — so we retry a few times, with a
-    // generous window each time, before telling the person it failed.
-    const ATTEMPTS = 3;
-    const TIMEOUT_PER_ATTEMPT = 12000;
+    // v2.78: ONE continuous attempt instead of three short ones. A handshake
+    // through the relay (TURN) — typical on a phone on mobile data — can take
+    // 15–30 s; the old 12 s attempts left the room and started over, killing
+    // the handshake that was almost done, so often only the 3rd one got
+    // lucky. Now the same connection keeps going for up to 45 s, with a
+    // live counter so it's clear something is happening.
+    const JOIN_WAIT_MS = 45000;
     roomConnErrors = 0;
     let joined = false;
+    const joinT0 = Date.now();
+    const joinTick = setInterval(()=>{
+      const sec = Math.round((Date.now() - joinT0)/1000);
+      warn.style.color = 'var(--chalk-dim)';
+      warn.textContent = sec < 15
+        ? `Csatlakozás a szobához…\u00a0(${sec}\u00a0mp)`
+        : `Lassú a kapcsolat, még próbálkozom…\u00a0(${sec}\u00a0mp)`;
+    }, 1000);
     try{
-      for(let attempt=1; attempt<=ATTEMPTS; attempt++){
-        warn.style.color = 'var(--chalk-dim)';
-        warn.textContent = ATTEMPTS>1
-          ? `Csatlakozás a szobához…\u00a0(${attempt}/${ATTEMPTS})`
-          : 'Csatlakozás a szobához…';
-        const result = await connect(roomCode, { expectPeer:true, timeoutMs:TIMEOUT_PER_ATTEMPT });
-        if(result.metPeer){ joined = true; break; }
+      warn.style.color = 'var(--chalk-dim)';
+      warn.textContent = 'Csatlakozás a szobához…';
+      try{
+        const result = await connect(roomCode, { expectPeer:true, timeoutMs:JOIN_WAIT_MS });
+        if(result.metPeer) joined = true;
+      } finally { clearInterval(joinTick); }
+      if(!joined){
         try{ if(room && typeof room.leave === 'function') room.leave(); }catch(e){}
         room = null;
         clearRoomActions();
@@ -7958,6 +7967,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.78', changes:[
+      'Javítva: lassú hálózaton (pl. mobilnetről) a csatlakozás gyakran csak a 3. próbálkozásra sikerült, mert a játék 12 másodpercenként megszakította és újrakezdte a majdnem kész kapcsolatot. Most egyetlen folyamatos próbálkozás tart legfeljebb 45 másodpercig, élő másodpercszámlálóval.'
+    ]},
     { version:'2.77', changes:[
       'A kapcsolat állapota most a valóságot mutatja: csatlakozáskor „Keresem a szobát…”, sikertelen próbálkozás után pedig piros „Nem sikerült kapcsolódni” (korábban hibásan „Kapcsolódva” állt ott).',
       'Az állapotsor mellett ⓘ jel: csatlakozáskor és a váróteremben is megnyitható a hálózati jelentés, ami már a szoba saját kapcsolatának adatait is tartalmazza.'
