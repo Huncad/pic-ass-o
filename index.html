@@ -1165,6 +1165,16 @@
   #fd-canvas{ border-radius:6px; box-shadow:0 4px 18px rgba(0,0,0,.35); }
   .canvas-area{ background:rgba(0,0,0,0.22) !important; box-shadow:none !important; }
   #watch-canvas{ box-shadow:0 4px 18px rgba(0,0,0,.35); }
+
+  /* v2.86: drawer screen — dark "table" everywhere around the paper, the
+     paper centred, and the guess list as a proper dark card beside it */
+  #screen-fulldraw{ background:var(--bg) !important; }
+  @media (min-width:860px), (orientation:landscape) and (max-height:500px){
+    #fd-content-wrap{ justify-content:center; align-items:center; gap:14px; padding:10px; }
+    #fd-canvas-wrap{ flex:0 0 auto; background:transparent; overflow:visible; }
+    .fd-guess-feed{ align-self:stretch; margin:0 !important; background:var(--panel) !important;
+      border:1.5px solid rgba(244,241,230,0.12); border-radius:14px; box-shadow:0 4px 18px rgba(0,0,0,.3); color:var(--chalk-dim); }
+  }
 </style>
 </head>
 <body>
@@ -6560,12 +6570,28 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const ctx = canvas.getContext && canvas.getContext('2d');
     if(!ctx) return false;                       // no 2D canvas support
     fdCtx = ctx;
+    // v2.86: where the guess list sits BESIDE the drawing (PC, landscape
+    // phone), the drawing area is shrunk to exactly the square, so the list
+    // sits right next to the paper instead of across an empty dark strip
+    const wrapEl = document.getElementById('fd-canvas-wrap');
+    const cw = document.getElementById('fd-content-wrap');
+    if(cw && getComputedStyle(cw).flexDirection === 'row'){
+      const feed = document.getElementById('fd-guess-feed');
+      const fs = feed ? getComputedStyle(feed) : null;
+      const feedW = feed ? feed.offsetWidth + (parseFloat(fs.marginLeft)||0) + (parseFloat(fs.marginRight)||0) : 0;
+      const side = Math.max(120, Math.floor(Math.min(cw.clientHeight - 20, cw.clientWidth - feedW - 20)));
+      wrapEl.style.flex = `0 0 ${side}px`;
+      wrapEl.style.height = side + 'px';
+    } else { wrapEl.style.flex = ''; wrapEl.style.height = ''; }
     const { w, h, W, H } = fdCanvasSize();
     canvas.style.left = Math.floor((W - w)/2) + 'px';
     canvas.style.top = Math.floor((H - h)/2) + 'px';
     canvas.style.right = 'auto'; canvas.style.bottom = 'auto';
     canvas.style.width = w + 'px';
     canvas.style.height = h + 'px';
+    // the time bar runs along the top edge of the paper, not the whole screen
+    const tb = document.getElementById('fd-timebar');
+    if(tb){ tb.style.left = Math.floor((W - w)/2) + 'px'; tb.style.width = w + 'px'; tb.style.right = 'auto'; tb.style.top = Math.floor((H - h)/2) + 'px'; }
     const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
     canvas.width = Math.max(1, Math.round(w*dpr));
     canvas.height = Math.max(1, Math.round(h*dpr));
@@ -8123,6 +8149,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.86', changes:[
+      'A rajzolói képernyő gépen (és fekvő telefonon) rendbe téve: a rajzlap középen, a tipplista közvetlenül mellette, sötét kártyán; eltűnt a fehér sáv és a szürke doboz, az időcsík pedig a rajzlap tetején fut, nem a képernyő teljes szélességében.'
+    ]},
     { version:'2.85', changes:[
       'A rajzlap mostantól minden eszközön négyzet alakú: amekkora részre a rajzoló rajzolni tud, pontosan azt látja mindenki más is, telefonon és gépen egyaránt. A lapon kívüli rész sötét, így egyértelmű, hol a rajzlap széle.',
       'A kör végén nem ugrik fel külön felirat a kör eredménye fölé: az eredményképernyő címe személyre szabott lett („Eltaláltad!”, „… kitalálta a rajzodat!”).'
