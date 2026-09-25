@@ -1193,6 +1193,24 @@
   }
   .close-btn:hover{ background:rgba(255,209,102,0.28) !important; }
   .close-btn:active{ background:#FFD166 !important; color:#16302A !important; transform:scale(.95); }
+
+  /* v2.88: admin additions + home-screen announcement */
+  #announce-banner{ display:flex; align-items:flex-start; gap:10px; background:rgba(255,209,102,0.14); border:2px solid rgba(255,209,102,0.7);
+    border-radius:14px; padding:10px 12px; margin-bottom:16px; color:var(--chalk); font-weight:700; line-height:1.35; }
+  #announce-banner .ab-ico{ font-size:1.2rem; line-height:1.2; }
+  #announce-text{ flex:1; white-space:pre-wrap; word-break:break-word; }
+  #announce-banner .ab-close{ background:none; border:none; box-shadow:none; color:var(--chalk-dim); padding:0 4px; font-size:1rem; min-height:0; }
+  .dash-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(110px,1fr)); gap:8px; margin:6px 0 10px; }
+  .dash-tile{ background:rgba(0,0,0,0.25); border-radius:10px; padding:8px 10px; text-align:center; }
+  .dash-tile b{ display:block; font-size:1.4rem; color:var(--yellow); line-height:1.1; }
+  .dash-tile span{ font-size:.72rem; }
+  .dash-room{ display:flex; gap:8px; align-items:center; padding:4px 0; border-bottom:1px solid rgba(255,255,255,.06); color:var(--chalk); }
+  .dash-room small{ color:var(--chalk-dim); margin-left:auto; white-space:nowrap; }
+  .health-sec{ margin:8px 0; }
+  .health-sec h4{ margin:0 0 4px; font-size:.85rem; color:var(--chalk); }
+  .health-row{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; padding:3px 0; border-bottom:1px solid rgba(255,255,255,.06); }
+  .health-row .hw{ color:var(--chalk); font-weight:700; margin-right:auto; }
+  .health-row button{ padding:2px 8px; font-size:.72rem; min-height:0; box-shadow:none; }
 </style>
 </head>
 <body>
@@ -1232,6 +1250,10 @@
       <span style="left:10%; animation-duration:11s; animation-delay:3.1s; --drift:-24px;">✏️</span>
       <span style="left:52%; animation-duration:10.4s; animation-delay:3.6s; --drift:12px;">🎨</span>
       <span style="left:92%; animation-duration:7.9s; animation-delay:2.8s; --drift:-16px;">⭐</span>
+    </div>
+    <div id="announce-banner" class="hidden" role="status">
+      <span class="ab-ico">📢</span><span id="announce-text"></span>
+      <button type="button" id="announce-close" class="ab-close" aria-label="Közlemény bezárása">✕</button>
     </div>
     <div id="browser-warning" class="hidden" role="alert">
       <div style="font-size:1.5rem;">⚠️</div>
@@ -1795,7 +1817,42 @@
         <input type="password" id="admin-gh-token-2" placeholder="GitHub token (ghp_...)">
       </div>
       <button class="secondary small" id="admin-save-live-btn">☁️ Mentés élesben</button>
+      <div id="admin-dirty-note" class="hidden" style="color:var(--yellow);font-weight:800;margin-top:6px;">⚠️ Mentetlen módosítások — a változások csak a „Mentés élesben” után jutnak el a játékosokhoz.</div>
       <div id="admin-save-status" class="admin-warning"></div>
+    </div>
+
+    <div class="admin-note" id="admin-dash-box">
+      <div class="admin-panel-header" style="margin-bottom:6px;">
+        <strong style="color:var(--chalk);">📊 Élő áttekintés</strong>
+        <button class="ghost small" id="admin-dash-refresh" type="button">🔄 Frissítés</button>
+      </div>
+      <div id="admin-dash"></div>
+    </div>
+
+    <div class="admin-note" id="admin-announce-box">
+      <strong style="color:var(--chalk);">📢 Közlemény a kezdőképernyőn</strong><br>
+      Rövid üzenet minden játékosnak (pl. „Péntek este 8-kor közös parti!”, „Új szavak érkeztek!”). Az élő tárhelyre kerül,
+      ugyanazzal a GitHub tokennel, mint a szavak. Aki bezárja, annak az adott közlemény nem jelenik meg újra.
+      <textarea id="admin-announce-text" rows="2" maxlength="200" placeholder="A közlemény szövege (max. 200 karakter)…" style="width:100%;margin-top:8px;"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+        <select id="admin-announce-days" aria-label="Meddig látszódjon">
+          <option value="1">1 napig</option><option value="3">3 napig</option><option value="7" selected>1 hétig</option>
+          <option value="30">30 napig</option><option value="0">levételig</option>
+        </select>
+        <button class="secondary small" id="admin-announce-publish" type="button">📢 Közzététel</button>
+        <button class="ghost small" id="admin-announce-remove" type="button">🗑️ Levétel</button>
+      </div>
+      <div id="admin-announce-status" class="admin-warning" style="text-align:left;"></div>
+    </div>
+
+    <div class="admin-note" id="admin-health-box">
+      <div class="admin-panel-header" style="margin-bottom:6px;">
+        <strong style="color:var(--chalk);">🩺 Szólista-ellenőrzés</strong>
+        <button class="ghost small" id="admin-health-run" type="button">🔎 Ellenőrzés</button>
+      </div>
+      Megkeresi a mindkét listában szereplő, a túl hosszú (telefonon nehezen olvasható), a túl rövid és a furcsa
+      karaktereket (szám, írásjel) tartalmazó szavakat — egy kattintással törölheted őket.
+      <div id="admin-health" style="margin-top:8px;"></div>
     </div>
 
     <div class="admin-note" id="admin-music-box" style="margin-bottom:18px;">
@@ -2150,6 +2207,24 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   ];
   let WORDS = FALLBACK_WORDS;
 
+  // v2.88: the admin's announcement on the home screen (dismissed per message)
+  function showAnnouncement(a, force){
+    const box = document.getElementById('announce-banner');
+    if(!box) return;
+    const text = a && typeof a.text === 'string' ? a.text.trim().slice(0, 200) : '';
+    const id = a && typeof a.id === 'string' ? a.id.slice(0, 40) : '';
+    const until = a ? Number(a.until) || 0 : 0;
+    let dismissed = '';
+    try{ dismissed = localStorage.getItem('picasso-announce-dismissed') || ''; }catch(e){}
+    const show = !!text && (!until || until > Date.now()) && (force || dismissed !== id);
+    box.classList.toggle('hidden', !show);
+    if(!show) return;
+    document.getElementById('announce-text').textContent = text;
+    document.getElementById('announce-close').onclick = ()=>{
+      try{ localStorage.setItem('picasso-announce-dismissed', id); }catch(e){}
+      box.classList.add('hidden');
+    };
+  }
   async function loadWordFile(path, tier){
     try{
       const res = await fetch(path, {cache:'no-store'});
@@ -2178,6 +2253,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       try{
         const mf = data.files && data.files['zene.json'];
         if(mf && mf.content) musicPlaylistChanged(JSON.parse(mf.content));
+      }catch(e){}
+      // v2.88: home-screen announcement from the admin
+      try{
+        const af = data.files && data.files['kozlemeny.json'];
+        showAnnouncement(af && af.content ? JSON.parse(af.content) : null);
       }catch(e){}
       const file = data.files && data.files['szavak.json'];
       if(!file || !file.content) return null;
@@ -2254,6 +2334,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     }
   }
   function closeAdmin(){
+    if(adminIsDirty() && !confirm('Vannak mentetlen módosítások a szólistában. Így is bezárod? (A módosítások ezen az eszközön megmaradnak, amíg újra nem töltöd az oldalt.)')) return;
     document.getElementById('admin-overlay').classList.add('hidden');
     if(location.hash === '#admin'){
       history.replaceState(null, '', location.pathname + location.search);
@@ -2289,8 +2370,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   });
 
   function renderAdminPanel(){
+    if(adminSavedSnapshot === null) adminSavedSnapshot = currentWordsJson();
     renderAdminList('konnyu');
     renderAdminList('kozepes');
+    try{ renderAdminDash(); }catch(e){}
     try{ renderAdminMusic(); }catch(e){}
     // show the right cloud-storage section depending on one-time setup state
     document.getElementById('admin-cloud-setup').classList.toggle('hidden', !!WORDS_GIST_ID);
@@ -2325,6 +2408,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       </div>
     `).join('') : '<div class="admin-empty">Nincs találat.</div>';
     listEl.scrollTop = keepScroll;
+    try{ updateAdminDirty(); }catch(e){}
   }
   ['konnyu','kozepes'].forEach(tier=>{
     // one delegated click handler per list instead of one per row (1000+ rows)
@@ -2724,6 +2808,121 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       status.style.color = 'var(--red)';
       status.textContent = 'Hálózati hiba: ' + e.message;
     }
+  });
+
+  // =====================================================================
+  // v2.88 admin extras: unsaved-changes guard, live overview, announcement,
+  // word-list health check
+  // =====================================================================
+  let adminSavedSnapshot = null;
+  function adminIsDirty(){ return adminSavedSnapshot !== null && adminSavedSnapshot !== currentWordsJson(); }
+  function updateAdminDirty(){
+    const el = document.getElementById('admin-dirty-note');
+    if(el) el.classList.toggle('hidden', !adminIsDirty());
+  }
+  window.addEventListener('beforeunload', (e)=>{ if(adminIsDirty()){ e.preventDefault(); e.returnValue = ''; } });
+  document.getElementById('admin-save-live-btn').addEventListener('click', ()=>{
+    const st = document.getElementById('admin-save-status');
+    const snap = currentWordsJson();
+    const t0 = Date.now();
+    const iv = setInterval(()=>{
+      if(st.textContent.startsWith('✅')){ adminSavedSnapshot = snap; updateAdminDirty(); clearInterval(iv); }
+      else if(Date.now() - t0 > 20000) clearInterval(iv);
+    }, 300);
+  });
+  function adminGhToken(){
+    const a = document.getElementById('admin-gh-token-2'), b = document.getElementById('admin-gh-token');
+    return ((a && a.value) || (b && b.value) || adminTokenGet('gh') || '').trim();
+  }
+
+  // ---- live overview ----
+  function renderAdminDash(){
+    const el = document.getElementById('admin-dash');
+    if(!el) return;
+    let rooms = [];
+    try{ rooms = [...knownRooms.values()]; }catch(e){}
+    let peers = 0; try{ peers = directoryPeerCount(); }catch(e){}
+    const inGame = rooms.filter(r=>r.inGame).length;
+    const playersInRooms = rooms.reduce((a,r)=>a + (Number(r.players)||0), 0);
+    const konnyu = WORDS.filter(w=>w.tier==='konnyu').length, kozepes = WORDS.filter(w=>w.tier==='kozepes').length;
+    let tracks = 0; try{ tracks = MUSIC_TRACKS.length; }catch(e){}
+    const tiles = [
+      [peers + 1, 'játékos most online'], [rooms.length, 'nyitott szoba'], [inGame, 'játék folyamatban'],
+      [playersInRooms, 'játékos szobákban'], [konnyu, 'könnyű szó'], [kozepes, 'nehéz szó'], [tracks, 'zeneszám']
+    ];
+    el.innerHTML = `<div class="dash-grid">${tiles.map(([n,l])=>`<div class="dash-tile"><b>${n}</b><span>${l}</span></div>`).join('')}</div>` +
+      (rooms.length
+        ? rooms.sort((a,b)=>(b.players||0)-(a.players||0)).map(r=>`<div class="dash-room">${r.isPrivate ? '🔒' : '🌐'} <span>${escapeHtml(r.name || 'Névtelen szoba')}</span>
+            <small>${escapeHtml(r.hostName || '?')} · ${Number(r.players)||0}${r.max ? '/' + Number(r.max) : ''} fő${r.inGame ? ' · 🎮 játékban' : ' · váróteremben'}</small></div>`).join('')
+        : '<div style="color:var(--chalk-dim);">Most nincs nyitott szoba (vagy ez az eszköz még nem kapcsolódott a szobalistához).</div>') +
+      `<div style="margin-top:6px;font-size:.72rem;">Verzió: v${CHANGELOG[0].version} · a számok a szobalista-hálózatból jönnek, ezért pár másodperc késéssel frissülnek.</div>`;
+  }
+  document.getElementById('admin-dash-refresh').addEventListener('click', ()=>{ sndClick(); renderAdminDash(); });
+
+  // ---- announcement ----
+  async function adminWriteGistFile(name, content){
+    const token = adminGhToken();
+    if(!token) throw new Error('Add meg fent a GitHub tokent.');
+    if(!WORDS_GIST_ID) throw new Error('Előbb állítsd be az élő tárhelyet.');
+    saveGithubToken(token);
+    const res = await fetch(`https://api.github.com/gists/${WORDS_GIST_ID}`, {
+      method:'PATCH',
+      headers:{ 'Authorization':'token ' + token, 'Content-Type':'application/json', 'Accept':'application/vnd.github+json' },
+      body: JSON.stringify({ files: { [name]: { content } } })
+    });
+    if(!res.ok) throw new Error(res.status === 401 ? 'Érvénytelen token.' : `Hiba (${res.status}).`);
+  }
+  async function adminAnnounce(remove){
+    const st = document.getElementById('admin-announce-status');
+    const text = document.getElementById('admin-announce-text').value.trim().slice(0, 200);
+    if(!remove && !text){ st.style.color = 'var(--red)'; st.textContent = 'Írd be a közlemény szövegét.'; return; }
+    const days = Number(document.getElementById('admin-announce-days').value) || 0;
+    const obj = remove ? { text:'', id:'', until:0 }
+      : { text, id: Date.now().toString(36), until: days ? Date.now() + days*86400000 : 0 };
+    st.style.color = 'var(--chalk-dim)'; st.textContent = remove ? 'Levétel…' : 'Közzététel…';
+    try{
+      await adminWriteGistFile('kozlemeny.json', JSON.stringify(obj));
+      st.style.color = 'var(--green)';
+      st.textContent = remove ? '✅ Levéve.' : `✅ Közzétéve${days ? ` (${days} napig)` : ''} — a játékosok a következő betöltéskor látják.`;
+      if(remove) document.getElementById('admin-announce-text').value = '';
+      showAnnouncement(obj, true);
+    }catch(e){ st.style.color = 'var(--red)'; st.textContent = e.message; }
+  }
+  document.getElementById('admin-announce-publish').addEventListener('click', ()=>adminAnnounce(false));
+  document.getElementById('admin-announce-remove').addEventListener('click', ()=>{ if(confirm('Leveszed a közleményt?')) adminAnnounce(true); });
+
+  // ---- word-list health check ----
+  function renderAdminHealth(){
+    const el = document.getElementById('admin-health');
+    if(!el) return;
+    const byTier = { konnyu:new Set(), kozepes:new Set() };
+    WORDS.forEach(w=>{ if(byTier[w.tier]) byTier[w.tier].add(w.w); });
+    const both = [...byTier.konnyu].filter(w=>byTier.kozepes.has(w)).sort((a,b)=>a.localeCompare(b,'hu'));
+    const LONG = 16;
+    const long = WORDS.filter(w=>w.w.length > LONG);
+    const short = WORDS.filter(w=>w.w.length < 3);
+    const odd = WORDS.filter(w=>/[^a-záéíóöőúüűäß\- ]/i.test(w.w));
+    const lbl = { konnyu:'könnyű', kozepes:'nehéz' };
+    const row = (w, tier)=>`<div class="health-row"><span class="hw">${escapeHtml(w)}</span><small>${lbl[tier]}</small>
+      <button class="ghost small" data-hdel="${escapeHtml(w)}" data-htier="${tier}">🗑️ törlés</button></div>`;
+    const sec = (title, items)=> items ? `<div class="health-sec"><h4>${title}</h4>${items}</div>` : '';
+    const html =
+      sec(`🔁 Mindkét listában szerepel (${both.length})`, both.map(w=>`<div class="health-row"><span class="hw">${escapeHtml(w)}</span>
+          <button class="ghost small" data-hdel="${escapeHtml(w)}" data-htier="konnyu">könnyűből ki</button>
+          <button class="ghost small" data-hdel="${escapeHtml(w)}" data-htier="kozepes">nehézből ki</button></div>`).join('')) +
+      sec(`📏 Túl hosszú, ${LONG} betűnél több (${long.length})`, long.map(w=>row(w.w, w.tier)).join('')) +
+      sec(`🔹 Túl rövid, 3 betűnél kevesebb (${short.length})`, short.map(w=>row(w.w, w.tier)).join('')) +
+      sec(`❓ Szám vagy furcsa karakter (${odd.length})`, odd.map(w=>row(w.w, w.tier)).join(''));
+    el.innerHTML = html || '<div style="color:var(--green);font-weight:800;">✅ Minden rendben — nem találtam problémás szót.</div>';
+  }
+  document.getElementById('admin-health-run').addEventListener('click', ()=>{ sndClick(); renderAdminHealth(); });
+  document.getElementById('admin-health').addEventListener('click', (e)=>{
+    const b = e.target.closest('[data-hdel]');
+    if(!b) return;
+    const w = b.dataset.hdel, t = b.dataset.htier;
+    WORDS = WORDS.filter(item => !(item.w === w && item.tier === t));
+    renderAdminList(t);
+    renderAdminHealth();
   });
 
   const TIER_INFO = {
@@ -8167,6 +8366,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.88', changes:[
+      'Admin: élő áttekintés (online játékosok, nyitott szobák, folyamatban lévő játékok, szó- és zeneszámok).',
+      'Admin: közlemény a kezdőképernyőre, lejárati idővel — a játékosok bezárhatják.',
+      'Admin: szólista-ellenőrzés (mindkét listában szereplő, túl hosszú, túl rövid, furcsa karakteres szavak), egykattintásos törléssel.',
+      'Admin: figyelmeztetés mentetlen szólista-módosításokra, bezáráskor és az oldal elhagyásakor is.'
+    ]},
     { version:'2.87', changes:[
       'Telefonon tippelőként is 3 tipp látszik egyszerre (eddig csak 1), ugyanúgy, mint rajzolóként: egy tömör sor tippenként.',
       'Új külsőt kapott a rajzoló „közel?” gombja: halvány sárga, lapos kapszula a zöld, domború gomb helyett.'
