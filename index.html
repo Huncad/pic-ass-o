@@ -498,6 +498,13 @@
     .fd-word-text{ font-size:1.3rem; }
   }
   .swatches{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
+  /* v2.81: while drawing, the page itself can't scroll or rubber-band —
+     a stray swipe outside the canvas used to move the whole screen */
+  html.fd-open, html.fd-open body{ overflow:hidden; overscroll-behavior:none; height:100%; }
+  #screen-fulldraw, #fd-prepare{ overscroll-behavior:none; }
+  #screen-fulldraw .fd-status, #screen-fulldraw .fd-toolbar, #screen-fulldraw #fd-roster{ touch-action:none; }
+  #screen-fulldraw .fd-guess-feed{ touch-action:pan-y; overscroll-behavior:contain; }
+  #screen-fulldraw input[type=range]{ touch-action:pan-x; }
 
   /* ============ v2.69: phone (portrait) game layout ============
      One principle: the canvas is the game, so nothing may sit on top of it
@@ -545,9 +552,11 @@
     .fd-guess-feed .fd-guess-line{ min-height:26px; }
     .fd-guess-feed .close-btn{ padding:1px 9px; font-size:.72rem; line-height:1.3; border-width:1.5px; }
     /* tools: 3 tight rows — colours / tools & actions / own colour & size */
-    .fd-toolbar{ display:flex; flex-wrap:wrap; gap:6px 8px; padding:7px 10px; padding-bottom:max(8px, env(safe-area-inset-bottom)); justify-content:space-between; }
-    .fd-toolbar .swatches{ order:1; flex:1 1 100%; flex-wrap:nowrap; justify-content:space-between; gap:4px; }
-    .fd-toolbar .swatch{ width:28px; height:28px; flex-shrink:0; }
+    /* v2.81: the bottom row (size slider) is lifted well clear of the
+       home-indicator strip, where an upward swipe leaves the app */
+    .fd-toolbar{ display:flex; flex-wrap:wrap; gap:6px 8px; padding:7px 10px; padding-bottom:max(26px, calc(env(safe-area-inset-bottom, 0px) + 18px)); justify-content:space-between; }
+    .fd-toolbar .swatches{ order:1; flex:1 1 100%; flex-wrap:nowrap; justify-content:space-between; gap:3px; }
+    .fd-toolbar .swatch{ width:27px; height:27px; flex-shrink:0; }
     #fd-tools{ order:2; padding:3px; gap:3px; }
     #fd-tools .fd-tool{ padding:5px 8px; font-size:1rem; }
     .fd-act{ order:3; padding:0; width:40px; height:34px; font-size:0 !important; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
@@ -3483,6 +3492,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     document.getElementById('main-board').classList.toggle('wide-mode', ids.includes('screen-watch'));
     document.getElementById('screen-fulldraw').classList.toggle('hidden', !ids.includes('screen-fulldraw'));
     document.getElementById('fd-prepare').classList.toggle('hidden', !ids.includes('fd-prepare'));
+    document.documentElement.classList.toggle('fd-open', ids.includes('screen-fulldraw') || ids.includes('fd-prepare'));
     if(!ids.includes('screen-roundend')) showingRoundEnd = false;
     // The connection/code banner is only useful while still in the lobby
     // (sharing the code with others); hide it during actual gameplay.
@@ -6785,7 +6795,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ strokeAction.send(payload); }catch(e){}
   }
 
-  const FD_SWATCHES = ['#222222','#e63946','#f4a300','#ffd166','#2a9d8f','#457b9d','#7b2cbf','#f77fbe','#ffffff'];
+  const FD_SWATCHES = ['#222222','#8b5a2b','#e63946','#f4a300','#ffd166','#2a9d8f','#457b9d','#7b2cbf','#f77fbe','#ffffff'];   // v2.81: + brown
   const fdSwatchesEl = document.getElementById('fd-swatches');
   function refreshSwatchColors(){
     Array.from(fdSwatchesEl.children).forEach((el,i)=>{ if(FD_SWATCHES[i]) el.style.background = renderColorFor(FD_SWATCHES[i]); });
@@ -8032,6 +8042,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.81', changes:[
+      'Rajzolás közben a rajzlapon kívüli véletlen húzás már nem görgeti a képernyőt.',
+      'Telefonon a vonalvastagság-állító feljebb került, távol az alsó sávtól, ahonnan véletlenül ki lehetett lépni az alkalmazásból.',
+      'Új szín a palettán: barna.'
+    ]},
     { version:'2.80', changes:[
       'Fekvő mód telefonon teljesen átdolgozva: a játék a billentyűzet fölötti látható részhez igazodik, a chat és a reakció gomb a felső sávba került, a chat jobb oldali, teljes magasságú panelként nyílik, gépelés közben pedig a névsor és a feliratok eltűnnek, hogy a rajz és a beviteli mező kiférjen. A nagy (Pro Max) iPhone-okon is működik.'
     ]},
@@ -8694,6 +8709,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // keyboard shrinks it on iOS without resizing the page), and park the
   // chat / reaction buttons in the header row instead of over the canvas.
   const phonePortrait = window.matchMedia('(max-width:859px) and (orientation:portrait)');
+  // v2.81: iOS ignores overflow:hidden for a swipe that starts on a fixed
+  // element, so stray swipes on the drawing screen are also stopped here
+  // (the canvas, the guess list and sliders/inputs keep their own touches).
+  document.getElementById('screen-fulldraw').addEventListener('touchmove', (e)=>{
+    const t = e.target;
+    if(t && t.closest && (t.closest('#fd-canvas') || t.closest('.fd-guess-feed') || t.closest('input'))) return;
+    if(e.cancelable) e.preventDefault();
+  }, { passive:false });
   const phoneLandscape = window.matchMedia('(orientation:landscape) and (max-height:500px)');
   let vvTimer = null;
   function syncVisualViewport(){
