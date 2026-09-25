@@ -1042,6 +1042,63 @@
     .timer .tring{ width:22px; height:22px; }
     body:has(.board.wide-mode) #screen-watch .canvas-area .timebar{ left:4px; right:4px; top:4px; }
   }
+
+  /* ============ v2.80: phone LANDSCAPE game layout ============
+     A phone on its side has ~390 px of height, and the keyboard takes half
+     of it. Rules: the game screens follow the VISIBLE viewport (so nothing
+     hides behind the keyboard), the chat/reaction buttons sit in the top bar
+     instead of over the guess list, the chat opens as a full-height side
+     panel on the right, and with the keyboard up everything that isn't the
+     canvas or the input is folded away. Keyed on HEIGHT, so it also covers
+     the big iPhones whose landscape width is over 859 px. */
+  @media (orientation:landscape) and (max-height:500px){
+    body:has(.board.wide-mode){ padding:0; }
+    .board.wide-mode{ padding:0; }
+    body:has(.board.wide-mode) #screen-watch{
+      position:fixed; left:0; right:0; z-index:400; background:var(--bg);
+      display:flex; flex-direction:column; overflow:hidden;
+      padding:6px calc(env(safe-area-inset-right, 0px) + 10px) max(6px, env(safe-area-inset-bottom)) calc(env(safe-area-inset-left, 0px) + 10px);
+    }
+    #screen-fulldraw, body:has(.board.wide-mode) #screen-watch{
+      top:var(--vvtop, 0px); bottom:auto; height:var(--vvh, 100%);
+    }
+    body:has(.board.wide-mode) #screen-watch .watch-top{ margin-bottom:4px; flex-shrink:0; }
+    body:has(.board.wide-mode) #screen-watch .watch-top .leave-txt{ display:none; }
+    body:has(.board.wide-mode) #screen-watch .roster{ margin:0 0 4px; padding:0; box-shadow:none; background:none; flex-shrink:0; min-height:0; }
+    body:has(.board.wide-mode) #screen-watch #watch-live{ flex:1; min-height:0; display:flex; }
+    body:has(.board.wide-mode) #screen-watch .watch-content-wrap{ flex:1; min-height:0; flex-direction:row; align-items:stretch; gap:8px; }
+    body:has(.board.wide-mode) #screen-watch .canvas-area{ flex:1; min-width:0; min-height:0; height:auto; padding:4px; }
+    body:has(.board.wide-mode) #screen-watch .guess-sidebar{
+      width:min(250px, 34vw); flex:0 0 auto; min-height:0; display:flex; flex-direction:column; gap:6px;
+    }
+    body:has(.board.wide-mode) #screen-watch .guess-inputs{ flex-shrink:0; }
+    body:has(.board.wide-mode) #screen-watch .guess-inputs h3{ display:none; }
+    body:has(.board.wide-mode) #screen-watch .guess-feed{ flex:1; min-height:0; max-height:none; padding:5px 10px; margin:0; overflow-y:auto; }
+    body:has(.board.wide-mode) #screen-watch .guess-feed h3{ margin:0 0 4px; font-size:.85rem; }
+    body:has(.board.wide-mode) #screen-watch .guess-row input{ padding:8px 10px; font-size:16px; }
+
+    /* buttons in the top bar */
+    body.fabs-top #chat-toggle-btn{ top:var(--fab-top); bottom:auto; right:calc(env(safe-area-inset-right, 0px) + 10px); width:38px; height:38px; font-size:1.05rem; box-shadow:0 3px 10px rgba(0,0,0,.35); }
+    body.fabs-top #reaction-toggle-btn{ top:calc(var(--fab-top) + 1px); bottom:auto; right:calc(env(safe-area-inset-right, 0px) + 54px); width:36px; height:36px; font-size:1rem; box-shadow:0 3px 10px rgba(0,0,0,.35); }
+    body.fabs-top #reaction-picker{ top:calc(var(--fab-top) + 44px); bottom:auto; right:calc(env(safe-area-inset-right, 0px) + 10px); }
+    body.fabs-top .fd-status, body.fabs-top #screen-watch .watch-top{ padding-right:100px !important; }
+
+    /* chat: full-height panel on the right, inside the visible area */
+    #chat-panel, #chat-panel.emoji-open{
+      top:calc(var(--vvtop, 0px) + 6px); bottom:auto; left:auto;
+      right:calc(env(safe-area-inset-right, 0px) + 8px);
+      width:min(380px, 48vw); height:calc(var(--vvh, 100vh) - 12px); max-height:none;
+    }
+    #chat-panel #chat-messages, #chat-panel.emoji-open #chat-messages{ min-height:0; }
+    #chat-header{ padding:6px 12px; font-size:1rem; }
+
+    /* keyboard up: keep only what's needed to type and to see the drawing */
+    body.kb-open:has(.board.wide-mode) #screen-watch .roster{ display:none; }
+    body.kb-open:has(.board.wide-mode) #screen-watch .watch-top{ margin-bottom:2px; }
+    body.kb-open:has(.board.wide-mode) #screen-watch .guess-feed h3{ display:none; }
+    body.kb-open:has(.board.wide-mode) #screen-watch{ padding-top:2px; padding-bottom:2px; }
+    body.kb-open #chat-header{ padding:3px 10px; }
+  }
 </style>
 </head>
 <body>
@@ -7975,6 +8032,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.80', changes:[
+      'Fekvő mód telefonon teljesen átdolgozva: a játék a billentyűzet fölötti látható részhez igazodik, a chat és a reakció gomb a felső sávba került, a chat jobb oldali, teljes magasságú panelként nyílik, gépelés közben pedig a névsor és a feliratok eltűnnek, hogy a rajz és a beviteli mező kiférjen. A nagy (Pro Max) iPhone-okon is működik.'
+    ]},
     { version:'2.79', changes:[
       'A játékszobák is az MQTT hálózatot használják (eddig a sokszor akadozó Nostr-t). Mobilnetről csatlakozó telefon eddig gyakran meg sem találta a szobanyitót. Fontos: minden eszközön frissíteni kell az oldalt, mert a régebbi verzió még a régi hálózaton keresi a szobát.'
     ]},
@@ -8634,6 +8694,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // keyboard shrinks it on iOS without resizing the page), and park the
   // chat / reaction buttons in the header row instead of over the canvas.
   const phonePortrait = window.matchMedia('(max-width:859px) and (orientation:portrait)');
+  const phoneLandscape = window.matchMedia('(orientation:landscape) and (max-height:500px)');
   let vvTimer = null;
   function syncVisualViewport(){
     const vv = window.visualViewport; if(!vv) return;
@@ -8646,7 +8707,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   function placeGameFabs(){
     let on = false;
-    if(phonePortrait.matches){
+    if(phonePortrait.matches || phoneLandscape.matches){
       const fd = document.getElementById('screen-fulldraw');
       const wt = document.getElementById('screen-watch');
       const scr = !fd.classList.contains('hidden') ? fd : (!wt.classList.contains('hidden') ? wt : null);
