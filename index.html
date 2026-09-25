@@ -2661,9 +2661,20 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   ['pointerdown','touchend','keydown'].forEach(ev=>
     document.addEventListener(ev, onAudioGesture, { capture:true, passive:true }));
+  // v2.76: music and sounds stop while the game is in the background (other
+  // app, locked screen, other tab) and come back when it returns. iOS keeps
+  // an <audio> element playing in the background unless it is paused.
+  function onPageHiddenAudio(){
+    try{ musicStopNow(); }catch(e){}
+    try{ if(actx && actx.state === 'running') actx.suspend(); }catch(e){}
+  }
   document.addEventListener('visibilitychange', ()=>{
-    if(document.visibilityState === 'visible' && masterSoundEnabled) wakeAudio();
+    if(document.visibilityState === 'hidden'){ onPageHiddenAudio(); return; }
+    if(masterSoundEnabled) wakeAudio();
+    try{ if(musicWanted) musicSync(); }catch(e){}
   });
+  window.addEventListener('pagehide', onPageHiddenAudio);
+  window.addEventListener('blur', ()=>{ if(document.visibilityState === 'hidden') onPageHiddenAudio(); });
   function audioCtx(){
     if(!actx){
       applyAudioSession();
@@ -2851,6 +2862,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     return true;
   }
   function musicStart(){
+    if(document.visibilityState === 'hidden') return;   // v2.76: never start in the background
     ensureMusicEl();
     ensureMusicGraph();
     if(musicFadeTimer){ clearTimeout(musicFadeTimer); musicFadeTimer = null; }
@@ -6040,7 +6052,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       for(let attempt=1; attempt<=ATTEMPTS; attempt++){
         warn.style.color = 'var(--chalk-dim)';
         warn.textContent = ATTEMPTS>1
-          ? `Csatlakozás a szobához… (${attempt}. próbálkozás / ${ATTEMPTS})`
+          ? `Csatlakozás a szobához…\u00a0(${attempt}/${ATTEMPTS})`
           : 'Csatlakozás a szobához…';
         const result = await connect(roomCode, { expectPeer:true, timeoutMs:TIMEOUT_PER_ATTEMPT });
         if(result.metPeer){ joined = true; break; }
@@ -7934,6 +7946,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.76', changes:[
+      'Javítva: a zene (főleg iPhone-on) akkor is szólt, ha a játék a háttérben volt. Most elhallgat, és visszatéréskor folytatódik.',
+      'Javítva: csatlakozáskor a próbálkozás-számláló csúnyán tört két sorba.'
+    ]},
     { version:'2.75', changes:[
       'A QR-kód kikerült a váróteremből.',
       'Hangerő és sötét mód minden képernyőn: ahol nincs saját menü, a jobb felső sarokban ⚙️ gomb nyitja meg.',
