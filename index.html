@@ -287,13 +287,12 @@
      group dissolves (display:contents) so its children line up directly
      beside the timer instead of wrapping into extra rows. */
   @media (max-width:859px){
-    .watch-top{ display:flex; flex-wrap:nowrap; align-items:center; gap:6px; }
-    .watch-top-left{ display:contents; }
+    .watch-top{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:6px; }
+    .watch-top-left{ display:flex; align-items:center; gap:6px; min-width:0; flex-wrap:nowrap; }
     .watch-top .leave-btn{ order:1; flex-shrink:0; padding:6px 10px; }
     .watch-top .timer{ order:2; flex-shrink:0; font-size:1.35rem; min-width:54px; padding:2px 10px; }
     #watch-round-indicator{ order:3; flex-shrink:0; white-space:nowrap; padding:4px 8px; font-size:.74rem; }
     #watch-round-indicator:empty{ display:none; }
-    #watch-hint-chip{ order:4; flex:1 1 auto; min-width:0; max-width:none; padding:4px 8px; font-size:.78rem; line-height:1.25; }
     .watch-top > div:last-child:empty{ display:none; }
   }
   /* Very narrow phones: the door icon alone is enough for Kilépés. */
@@ -509,9 +508,8 @@
      a stray swipe outside the canvas used to move the whole screen */
   html.fd-open, html.fd-open body{ overflow:hidden; overscroll-behavior:none; height:100%; }
   #screen-fulldraw, #fd-prepare{ overscroll-behavior:none; }
-  #screen-fulldraw .fd-status, #screen-fulldraw .fd-toolbar, #screen-fulldraw #fd-roster{ touch-action:none; }
+  #screen-fulldraw .fd-status, #screen-fulldraw #fd-roster{ touch-action:none; }
   #screen-fulldraw .fd-guess-feed{ touch-action:pan-y; overscroll-behavior:contain; }
-  #screen-fulldraw input[type=range]{ touch-action:pan-x; }
 
   /* ============ v2.69: phone (portrait) game layout ============
      One principle: the canvas is the game, so nothing may sit on top of it
@@ -1117,6 +1115,41 @@
     body.kb-open:has(.board.wide-mode) #screen-watch{ padding-top:2px; padding-bottom:2px; }
     body.kb-open #chat-header{ padding:3px 10px; }
   }
+
+  /* ============ v2.83 ============ */
+  /* letter hint: a pill at the top centre of the canvas, readable on any
+     paper colour (dark glass + yellow outline), never catches touches */
+  #watch-hint-chip{
+    position:absolute; top:16px; left:50%; transform:translateX(-50%); z-index:4; pointer-events:none;
+    max-width:calc(100% - 28px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    background:rgba(12,22,19,0.82); color:#FFD166; border:2px solid #FFD166; border-radius:999px;
+    padding:5px 16px; font-family:'Nunito',sans-serif; font-weight:800; font-size:1.15rem; letter-spacing:2px;
+    box-shadow:0 3px 12px rgba(0,0,0,.35); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
+  }
+  @media (max-width:859px), (orientation:landscape) and (max-height:500px){
+    #watch-hint-chip{ top:12px; font-size:1rem; padding:3px 12px; letter-spacing:1.5px; }
+  }
+  /* countdown in the middle of the top bar; the empty right column leaves
+     room for the chat/reaction buttons, so no extra padding is needed */
+  body.fabs-top #screen-watch .watch-top{ padding-right:0 !important; }
+  .fd-status{ grid-template-columns:1fr auto 1fr !important; grid-template-areas:"menu timer ." "word word word"; row-gap:4px; }
+  .fd-status > div:first-child{ grid-area:menu; }
+  .fd-status #fd-timer{ grid-area:timer; justify-self:center; }
+  .fd-status #fd-word-bar{ grid-area:word; justify-content:center !important; min-width:0; }
+  body.fabs-top .fd-status{ padding-right:10px !important; }
+  /* drawing size slider: clearly visible and always grabbable */
+  #screen-fulldraw .fd-toolbar{ touch-action:auto; }
+  .fd-size-group{ position:relative; z-index:2; }
+  .fd-size-group input[type=range]{
+    -webkit-appearance:none; appearance:none; touch-action:auto; height:34px; background:transparent; cursor:pointer;
+  }
+  .fd-size-group input[type=range]::-webkit-slider-runnable-track{ height:8px; border-radius:99px; background:rgba(244,241,230,0.35); }
+  .fd-size-group input[type=range]::-moz-range-track{ height:8px; border-radius:99px; background:rgba(244,241,230,0.35); }
+  .fd-size-group input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:28px; height:28px; margin-top:-10px; border-radius:50%;
+    background:#FFD166; border:3px solid #16302A; box-shadow:0 2px 6px rgba(0,0,0,.4);
+  }
+  .fd-size-group input[type=range]::-moz-range-thumb{ width:26px; height:26px; border-radius:50%; background:#FFD166; border:3px solid #16302A; }
 </style>
 </head>
 <body>
@@ -1335,7 +1368,6 @@
       <div class="watch-top-left">
         <button class="ghost small menu-open-btn leave-btn" title="Menü" aria-label="Menü megnyitása"><span class="leave-ico">☰</span> <span class="leave-txt">Menü</span></button>
         <div id="watch-round-indicator" class="challenge-chip" style="background:rgba(0,0,0,0.2);border-style:solid;border-color:rgba(244,241,230,0.2);color:var(--chalk-dim);"></div>
-        <div id="watch-hint-chip" class="challenge-chip hidden" style="background:rgba(0,0,0,0.2);border-style:solid;border-color:var(--yellow);color:var(--yellow);"></div>
       </div>
       <div class="timer" id="watch-timer">--</div>
       <div></div>
@@ -1347,7 +1379,7 @@
     </div>
     <div id="watch-live" class="hidden">
       <div class="watch-content-wrap">
-        <div class="canvas-area"><div class="timebar" id="watch-timebar" aria-hidden="true"><i></i></div><canvas id="watch-canvas" width="900" height="500"></canvas></div>
+        <div class="canvas-area"><div class="timebar" id="watch-timebar" aria-hidden="true"><i></i></div><div id="watch-hint-chip" class="hidden" aria-live="polite"></div><canvas id="watch-canvas" width="900" height="500"></canvas></div>
         <div class="guess-sidebar">
           <div class="guess-inputs">
             <h3>Tipped</h3>
@@ -6990,7 +7022,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function showHint(mask){
     lastHintMask = mask;
     const chip = document.getElementById('watch-hint-chip');
-    chip.textContent = `💡 ${mask}`;
+    chip.textContent = mask;
     chip.classList.remove('hidden');
   }
   function computeHintMask(word, revealedCount){
@@ -8066,6 +8098,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.83', changes:[
+      'Javítva: a vonalvastagság-csúszka telefonon nem mozdult. Most nagyobb, jól látható sárga fogantyúja van.',
+      'A visszaszámláló a felső sáv közepére került, a rajzolónál és a tippelőknél is; a rajzolandó szó alatta, saját sorban látszik.',
+      'A betűsegéd a rajzlap tetején középen jelenik meg, sötét alapon sárga keretben, így bármilyen színű a rajz, jól olvasható, és nem takarja a rajzolást.'
+    ]},
     { version:'2.82', changes:[
       'Rajzolóként a túl hosszú szó lassan oda-vissza gördül, így végig olvasható; a nehézségi címke (Könnyű/Közepes) a rajzolói sávról kikerült.',
       'Telefonon a vonalvastagság-állító a középső sorba került, az eszközgombok alulra, és az alsó szél is több helyet kapott.',
