@@ -588,13 +588,13 @@
     body:has(.board.wide-mode) #screen-watch .guess-inputs h3,
     body:has(.board.wide-mode) #screen-watch .guess-feed h3{ display:none; }
     /* list first, input last: the input sits right above the keyboard/thumb */
-    body:has(.board.wide-mode) #screen-watch .guess-feed{ order:1; flex:0 0 auto; height:70px; max-height:none; padding:5px 10px; margin:0; overflow-y:auto; }
+    body:has(.board.wide-mode) #screen-watch .guess-feed{ order:1; flex:0 0 auto; height:92px; max-height:none; padding:5px 10px; margin:0; overflow-y:auto; }
     body:has(.board.wide-mode) #screen-watch .guess-inputs{ order:2; }
     body:has(.board.wide-mode) #screen-watch .guess-row input{ font-size:16px; padding:10px 12px; }   /* 16px: iOS won't zoom in */
     body:has(.board.wide-mode) #screen-watch .guess-row button{ padding:10px 16px; }
     /* keyboard open: every pixel goes to the drawing */
     body.kb-open:has(.board.wide-mode) #screen-watch .roster{ display:none; }
-    body.kb-open:has(.board.wide-mode) #screen-watch .guess-feed{ height:48px; }
+    body.kb-open:has(.board.wide-mode) #screen-watch .guess-feed{ height:92px; }
   }
   /* v2.55: drawing tools (pen / fill / line / ellipse) */
   .fd-tool{ padding:6px 9px; font-size:1.05rem; line-height:1; }
@@ -1175,6 +1175,24 @@
     .fd-guess-feed{ align-self:stretch; margin:0 !important; background:var(--panel) !important;
       border:1.5px solid rgba(244,241,230,0.12); border-radius:14px; box-shadow:0 4px 18px rgba(0,0,0,.3); color:var(--chalk-dim); }
   }
+
+  /* v2.87: phone guessers see 3 guesses at once, same as the drawer:
+     one compact line per guess (avatar · name · guess) */
+  @media (max-width:859px) and (orientation:portrait){
+    body:has(.board.wide-mode) #screen-watch .guess-feed .gentry{ align-items:center; gap:7px; padding:2px 2px; min-height:26px; border-bottom:0; }
+    body:has(.board.wide-mode) #screen-watch .guess-feed .rav{ width:20px; height:20px; font-size:.68rem; }
+    body:has(.board.wide-mode) #screen-watch .guess-feed .gbody{ display:flex; align-items:baseline; gap:7px; min-width:0; }
+    body:has(.board.wide-mode) #screen-watch .guess-feed .gname{ font-size:.8rem; flex-shrink:0; max-width:45%; white-space:nowrap; overflow:hidden; }
+    body:has(.board.wide-mode) #screen-watch .guess-feed .gtext{ margin:0; font-size:.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  }
+  /* the drawer's "közel?" button: a light pill instead of a 3D green button */
+  .close-btn, .fd-guess-feed .close-btn{
+    background:rgba(255,209,102,0.14) !important; color:#FFD166 !important; border:1.5px solid rgba(255,209,102,0.75) !important;
+    box-shadow:none !important; border-radius:999px; font-weight:800; font-size:.74rem; line-height:1.2;
+    padding:3px 10px; min-height:0; transform:none;
+  }
+  .close-btn:hover{ background:rgba(255,209,102,0.28) !important; }
+  .close-btn:active{ background:#FFD166 !important; color:#16302A !important; transform:scale(.95); }
 </style>
 </head>
 <body>
@@ -7326,7 +7344,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function closeControlHtml(gid, peerId, correct){
     if(!gid || correct) return '';
     const iAmDrawer = currentRound && currentRound.drawerId === selfId;
-    if(iAmDrawer && peerId !== selfId) return `<button class="close-btn" type="button" data-close-gid="${gid}" title="Jelöld meg, ha közel jár a megoldáshoz">〰 közel</button>`;
+    if(iAmDrawer && peerId !== selfId) return `<button class="close-btn" type="button" data-close-gid="${gid}" title="Jelöld meg, ha közel jár a megoldáshoz">közel?</button>`;
     return '';
   }
   function applyCloseMark(gid){
@@ -8149,6 +8167,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.87', changes:[
+      'Telefonon tippelőként is 3 tipp látszik egyszerre (eddig csak 1), ugyanúgy, mint rajzolóként: egy tömör sor tippenként.',
+      'Új külsőt kapott a rajzoló „közel?” gombja: halvány sárga, lapos kapszula a zöld, domború gomb helyett.'
+    ]},
     { version:'2.86', changes:[
       'A rajzolói képernyő gépen (és fekvő telefonon) rendbe téve: a rajzlap középen, a tipplista közvetlenül mellette, sötét kártyán; eltűnt a fehér sáv és a szürke doboz, az időcsík pedig a rajzlap tetején fut, nem a képernyő teljes szélességében.'
     ]},
