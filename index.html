@@ -122,6 +122,7 @@
   .conn-status .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-right:5px; }
   .conn-status.connecting .dot{ background:var(--yellow); }
   .conn-status.error .dot{ background:var(--red); }
+  .conn-diag-btn{ background:none; border:none; box-shadow:none; color:inherit; font-size:.95rem; padding:0 4px; margin:0; cursor:pointer; vertical-align:middle; min-height:0; }
 
   button{
     font-family:'Nunito',sans-serif; font-weight:800; cursor:pointer; border:none;
@@ -1057,7 +1058,7 @@
       <div class="subtitle">Rajzolj a saját eszközödön, a többiek élőben tippelnek a sajátjukon</div>
     </div>
   </div>
-  <div id="conn-status" class="conn-status hidden"><span class="dot"></span><span id="conn-status-text"></span></div>
+  <div id="conn-status" class="conn-status hidden"><span class="dot"></span><span id="conn-status-text"></span> <button type="button" id="conn-diag-btn" class="conn-diag-btn" title="Hálózati részletek" aria-label="Hálózati részletek megjelenítése">ⓘ</button></div>
 
   <div id="screen-error" class="hidden">
     <div class="error-box">
@@ -3400,6 +3401,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let localTickTimer = null;
   let lastTickPlayed = null;
 
+  document.getElementById('conn-diag-btn').addEventListener('click', (e)=>{ e.stopPropagation(); showNetDiagnostics(); });
   function setConnStatus(kind, text){
     const el = document.getElementById('conn-status');
     el.classList.remove('hidden','connecting','error');
@@ -3419,7 +3421,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!ids.includes('screen-roundend')) showingRoundEnd = false;
     // The connection/code banner is only useful while still in the lobby
     // (sharing the code with others); hide it during actual gameplay.
-    document.getElementById('conn-status').classList.toggle('hidden', !ids.includes('screen-lobby'));
+    document.getElementById('conn-status').classList.toggle('hidden', !ids.includes('screen-lobby') && !ids.includes('screen-join'));
     // v2.48: the in-game menu belongs to gameplay — whatever route leads out
     // of the game (own exit, AFK kick, host gone, error), it must not stay
     // open on top of the home/lobby/result screens.
@@ -4730,7 +4732,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
           }
         });
         setupActions();
-        setConnStatus(null, 'Kapcsolódva a szobához');
+        // v2.77: a guest is only "connected" once somebody actually answered
+        if(expectPeer) setConnStatus('connecting', 'Keresem a szobát…');
+        else setConnStatus(null, 'Kapcsolódva a szobához');
         document.getElementById('chat-toggle-btn').classList.remove('hidden');
         document.getElementById('reaction-toggle-btn').classList.remove('hidden');
         if(!expectPeer){
@@ -4756,6 +4760,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
           if(!settled){
             settled = true;
             clearTimeout(timer);
+            setConnStatus(null, 'Kapcsolódva a szobához');
             resolve({ metPeer:true });
           }
         };
@@ -5345,7 +5350,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       }catch(e){}
     });
     if(dirTransports.length === 0) lines.push('Jelzőszerverek: még nincs kapcsolat');
-    lines.push(`Sikertelen kapcsolatépítések: ${dirConnErrors}`);
+    lines.push(`Sikertelen kapcsolatépítések (szobalista): ${dirConnErrors}`);
+    // v2.77: the game room's own connection (joining / lobby)
+    if(roomCode){
+      let peers = 0;
+      try{ peers = room && typeof room.getPeers === 'function' ? Object.keys(room.getPeers() || {}).length : 0; }catch(e){}
+      lines.push(`Szoba: ${roomCode} · ${isHost ? 'szobanyitó' : 'vendég'} · kapcsolódott társak: ${peers} · sikertelen kapcsolatépítések a szobában: ${roomConnErrors}`);
+    }
     recentConnErrors.forEach(e=>lines.push('Hiba: ' + e));
     if(IS_APPLE_WEBKIT) lines.push(`Apple böngészőmotor: igen${IS_IN_APP_BROWSER ? ' (beépített böngésző — pl. Messenger)' : ''} · helyi-cím javítás: ${appleNetUnlocked ? 'bekapcsolva' : 'nincs bekapcsolva'}`);
     lines.push('Közvetítő (TURN): ' + ({
@@ -6063,6 +6074,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       roomActionInProgress = false;
       btn.disabled = false;
       if(!joined){
+        setConnStatus('error', 'Nem sikerült kapcsolódni');
         // nothing to talk to: put the in-room UI away again
         clearRoomActions();
         document.getElementById('chat-toggle-btn').classList.add('hidden');
@@ -6075,7 +6087,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
               : turnIceServers.length > 0
                 ? 'Megtaláltam a szobát, de a közvetítő szerveren keresztül sem sikerült kapcsolódni. Koppints a szobalista melletti ⓘ jelre a kezdőképernyőn, és nézd meg, mit ír a „közvetítő" sorban.'
                 : 'Megtaláltam a szobát, de a két eszköz hálózata nem engedi a közvetlen kapcsolatot (gyakori mobilneten). Próbáld wifiről, vagy koppints a szobalista melletti ⓘ jelre a kezdőképernyőn a részletekért.')
-          : 'Nem sikerült elérni a szobát — lehet, hogy már megszűnt, vagy elindult a játék. Kérj új meghívót a szobanyitótól, vagy próbáld újra.';
+          : 'Nem sikerült elérni a szobát — lehet, hogy már megszűnt, vagy elindult a játék. Kérj új meghívót a szobanyitótól, vagy próbáld újra. A fenti ⓘ jel mutatja a hálózati részleteket.';
         // On iPhone the fix is also worth offering when nobody answered at
         // all: a failed direct connection doesn't always get reported.
         document.getElementById('apple-fix-join-wrap').classList.toggle('hidden', !appleCase);
@@ -7946,6 +7958,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.77', changes:[
+      'A kapcsolat állapota most a valóságot mutatja: csatlakozáskor „Keresem a szobát…”, sikertelen próbálkozás után pedig piros „Nem sikerült kapcsolódni” (korábban hibásan „Kapcsolódva” állt ott).',
+      'Az állapotsor mellett ⓘ jel: csatlakozáskor és a váróteremben is megnyitható a hálózati jelentés, ami már a szoba saját kapcsolatának adatait is tartalmazza.'
+    ]},
     { version:'2.76', changes:[
       'Javítva: a zene (főleg iPhone-on) akkor is szólt, ha a játék a háttérben volt. Most elhallgat, és visszatéréskor folytatódik.',
       'Javítva: csatlakozáskor a próbálkozás-számláló csúnyán tört két sorba.'
