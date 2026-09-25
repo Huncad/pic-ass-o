@@ -1158,6 +1158,13 @@
     background:#FFD166; border:3px solid #16302A; box-shadow:0 2px 6px rgba(0,0,0,.4);
   }
   .fd-size-group input[type=range]::-moz-range-thumb{ width:26px; height:26px; border-radius:50%; background:#FFD166; border:3px solid #16302A; }
+
+  /* v2.85: around the square drawing: a dark "table", so it is obvious where
+     the paper ends — for the drawer and the guessers alike */
+  #fd-canvas-wrap{ background:var(--bg); }
+  #fd-canvas{ border-radius:6px; box-shadow:0 4px 18px rgba(0,0,0,.35); }
+  .canvas-area{ background:rgba(0,0,0,0.22) !important; box-shadow:none !important; }
+  #watch-canvas{ box-shadow:0 4px 18px rgba(0,0,0,.35); }
 </style>
 </head>
 <body>
@@ -6528,25 +6535,37 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     startTicker(document.getElementById('fd-timer'), true);
     startAfkWatch();
     const wrap = document.getElementById('fd-canvas-wrap');
-    if(wrap.clientWidth && wrap.clientHeight){
-      rd.canvasAspect = wrap.clientWidth / wrap.clientHeight;
-    }
+    rd.canvasAspect = CANVAS_ASPECT;
   }
 
   // A canvas can legitimately be 0 px wide for a moment (screen still being
   // laid out, rotation, a hidden panel): every size is floored at 1 so no
   // division ever produces Infinity/NaN — those used to travel over the
   // network and break the drawing on every other device.
+  // v2.85: every drawing is SQUARE, on every device. Before, the drawing
+  // area took the drawer's screen shape (tall on a phone, wide on a PC), so
+  // the other side saw it shrunk into a strip with big unusable margins. Now
+  // the drawer gets the biggest square that fits, centred, and everyone else
+  // shows exactly that square — what you can draw on is what they see.
+  const CANVAS_ASPECT = 1;
   function fdCanvasSize(){
     const wrap = document.getElementById('fd-canvas-wrap');
-    return { w: Math.max(1, wrap.clientWidth), h: Math.max(1, wrap.clientHeight) };
+    const W = Math.max(1, wrap.clientWidth), H = Math.max(1, wrap.clientHeight);
+    let w = W, h = w / CANVAS_ASPECT;
+    if(h > H){ h = H; w = h * CANVAS_ASPECT; }
+    return { w: Math.max(1, Math.floor(w)), h: Math.max(1, Math.floor(h)), W, H };
   }
   function setupFdCanvas(){
     const canvas = document.getElementById('fd-canvas');
     const ctx = canvas.getContext && canvas.getContext('2d');
     if(!ctx) return false;                       // no 2D canvas support
     fdCtx = ctx;
-    const { w, h } = fdCanvasSize();
+    const { w, h, W, H } = fdCanvasSize();
+    canvas.style.left = Math.floor((W - w)/2) + 'px';
+    canvas.style.top = Math.floor((H - h)/2) + 'px';
+    canvas.style.right = 'auto'; canvas.style.bottom = 'auto';
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
     const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
     canvas.width = Math.max(1, Math.round(w*dpr));
     canvas.height = Math.max(1, Math.round(h*dpr));
@@ -6652,8 +6671,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(fdCurrentStroke) drawStrokeOn(fdCtx, fdCurrentStroke, w, h);
   }
   function fdCanvasPosNorm(e){
-    const wrap = document.getElementById('fd-canvas-wrap');
-    const rect = wrap.getBoundingClientRect();
+    const rect = document.getElementById('fd-canvas').getBoundingClientRect();
     const w = rect.width || 1, h = rect.height || 1;
     const clamp01 = (v)=> Math.min(1, Math.max(0, v));
     return { x: clamp01((e.clientX-rect.left)/w), y: clamp01((e.clientY-rect.top)/h) };
@@ -7421,13 +7439,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       sndCorrect(); flash('green'); burstConfetti(120);
       const iGuessed = result.correctPlayerId === selfId, iDrew = currentRound.drawerId === selfId;
       const who = displayNameFor(result.correctPlayerId, result.correctPlayerName);
-      showFxBanner(iGuessed ? 'Eltaláltad! 🎉' : (iDrew ? 'Kitalálták! 🎨' : `${who} eltalálta!`),
-        `+${result.pointsForGuesser} pont${iGuessed || iDrew ? '' : ' neki és a rajzolónak'}`, 'good');
+      // v2.85: no pop-up text here — the round-end screen already says it
       fireworkShow(iGuessed || iDrew ? 5 : 3, 260);
       if(iGuessed || iDrew) burstEmoji(['⭐','🎉','✨','🏅'], 14);
       [result.correctPlayerId, currentRound.drawerId].forEach(pid=>setTimeout(()=>pulseRosterChip(pid), 300));
     }
-    else { sndTimeout(); flash('red'); showFxBanner(result.type === 'pass' ? 'Passz! 🙈' : 'Lejárt az idő! ⏰', result.word ? `A szó: ${result.word}` : '', 'bad'); }
+    else { sndTimeout(); flash('red'); }
 
     renderRoundEnd(currentRound.idx, result);
     hostSyncTurnOrder();
@@ -7637,7 +7654,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const wordEl = document.getElementById('roundend-word');
     const shownWord = result.word || (currentRound.drawerId === selfId ? currentRound.word : '');
     if(result.type === 'correct'){
-      banner.textContent = `🎉 ${result.correctPlayerName} kitalálta!`;
+      banner.textContent = result.correctPlayerId === selfId ? '🎉 Eltaláltad!'
+        : (currentRound.drawerId === selfId ? `🎨 ${result.correctPlayerName} kitalálta a rajzodat!` : `🎉 ${result.correctPlayerName} kitalálta!`);
       banner.className = 'result-banner win';
       wordEl.innerHTML = `A szó: <span class="word-reveal-final">${escapeHtml(shownWord)}</span> — +${Number(result.pointsForGuesser)||0} pont a tippelőnek, és ugyanennyi a rajzolónak (${escapeHtml(currentRound.drawerName)})`;
     } else {
@@ -7709,7 +7727,6 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     burstConfetti(80,-20); setTimeout(()=>burstConfetti(80,-20),300);
     setTimeout(()=>burstConfetti(100,-20),700); setTimeout(()=>burstConfetti(100,-20),1200);
     const iWon = winners.some(w=>w.id === selfId);
-    showFxBanner(iWon ? 'Te nyertél! 🏆' : 'Vége a játéknak! 🏁', winners.length ? winners.map(w=>w.name).join(' & ') : '', 'good');
     fireworkShow(iWon ? 10 : 6, 330);
     if(iWon) burstEmoji(['🏆','👑','⭐','🥇'], 18);
   }
@@ -8106,6 +8123,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.85', changes:[
+      'A rajzlap mostantól minden eszközön négyzet alakú: amekkora részre a rajzoló rajzolni tud, pontosan azt látja mindenki más is, telefonon és gépen egyaránt. A lapon kívüli rész sötét, így egyértelmű, hol a rajzlap széle.',
+      'A kör végén nem ugrik fel külön felirat a kör eredménye fölé: az eredményképernyő címe személyre szabott lett („Eltaláltad!”, „… kitalálta a rajzodat!”).'
+    ]},
     { version:'2.84', changes:[
       'Javítva: telefonon a vonalvastagság-csúszka összenyomódott, csak a fogantyúja látszott. Most a színválasztóval együtt saját sort kap, teljes szélességben; az eszközgombok egy sorba férnek alatta.'
     ]},
