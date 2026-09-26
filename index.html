@@ -3657,6 +3657,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     mobileDirNet = names[(i + 1) % names.length];
     try{ localStorage.setItem('picasso-mobile-dir-net-v2', mobileDirNet); }catch(e){}
   }
+  // v2.94: direct MQTT room list state (declared up here with the other
+  // room-list state: the status line is drawn during start-up already)
+  const DIRQ_TOPIC = 'picasso/' + APP_ID + '/rooms/v1';
+  const DIRQ_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
+  const DIRQ_HERE_MS = 10000, DIRQ_HERE_TTL = 26000, DIRQ_MAX_BYTES = 4000;
+  let dirqClients = [];                 // { url, client }
+  let dirqConnectedOnce = false;
+  let dirqState = 'loading';            // loading | ok | failed
+  const dirqSeen = new Map();           // peerId -> last heard (ms)
   let dirTransports = [];   // [{ name, action, peers:Set, getSockets }]
   let dirChannel = null;
   let dirStartedAt = Date.now();
@@ -5362,6 +5371,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
 
   function directoryBroadcast(msg){
+    try{ dirqPublish({ t:'ann', d: msg }); }catch(e){}
     dirTransports.forEach(t=>{ try{ t.action.send(msg); }catch(e){} });
     try{ if(dirChannel) dirChannel.postMessage(msg); }catch(e){}
   }
@@ -5545,6 +5555,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(dirStarted) return;
     dirStarted = true;
     dirStartedTurnless = !!TURN_CREDENTIALS_URL && turnIceServers.length === 0 && turnLoadState !== 'dead';
+    // v2.94: a phone whose direct MQTT room list already works needs no WebRTC list
+    if(IS_MOBILE && dirqConnectedOnce){ dirPaused = false; dirStartedAt = Date.now(); updateDirectoryStatusUI(); return; }
     dirPaused = false;
     dirStartedAt = Date.now();
     // v2.50: BitTorrent first on every device. Phones run only ONE network
@@ -5630,7 +5642,17 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   document.getElementById('btn-room-list-refresh').addEventListener('click', manualDirectoryRefresh);
 
   function connectDirectory(){
-    if(!dirPaused) startDirectoryTransports();
+    // v2.94: a phone first gives the direct MQTT list up to 8 s; only if that
+    // doesn't come up does it fall back to the WebRTC room list
+    const startWebrtcList = ()=>{ if(!dirPaused) startDirectoryTransports(); };
+    if(IS_MOBILE && !dirqConnectedOnce && dirqState !== 'failed'){
+      const t0 = Date.now();
+      const wait = ()=>{
+        if(dirqConnectedOnce || dirqState === 'failed' || Date.now() - t0 > 8000){ startWebrtcList(); return; }
+        setTimeout(wait, 250);
+      };
+      wait();
+    } else startWebrtcList();
     try{
       if('BroadcastChannel' in window){
         dirChannel = new BroadcastChannel('picasso-room-directory-v1');
@@ -5762,10 +5784,97 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   })();
 
   function directoryPeerCount(){
-    return dirTransports.reduce((m,t)=>Math.max(m, t.peers.size), 0);
+    return Math.max(dirTransports.reduce((m,t)=>Math.max(m, t.peers.size), 0), dirqPeerCount());
   }
+
+  // =====================================================================
+  // v2.94: DIRECT room list over MQTT. The rooms are announced as plain
+  // messages through public MQTT brokers — no WebRTC, so no STUN, no relay,
+  // no direct device-to-device link needed just to SEE a room.
+  // Why: an iPhone kept the WebRTC room list's 20 ready-made connections
+  // open (and rebuilt them every minute) for the whole visit. After a while
+  // it could not gather any network address at all any more (STUN 0,
+  // relay 0 in its report), so it neither saw the PC's room nor could it
+  // connect. On a phone the WebRTC room list is now not started at all
+  // while this channel works: the phone opens WebRTC connections only when
+  // it actually joins a room — fresh ones, with the relay already loaded.
+  // PCs keep the old list too, so not-yet-updated devices still see them.
+  // =====================================================================
+  function dirqOpenCount(){ return dirqClients.filter(c=>c.client && c.client.connected).length; }
+  function dirqPeerCount(){
+    const now = Date.now(); let n = 0;
+    for(const [id, t] of dirqSeen){ if(now - t > DIRQ_HERE_TTL) dirqSeen.delete(id); else n++; }
+    return n;
+  }
+  function dirqPublish(obj){
+    let payload;
+    try{ payload = JSON.stringify(Object.assign({ s: selfId }, obj)); }catch(e){ return; }
+    if(payload.length > DIRQ_MAX_BYTES) return;
+    dirqClients.forEach(c=>{ try{ if(c.client && c.client.connected) c.client.publish(DIRQ_TOPIC, payload, { qos:0, retain:false }); }catch(e){} });
+  }
+  function dirqOnMessage(topic, buf){
+    if(topic !== DIRQ_TOPIC) return;
+    let m;
+    try{ const str = String(buf); if(str.length > DIRQ_MAX_BYTES) return; m = JSON.parse(str); }catch(e){ return; }
+    if(!isPlainObject(m)) return;
+    const from = cleanPeerId(m.s);
+    if(!from || from === selfId) return;
+    const prev = dirqSeen.get(from);
+    const isNew = !prev || Date.now() - prev > DIRQ_HERE_TTL;
+    dirqSeen.set(from, Date.now());
+    if(isNew){ announceMyRoom(); updateDirectoryStatusUI(); }   // a newcomer hears about my room at once
+    if(m.t === 'ann' && isPlainObject(m.d)) handleDirectoryMessage(m.d);
+  }
+  // phones: once the direct list works, drop the WebRTC one (never while in a room —
+  // there the room shares its connections)
+  function stopWebrtcDirectoryOnPhone(){
+    if(!IS_MOBILE || room || !dirTransports.length) return;
+    mobileDirGen++;                                   // stops the phone's network-switching check
+    dirTransports.forEach(t=>{ try{ if(t.room && typeof t.room.leave === 'function') t.room.leave(); }catch(e){} });
+    dirTransports = [];
+    updateDirectoryStatusUI();
+  }
+  async function startDirectMqttDirectory(){
+    let lib = null;
+    try{
+      const mod = await Promise.race([
+        import('https://esm.run/mqtt@5.15.2'),
+        new Promise((_, rej)=>setTimeout(()=>rej(new Error('timeout')), 12000))
+      ]);
+      lib = (mod && mod.default && typeof mod.default.connect === 'function') ? mod.default : mod;
+      if(!lib || typeof lib.connect !== 'function') throw new Error('no mqtt');
+    }catch(e){
+      dirqState = 'failed';
+      try{ console.warn('[PIC-ASS-O] direct MQTT room list unavailable:', e && e.message); }catch(err){}
+      updateDirectoryStatusUI();
+      return;
+    }
+    DIRQ_BROKERS.forEach(url=>{
+      try{
+        const client = lib.connect(url, {
+          clean:true, keepalive:30, connectTimeout:10000, reconnectPeriod:5000,
+          clientId: 'pic_' + String(selfId).slice(0,12) + '_' + Math.random().toString(36).slice(2,7)
+        });
+        client.on('connect', ()=>{
+          dirqConnectedOnce = true; dirqState = 'ok';
+          try{
+            client.subscribe(DIRQ_TOPIC, { qos:0 }, ()=>{ dirqPublish({ t:'here' }); announceMyRoom(); });
+          }catch(e){}
+          stopWebrtcDirectoryOnPhone();
+          updateDirectoryStatusUI();
+        });
+        client.on('message', dirqOnMessage);
+        client.on('error', ()=>{});
+        client.on('close', ()=>{ try{ updateDirectoryStatusUI(); }catch(e){} });
+        dirqClients.push({ url, client });
+      }catch(e){}
+    });
+    setInterval(()=>dirqPublish({ t:'here' }), DIRQ_HERE_MS);
+  }
+  startDirectMqttDirectory();
   function relaySummary(){
     let open = 0, total = 0;
+    try{ open += dirqOpenCount(); total += dirqClients.length; }catch(e){}
     dirTransports.forEach(t=>{
       try{
         const socks = (t.getSockets && t.getSockets()) || {};
@@ -5871,6 +5980,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   async function showNetDiagnostics(){
     const lines = [`PIC-ASS-O v${CHANGELOG[0].version}`];
+    try{
+      lines.push(`Szobalista közvetlenül (MQTT, WebRTC nélkül): ${dirqOpenCount()}/${dirqClients.length} bróker elérhető, talált játékosok: ${dirqPeerCount()}` + (dirqState === 'failed' ? ' — NEM töltődött be' : ''));
+      dirqClients.forEach(c=>lines.push(`   ${c.client && c.client.connected ? 'OK' : 'nincs kapcsolat'}  ${String(c.url).replace(/^wss?:\/\//,'')}`));
+    }catch(e){}
+    if(IS_MOBILE && dirTransports.length === 0 && dirqConnectedOnce) lines.push('WebRTC-s szobalista: telefonon kikapcsolva (a közvetlen lista működik)');
     dirTransports.forEach(t=>{
       let open = 0, total = 0;
       try{
@@ -5888,7 +6002,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         });
       }catch(e){}
     });
-    if(dirTransports.length === 0) lines.push('Jelzőszerverek: még nincs kapcsolat');
+    if(dirTransports.length === 0 && !dirqConnectedOnce) lines.push('Jelzőszerverek: még nincs kapcsolat');
     lines.push(`Sikertelen kapcsolatépítések (szobalista): ${dirConnErrors}`);
     // v2.77: the game room's own connection (joining / lobby)
     if(roomCode){
@@ -8855,6 +8969,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.94', changes:[
+      'Új, megbízhatóbb szobalista: a szobák közvetlenül az MQTT-szervereken keresztül látszanak, közvetlen eszköz–eszköz kapcsolat nélkül. Telefonon a régi, WebRTC-s szobalista már nem fut: az iPhone egy idő után ettől nem tudott új kapcsolatot építeni, ezért nem látta a PC-n nyitott szobát, és csatlakozni sem tudott. A telefon most csak akkor épít kapcsolatot, amikor ténylegesen belép egy szobába.',
+      'Fontos: a régi verziót futtató eszközök a régi listán látszanak — mindenki frissítse az oldalt.'
+    ]},
     { version:'2.93', changes:[
       'Javítva: ha a közvetítő (TURN) szerver adatai lassan érkeztek meg (pl. mobilneten vagy a Messenger böngészőjében), a szobalista egész végig nélküle futott, és egy iPhone így nem látta a más gépen nyitott szobákat. Most, amint a közvetítő megérkezik és működik, a szobalista újraépül vele.',
       'Szobanyitáskor és csatlakozáskor a játék tovább (legfeljebb 9 mp-ig) vár a közvetítőre, mert a nélküle indított szobakapcsolat később sem kapja meg. Ha a lekérés nem sikerül, többször is újrapróbálja.'
