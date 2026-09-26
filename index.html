@@ -3675,6 +3675,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let turnLoadState = TURN_CREDENTIALS_URL ? 'loading' : (TURN_SERVERS.length ? 'ok' : 'off');
   let turnLoadPromise = null;
   let turnRetried = false;
+  // v2.93: several retries instead of one, and remember whether the room
+  // list had to start before the relay arrived (see probeTurnServers)
+  let turnRetryCount = 0;
+  const TURN_RETRY_DELAYS = [6000, 15000, 30000, 60000];
+  let dirStartedTurnless = false;
   let deadTurnCount = 0;   // v2.60: how many relay entries were dropped as dead
   function applyTurnServers(relays){
     turnIceServers = TURN_SERVERS.concat(relays);
@@ -3719,9 +3724,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         turnLoadPromise = null;   // allow a retry
         // One automatic retry after a short pause (a transient network
         // hiccup on first load shouldn't need a page reload to recover).
-        if(!turnRetried){
+        if(turnRetryCount < TURN_RETRY_DELAYS.length){
+          const wait = TURN_RETRY_DELAYS[turnRetryCount++];
           turnRetried = true;
-          setTimeout(()=>{ loadTurnServers(); }, 8000);
+          setTimeout(()=>{ loadTurnServers(); }, wait);
         }
       }finally{
         clearTimeout(timer);
@@ -3746,6 +3752,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(done) return; done = true;
       turnProbeInfo = { relay: relayFound, ms: Date.now() - t0 };
       try{ pc.close(); }catch(e){}
+      // v2.93: the relay arrived only AFTER the room list had started
+      // without it (slow phone network, Messenger's browser…). The list's
+      // ready-made connection offers carry no relay address, so a phone
+      // that can't connect directly would see nobody for the whole visit.
+      // Now that the relay is proven to work, rebuild the list once with it.
+      if(relayFound && dirStartedTurnless){
+        dirStartedTurnless = false;
+        try{ if(dirStarted && !dirPaused) restartDirectoryTransports(); }catch(e){}
+      }
       if(!relayFound && turnLoadState === 'ok'){
         turnLoadState = 'dead';
         try{ console.warn('[PIC-ASS-O] TURN relay gave no address — quota used up, credential revoked, or blocked on this network'); }catch(e){}
@@ -3775,8 +3790,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   // Waits for the relay list, but never longer than a few seconds — joining
   // must not hang because the TURN provider is slow.
-  function turnReady(){
-    return Promise.race([ loadTurnServers(), new Promise(r=>setTimeout(r, 4000)) ]);
+  // v2.93: creating or joining a room waits longer (9 s): a room connection
+  // started without the relay never gets it later.
+  function turnReady(maxMs){
+    return Promise.race([ loadTurnServers(), new Promise(r=>setTimeout(r, maxMs || 4000)) ]);
   }
 
   // iPhone/Safari local-address fix state. Declared up here, next to the
@@ -5527,6 +5544,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function startDirectoryTransports(){
     if(dirStarted) return;
     dirStarted = true;
+    dirStartedTurnless = !!TURN_CREDENTIALS_URL && turnIceServers.length === 0 && turnLoadState !== 'dead';
     dirPaused = false;
     dirStartedAt = Date.now();
     // v2.50: BitTorrent first on every device. Phones run only ONE network
@@ -6517,7 +6535,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     roomActionInProgress = true;
     createBtn.disabled = true;
     sndClick();
-    await turnReady();
+    await turnReady(9000);
     roomCode = genRoomCode();
     isHost = true;
     joinOrderIds = [selfId];
@@ -6560,7 +6578,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     roomActionInProgress = true;
     btn.disabled = true;
     sndClick();
-    await turnReady();
+    if(turnLoadState === 'loading' || turnLoadState === 'failed'){
+      warn.style.color = 'var(--chalk-dim)';
+      warn.textContent = 'Kapcsolat előkészítése…';
+    }
+    await turnReady(9000);
     if(pendingPrivateRoom){
       // Closed room picked from the list: check the typed code against the
       // room's fingerprint before even trying to connect.
@@ -8833,6 +8855,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.93', changes:[
+      'Javítva: ha a közvetítő (TURN) szerver adatai lassan érkeztek meg (pl. mobilneten vagy a Messenger böngészőjében), a szobalista egész végig nélküle futott, és egy iPhone így nem látta a más gépen nyitott szobákat. Most, amint a közvetítő megérkezik és működik, a szobalista újraépül vele.',
+      'Szobanyitáskor és csatlakozáskor a játék tovább (legfeljebb 9 mp-ig) vár a közvetítőre, mert a nélküle indított szobakapcsolat később sem kapja meg. Ha a lekérés nem sikerül, többször is újrapróbálja.'
+    ]},
     { version:'2.92', changes:[
       'A betű-súgó ismét csak a kör felétől jelenik meg (a szó hosszával és egy betűvel), utána fokozatosan, egyesével nyílik fel még néhány betű — legfeljebb a szó kb. fele, és legfeljebb 4 betű.'
     ]},
