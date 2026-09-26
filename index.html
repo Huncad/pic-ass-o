@@ -7576,17 +7576,24 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(isDrawerSide && settings.hintsEnabled && hintAction && currentRound && currentRound.word){
         const frac = elapsed / fdRoundTimeTotal;
         const wordLen = hintLetterIndexes(currentRound.word).length;
-        // Never reveal more than roughly half the word, and always leave at
-        // least one letter hidden — a hint, not the answer.
-        const maxHints = Math.max(0, Math.min(2, Math.ceil(wordLen/2)-1));
-        let targetHints = 0;
-        if(frac >= 0.7) targetHints = maxHints;
-        else if(frac >= 0.4) targetHints = Math.min(1, maxHints);
-        // v2.89: the length (just blanks) is shown from the very start
-        if(!hintSentInitial || targetHints > hintRevealedCount){
-          hintSentInitial = true;
-          hintRevealedCount = Math.max(hintRevealedCount, targetHints);
-          hintAction.send({ mask: computeHintMask(currentRound.word, hintRevealedCount) });
+        // v2.92: nothing in the first half of the round. From the middle the
+        // blanks (the length) appear with a first letter, then one more
+        // letter at a time, spread evenly up to 90% of the time. Never more
+        // than about half the word, and at most 4 letters — a hint, not the
+        // answer.
+        const maxHints = Math.max(0, Math.min(4, Math.floor((wordLen-1)/2)));
+        const HINT_START = 0.5, HINT_END = 0.9;
+        if(frac >= HINT_START){
+          let targetHints = 0;
+          if(maxHints > 0){
+            const step = (HINT_END - HINT_START) / maxHints;
+            targetHints = Math.min(maxHints, 1 + Math.floor((frac - HINT_START) / step));
+          }
+          if(!hintSentInitial || targetHints > hintRevealedCount){
+            hintSentInitial = true;
+            hintRevealedCount = Math.max(hintRevealedCount, targetHints);
+            hintAction.send({ mask: computeHintMask(currentRound.word, hintRevealedCount) });
+          }
         }
       }
       if(isDrawerSide && remaining<=0 && currentRound && !processedResultRounds.has(roundKey(currentRound))){
@@ -8826,6 +8833,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.92', changes:[
+      'A betű-súgó ismét csak a kör felétől jelenik meg (a szó hosszával és egy betűvel), utána fokozatosan, egyesével nyílik fel még néhány betű — legfeljebb a szó kb. fele, és legfeljebb 4 betű.'
+    ]},
     { version:'2.91', changes:[
       'Javítva: a rajz egy idő után nem ott jelent meg, ahol az ujjad volt (főleg a lap alján és jobb szélén), és a rajzlap kisebb maradt a rendelkezésre álló helynél. Most a lap mindig kitölti a helyet, és pontosan az ujjad alá rajzol.',
       'Telefonon nagyobb lett a rajzlap: vékonyabb a tippsáv és kisebb az alsó margó, főleg kis képernyőn (iPhone mini, SE) és a Messenger böngészőjében.',
