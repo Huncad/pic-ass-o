@@ -150,6 +150,7 @@
     font-size:1rem; width:100%;
   }
   label.field-label{ display:block; font-weight:800; margin-bottom:8px; color:var(--chalk-dim); font-size:.9rem; }
+  .player-chip.pending{ opacity:.7; border-style:dashed; font-style:italic; }
   .setup-hint{ margin:8px 2px 0; font-size:.78rem; line-height:1.35; color:var(--chalk-dim); opacity:.85; }
   .setup-section{margin:20px 0;}
 
@@ -5327,11 +5328,20 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         // earlier attempt or an earlier room can no longer do anything.
         roomGeneration++;
         if(room){
+          // v2.97: a failed join attempt says goodbye, so another guest it
+          // did reach doesn't keep showing it as a ghost player
+          if(expectPeer){ try{ if(byeAction) byeAction.send({}); }catch(e){} }
           try{ if(typeof room.leave === 'function') room.leave(); }catch(e){}
           room = null;
         }
         clearRoomActions();
         pendingLateSnapshot = null;
+        if(expectPeer){
+          // v2.97: a fresh attempt starts from nobody
+          hostPeerId = null;
+          Object.keys(lobbyPlayers).forEach(id=>{ if(id !== selfId) delete lobbyPlayers[id]; });
+          joinOrderIds = [selfId];
+        }
         setConnStatus('connecting', 'Kapcsolódás a hálózathoz…');
         room = roomJoin(ROOM_NET === 'mqtt' ? MQTT_CFG : TRYSTERO_CFG, code, {
           handshakeTimeoutMs: HANDSHAKE_TIMEOUT_MS,
@@ -5358,21 +5368,31 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         // so a flaky/blocked directory (some mobile browsers restrict the
         // WebSocket relays used for peer discovery) can't by itself prevent
         // a perfectly good direct join.
-        let settled = false;
+        // v2.97: "in" means connected to the HOST. Meeting another guest
+        // first is fine, but it doesn't count: a guest who only reached
+        // another guest used to be let into the lobby while the host never
+        // saw them (and never would), so the attempt stopped too early.
+        let settled = false, metOther = false;
+        const gen = roomGeneration;
         const timer = setTimeout(()=>{
           if(settled) return;
           settled = true;
-          resolve({ metPeer:false });
+          clearInterval(hostCheck);
+          resolve({ metPeer:false, metOther });
         }, Math.max(1000, timeoutMs));
+        const hostCheck = setInterval(()=>{
+          if(settled || gen !== roomGeneration){ clearInterval(hostCheck); return; }
+          if(hostPeerId && lobbyPlayers[hostPeerId] !== undefined){
+            settled = true;
+            clearTimeout(timer); clearInterval(hostCheck);
+            setConnStatus(null, 'Kapcsolódva a szobához');
+            resolve({ metPeer:true, metOther:true });
+          }
+        }, 250);
         const priorOnPeerJoin = room.onPeerJoin;
         room.onPeerJoin = (peerId)=>{
           if(priorOnPeerJoin) priorOnPeerJoin(peerId);
-          if(!settled){
-            settled = true;
-            clearTimeout(timer);
-            setConnStatus(null, 'Kapcsolódva a szobához');
-            resolve({ metPeer:true });
-          }
+          metOther = true;
         };
       }catch(e){
         reject(e);
@@ -6870,7 +6890,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
           let result = await connect(roomCode, { expectPeer:true, timeoutMs:JOIN_WAIT_MS });
           // the host demonstrably hears us, but no connection came of it:
           // one fresh attempt (new connection offers) before giving up
-          if(!result.metPeer && knockAckedAt && roomCode){
+          if(!result.metPeer && (knockAckedAt || result.metOther) && roomCode){
             joinRetried = true; joinRetriedEver = true;
             warn.style.color = 'var(--chalk-dim)';
             result = await connect(roomCode, { expectPeer:true, timeoutMs:35000 });
@@ -6883,6 +6903,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         }
       } finally { clearInterval(joinTick); }
       if(!joined){
+        try{ if(room && byeAction) byeAction.send({}); }catch(e){}
+        await new Promise(r=>setTimeout(r, 400));     // let the goodbye go out
         try{ if(room && typeof room.leave === 'function') room.leave(); }catch(e){}
         room = null;
         clearRoomActions();
@@ -6943,9 +6965,27 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     document.getElementById('lobby-code-section').classList.toggle('hidden', roomIsPublic);
     document.getElementById('lobby-public-note').classList.toggle('hidden', !roomIsPublic);
   }
+  // v2.97: the host sees who is trying to get in right now (heard over the
+  // direct MQTT list), so a guest stuck at "Csatlakozás…" isn't invisible
+  function pendingKnockers(){
+    if(!isHost || meta) return [];
+    const now = Date.now(), out = [];
+    knocksHeard.forEach((k, id)=>{ if(now - k.last < 7000 && lobbyPlayers[id] === undefined) out.push(k.name); });
+    return out;
+  }
+  let lastPendingSig = '';
+  setInterval(()=>{
+    const sig = pendingKnockers().join('|');
+    if(sig !== lastPendingSig){
+      lastPendingSig = sig;
+      try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){}
+    }
+  }, 1500);
   function renderLobbyPlayers(){
     const ids = Object.keys(lobbyPlayers);
-    document.getElementById('lobby-players').innerHTML = ids.map(id=>{
+    const pending = pendingKnockers();
+    document.getElementById('lobby-players').innerHTML = pending.map(n=>
+      `<div class="player-chip pending" title="Most próbál csatlakozni — a kapcsolat még épül">⏳ ${escapeHtml(n)} csatlakozik…</div>`).join('') + ids.map(id=>{
       const canKick = isHost && id !== selfId;
       const canVote = !isHost && id !== selfId && id !== hostPeerId;
       return `<div class="player-chip ${id===selfId?'me':''}">
@@ -9101,6 +9141,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.97', changes:[
+      'Javítva: aki csatlakozáskor előbb egy másik játékossal kapcsolódott össze, mint a szobanyitóval, azt a játék „bent lévőnek” vette, pedig a szobanyitó nem látta (a többiek viszont igen). Most a csatlakozás csak akkor sikeres, ha a szobanyitóval is létrejött a kapcsolat; addig a játék tovább próbálkozik.',
+      'A szobanyitó a váróteremben látja, ha valaki épp csatlakozni próbál („⏳ … csatlakozik…”).'
+    ]},
     { version:'2.96', changes:[
       'Csatlakozáskor a telefon az MQTT-szobalistán „kopogtat” a szobanyitónál, aki visszajelez. Ha a szobanyitó hallja a csatlakozót, de a közvetlen kapcsolat nem jön létre, a játék egyszer automatikusan, tiszta lappal újrapróbálja, és a hibaüzenet is megmondja, melyik rész akadt el.',
       'A ⓘ hálózati jelentésben telefonon is látszanak a szoba saját jelzőszerverei, a szobanyitónál pedig az, hogy ki próbált csatlakozni.'
