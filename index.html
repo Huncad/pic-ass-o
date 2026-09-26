@@ -3721,7 +3721,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let dirqClients = [];                 // { url, client }
   let dirqConnectedOnce = false;
   let dirqState = 'loading';            // loading | ok | failed
+  let lastJoinKnockAcked = false;       // v2.96: did the host answer my last join attempt?
+  let joinRetriedEver = false;
   const dirqSeen = new Map();           // peerId -> last heard (ms)
+  // v2.96: knocking (see dirqOnMessage)
+  let myKnockKey = '', myKnockKeyCode = '';   // host: key of the room I'm hosting
+  let pendingKnockKey = '';                   // guest: key of the room I'm trying to get into
+  let knockAckedAt = 0;
+  const knocksHeard = new Map();              // host: peerId -> { name, count, first, last }
   let dirTransports = [];   // [{ name, action, peers:Set, getSockets }]
   let dirChannel = null;
   let dirStartedAt = Date.now();
@@ -5880,6 +5887,31 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     dirqSeen.set(from, Date.now());
     if(isNew){ announceMyRoom(); updateDirectoryStatusUI(); }   // a newcomer hears about my room at once
     if(m.t === 'ann' && isPlainObject(m.d)) handleDirectoryMessage(m.d);
+    // v2.96: "knocking" — a guest waiting to get into a room says so over
+    // this channel too, and the host answers. It doesn't connect anyone; it
+    // tells us whether the two devices can HEAR each other at all, so a
+    // failed join can say which half is broken.
+    if(m.t === 'knock' && typeof m.k === 'string' && myKnockKey && m.k === myKnockKey && isHost && roomCode){
+      const name = cleanText(m.n, 16) || 'valaki';
+      const rec = knocksHeard.get(from) || { name, count:0, first:Date.now(), last:0 };
+      // the same knock arrives once per broker: count (and answer) it once
+      if(Date.now() - rec.last > 1500){
+        rec.name = name; rec.count++; rec.last = Date.now();
+        knocksHeard.set(from, rec);
+        dirqPublish({ t:'knockack', k: m.k, to: from });
+      }
+    }
+    if(m.t === 'knockack' && m.to === selfId && typeof m.k === 'string' && pendingKnockKey && m.k === pendingKnockKey){
+      knockAckedAt = Date.now();
+    }
+  }
+  // the room code is never sent in the clear, only a short hash of it
+  async function knockKeyFor(code){
+    try{
+      const data = new TextEncoder().encode(APP_ID + '|knock|' + String(code).toUpperCase());
+      const h = await crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(h)).slice(0, 12).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }catch(e){ return ''; }
   }
   // phones: once the direct list works, drop the WebRTC one (never while in a room —
   // there the room shares its connections)
@@ -5928,6 +5960,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     setInterval(()=>dirqPublish({ t:'here' }), DIRQ_HERE_MS);
   }
   startDirectMqttDirectory();
+  // host side of knocking: keep my key in step with the room I'm hosting
+  setInterval(async ()=>{
+    const want = (isHost && roomCode) ? String(roomCode) : '';
+    if(want === myKnockKeyCode) return;
+    myKnockKeyCode = want;
+    knocksHeard.clear();
+    myKnockKey = want ? await knockKeyFor(want) : '';
+  }, 1000);
   function relaySummary(){
     let open = 0, total = 0;
     try{ open += dirqOpenCount(); total += dirqClients.length; }catch(e){}
@@ -6041,6 +6081,19 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       dirqClients.forEach(c=>lines.push(`   ${c.client && c.client.connected ? 'OK' : 'nincs kapcsolat'}  ${String(c.url).replace(/^wss?:\/\//,'')}`));
     }catch(e){}
     if(IS_MOBILE && dirTransports.length === 0 && dirqConnectedOnce) lines.push('WebRTC-s szobalista: telefonon kikapcsolva (a közvetlen lista működik)');
+    // v2.96: the game room's own signalling servers
+    try{
+      if(roomCode && ROOM_NET === 'mqtt' && TrysteroMqtt && TrysteroMqtt.getRelaySockets){
+        const socks = TrysteroMqtt.getRelaySockets() || {};
+        const ent = Object.entries(socks);
+        lines.push(`A szoba jelzőszerverei (mqtt): ${ent.filter(([u,ws])=>ws && ws.readyState === 1).length}/${ent.length} elérhető`);
+        ent.forEach(([url, ws])=>lines.push(`   ${ws ? ['nyitás…','OK','záródik','ZÁRVA'][ws.readyState] : '—'}  ${String(url).replace(/^wss?:\/\//,'')}`));
+      }
+    }catch(e){}
+    if(isHost && knocksHeard.size){
+      knocksHeard.forEach((k)=>lines.push(`Csatlakozni próbált (MQTT-n hallottam): ${k.name}, ${k.count}× — utoljára ${Math.round((Date.now()-k.last)/1000)} mp-e`));
+    }
+    if(!isHost && roomCode) lines.push(`A szobanyitó ${knockAckedAt || lastJoinKnockAcked ? 'VÁLASZOLT a kopogtatásomra (hall engem)' : 'nem válaszolt a kopogtatásomra'}${joinRetriedEver ? ' · automatikus újrapróbálás megtörtént' : ''}`);
     dirTransports.forEach(t=>{
       let open = 0, total = 0;
       try{
@@ -6793,6 +6846,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // live counter so it's clear something is happening.
     const JOIN_WAIT_MS = 45000;
     roomConnErrors = 0;
+    let joinRetried = false;
     let joined = false;
     const joinT0 = Date.now();
     const joinTick = setInterval(()=>{
@@ -6806,8 +6860,27 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       warn.style.color = 'var(--chalk-dim)';
       warn.textContent = 'Csatlakozás a szobához…';
       try{
-        const result = await connect(roomCode, { expectPeer:true, timeoutMs:JOIN_WAIT_MS });
-        if(result.metPeer) joined = true;
+        // v2.96: knock on the host's door over the direct list while waiting
+        pendingKnockKey = await knockKeyFor(roomCode);
+        knockAckedAt = 0;
+        const knock = ()=>{ if(pendingKnockKey) dirqPublish({ t:'knock', k: pendingKnockKey, n: myName }); };
+        knock();
+        const knockTimer = setInterval(knock, 3000);
+        try{
+          let result = await connect(roomCode, { expectPeer:true, timeoutMs:JOIN_WAIT_MS });
+          // the host demonstrably hears us, but no connection came of it:
+          // one fresh attempt (new connection offers) before giving up
+          if(!result.metPeer && knockAckedAt && roomCode){
+            joinRetried = true; joinRetriedEver = true;
+            warn.style.color = 'var(--chalk-dim)';
+            result = await connect(roomCode, { expectPeer:true, timeoutMs:35000 });
+          }
+          if(result.metPeer) joined = true;
+        } finally {
+          clearInterval(knockTimer);
+          lastJoinKnockAcked = !!knockAckedAt;
+          pendingKnockKey = '';
+        }
       } finally { clearInterval(joinTick); }
       if(!joined){
         try{ if(room && typeof room.leave === 'function') room.leave(); }catch(e){}
@@ -6830,7 +6903,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
               : turnIceServers.length > 0
                 ? 'Megtaláltam a szobát, de a közvetítő szerveren keresztül sem sikerült kapcsolódni. Koppints a szobalista melletti ⓘ jelre a kezdőképernyőn, és nézd meg, mit ír a „közvetítő" sorban.'
                 : 'Megtaláltam a szobát, de a két eszköz hálózata nem engedi a közvetlen kapcsolatot (gyakori mobilneten). Próbáld wifiről, vagy koppints a szobalista melletti ⓘ jelre a kezdőképernyőn a részletekért.')
-          : 'Nem sikerült elérni a szobát — lehet, hogy már megszűnt, vagy elindult a játék. Kérj új meghívót a szobanyitótól, vagy próbáld újra. A fenti ⓘ jel mutatja a hálózati részleteket.';
+          : (lastJoinKnockAcked
+              // v2.96: we KNOW the host is there and hears us
+              ? 'A szobanyitó látja, hogy csatlakozni szeretnél, de a két eszköz között nem jött létre a közvetlen kapcsolat. Próbáld újra; ha most sem megy, koppints a fenti ⓘ jelre, és küldd el a jelentést a szobanyitó ⓘ jelentésével együtt.'
+              : 'Nem sikerült elérni a szobát — lehet, hogy már megszűnt, vagy elindult a játék. Kérj új meghívót a szobanyitótól, vagy próbáld újra. A fenti ⓘ jel mutatja a hálózati részleteket.');
         // On iPhone the fix is also worth offering when nobody answered at
         // all: a failed direct connection doesn't always get reported.
         document.getElementById('apple-fix-join-wrap').classList.toggle('hidden', !appleCase);
@@ -9025,6 +9101,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.96', changes:[
+      'Csatlakozáskor a telefon az MQTT-szobalistán „kopogtat” a szobanyitónál, aki visszajelez. Ha a szobanyitó hallja a csatlakozót, de a közvetlen kapcsolat nem jön létre, a játék egyszer automatikusan, tiszta lappal újrapróbálja, és a hibaüzenet is megmondja, melyik rész akadt el.',
+      'A ⓘ hálózati jelentésben telefonon is látszanak a szoba saját jelzőszerverei, a szobanyitónál pedig az, hogy ki próbált csatlakozni.'
+    ]},
     { version:'2.95', changes:[
       'Javítva: a tűzijáték és a konfetti (főleg a játék végén) másodpercekre belassította, beszaggatta a játékot, leginkább telefonon. Az effektek most jóval kevesebb erőforrást használnak, kevesebb, de ugyanolyan látványos részecskével, időben elosztva; ha a készülék mégis lassulna, maguktól ritkulnak.'
     ]},
