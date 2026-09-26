@@ -150,6 +150,7 @@
     font-size:1rem; width:100%;
   }
   label.field-label{ display:block; font-weight:800; margin-bottom:8px; color:var(--chalk-dim); font-size:.9rem; }
+  .setup-hint{ margin:8px 2px 0; font-size:.78rem; line-height:1.35; color:var(--chalk-dim); opacity:.85; }
   .setup-section{margin:20px 0;}
 
   .create-wrap{ margin-top:14px; text-align:center; }
@@ -564,12 +565,14 @@
     .fd-toolbar{ display:flex; flex-wrap:wrap; gap:6px 8px; padding:7px 10px; padding-bottom:max(40px, calc(env(safe-area-inset-bottom, 0px) + 28px)); justify-content:space-between; }
     .fd-toolbar .swatches{ order:1; flex:1 1 100%; flex-wrap:nowrap; justify-content:space-between; gap:3px; }
     .fd-toolbar .swatch{ width:27px; height:27px; flex-shrink:0; }
-    #fd-tools{ order:4; padding:3px; gap:3px; }
-    #fd-tools .fd-tool{ padding:5px 8px; font-size:1rem; }
-    .fd-act{ order:5; padding:0; width:40px; height:34px; font-size:0 !important; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
+    #fd-tools{ order:4; padding:3px; gap:2px; }
+    #fd-tools .fd-tool{ padding:5px 5px; font-size:.95rem; }
+    .fd-toolbar{ column-gap:4px !important; }
+    .fd-act{ order:5; padding:0; width:34px; height:34px; font-size:0 !important; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
     .fd-act::before{ font-size:1.05rem; }
     #fd-btn-eraser::before{ content:"🧽"; }
     #fd-btn-undo::before{ content:"↶"; font-size:1.3rem; font-weight:800; }
+    #fd-btn-redo::before{ content:"↷"; font-size:1.3rem; font-weight:800; }
     #fd-btn-clear::before{ content:"🗑️"; }
     .fd-color-group{ order:2; padding:3px 6px; }
     .fd-color-group input[type=color]{ width:30px; height:26px; }
@@ -1148,6 +1151,24 @@
     .fd-toolbar .fd-size-group input[type=range]{ width:100%; flex:1 1 auto; min-width:0; }
   }
   .fd-size-group input[type=range]{ min-width:120px; }
+  /* v2.89: brush preview — real size and colour */
+  .fd-size-group{ display:flex; align-items:center; gap:8px; }
+  .fd-size-dot{ flex:0 0 32px; width:32px; height:32px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+    background:rgba(0,0,0,.22); box-shadow:inset 0 0 0 1px rgba(244,241,230,.18); }
+  .fd-size-dot i{ display:block; width:7px; height:7px; border-radius:50%; background:#222; box-shadow:0 0 0 1px rgba(244,241,230,.35); transition:width .12s, height .12s; }
+  .fd-size-dot i.eraser{ box-shadow:0 0 0 1.5px var(--chalk-dim); }
+  .fd-act:disabled{ opacity:.35; cursor:default; }
+  /* v2.89: the chat / reaction buttons float in the bottom-right corner on
+     a computer — the toolbar keeps clear of them, and the four action
+     buttons are icons (with tooltips) like on the phone, so it all fits */
+  body:not(.fabs-top) #screen-fulldraw .fd-toolbar{ padding-right:140px; gap:6px; }
+  body:not(.fabs-top) #screen-fulldraw .fd-toolbar .swatches{ gap:4px; }
+  body:not(.fabs-top) .fd-act{ padding:0; width:44px; height:38px; font-size:0 !important; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
+  body:not(.fabs-top) .fd-act::before{ font-size:1.15rem; }
+  body:not(.fabs-top) #fd-btn-eraser::before{ content:"🧽"; }
+  body:not(.fabs-top) #fd-btn-undo::before{ content:"↶"; font-size:1.4rem; font-weight:800; }
+  body:not(.fabs-top) #fd-btn-redo::before{ content:"↷"; font-size:1.4rem; font-weight:800; }
+  body:not(.fabs-top) #fd-btn-clear::before{ content:"🗑️"; }
   .fd-size-group input[type=range]{
     -webkit-appearance:none; appearance:none; touch-action:auto; height:34px; background:transparent; cursor:pointer;
   }
@@ -1377,6 +1398,22 @@
         <button class="pill active" data-hints="on">Igen 💡</button>
         <button class="pill" data-hints="off">Ne</button>
       </div>
+    </div>
+    <div class="setup-section">
+      <label class="field-label">Ki tippelhet egy körben?</label>
+      <div class="pill-row" id="guessmode-row">
+        <button class="pill active" data-guessmode="first">Aki elsőként kitalálja 🏁</button>
+        <button class="pill" data-guessmode="all">Mindenki kitalálhatja 👥</button>
+      </div>
+      <p class="setup-hint">Mindenki kitalálhatja: a kör addig tart, amíg mindenki eltalálta vagy lejár az idő, és aki gyorsabb, több pontot kap.</p>
+    </div>
+    <div class="setup-section">
+      <label class="field-label">Mennyi pontot kap a rajzoló?</label>
+      <div class="pill-row" id="drawerpts-row">
+        <button class="pill active" data-drawerpts="same">Ugyanannyit, mint a tippelő</button>
+        <button class="pill" data-drawerpts="half">Fele annyit ½</button>
+      </div>
+      <p class="setup-hint">Két játékosnál a „Fele annyit” kell, különben mindig döntetlen lesz a vége.</p>
     </div>
     <div class="start-btn-wrap" style="display:flex;justify-content:center;margin-top:24px;">
       <button class="big" id="btn-create-room" style="background:var(--green);">Szoba létrehozása 🎉</button>
@@ -1615,6 +1652,7 @@
     <div class="tool-group fd-color-group"><input type="color" id="fd-custom-color" value="#222222" aria-label="Saját szín"></div>
     <div class="tool-group fd-size-group">
       <span class="fd-size-label" style="font-size:.75rem;">Vastagság</span>
+      <span class="fd-size-dot" id="fd-size-dot" aria-hidden="true"><i></i></span>
       <input type="range" id="fd-brush-size" min="2" max="30" value="7" aria-label="Vastagság">
     </div>
     <div class="tool-group" id="fd-tools">
@@ -1622,9 +1660,11 @@
       <button class="ghost small fd-tool" data-tool="fill" title="Kitöltés" aria-label="Kitöltés">🪣</button>
       <button class="ghost small fd-tool" data-tool="line" title="Egyenes vonal" aria-label="Egyenes vonal">📏</button>
       <button class="ghost small fd-tool" data-tool="circle" title="Kör / ellipszis" aria-label="Kör vagy ellipszis">⭕</button>
+      <button class="ghost small fd-tool" data-tool="rect" title="Téglalap" aria-label="Téglalap">⬜</button>
     </div>
     <button class="ghost small fd-act" id="fd-btn-eraser" aria-label="Radír" title="Radír">Radír</button>
-    <button class="ghost small fd-act" id="fd-btn-undo" aria-label="Vissza" title="Vissza">Vissza</button>
+    <button class="ghost small fd-act" id="fd-btn-undo" aria-label="Vissza" title="Vissza (Ctrl+Z)">Vissza</button>
+    <button class="ghost small fd-act" id="fd-btn-redo" aria-label="Újra" title="Újra (Ctrl+Y)" disabled>Újra</button>
     <button class="ghost small fd-act" id="fd-btn-clear" aria-label="Törlés" title="Törlés">Törlés</button>
   </div>
 </div>
@@ -1940,6 +1980,25 @@
   </div>
 </div>
 
+<script>
+// v2.89: if the game engine (loaded from a CDN) never arrives — blocked
+// network, ad blocker, CDN outage — say so instead of leaving a blank board.
+(function(){
+  var started = Date.now();
+  function anyScreen(){
+    return [].some.call(document.querySelectorAll('[id^="screen-"]'), function(e){ return !e.classList.contains('hidden'); });
+  }
+  function check(){
+    if(window.__picassoBooted || anyScreen()) return;
+    if(Date.now() - started < 20000){ setTimeout(check, 1000); return; }
+    var box = document.getElementById('screen-error');
+    var det = document.getElementById('error-detail');
+    if(det) det.innerHTML = 'A játék motorja nem töltődött be (a böngésző nem érte el a szükséges internetes forrást).<br><br>Próbáld újratölteni az oldalt, vagy válts másik hálózatra (pl. wifi helyett mobilnetre). Ha reklámblokkolót használsz, kapcsold ki erre az oldalra.<br><br><button type="button" onclick="location.reload()" style="margin-top:6px;">Újratöltés 🔄</button>';
+    if(box) box.classList.remove('hidden');
+  }
+  window.addEventListener('DOMContentLoaded', function(){ setTimeout(check, 1000); });
+})();
+</script>
 <script type="module">
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
@@ -1947,6 +2006,7 @@
 // relays that never find each other.
 import * as Trystero from 'https://esm.run/trystero@0.25.4';
 const {joinRoom, selfId} = Trystero;
+window.__picassoBooted = true;
 // v2.50: the Nostr relays stopped carrying the connection set-up messages
 // reliably (Sept 2026): phones — which only used Nostr — saw no rooms and
 // couldn't join any, while PCs still worked through their second,
@@ -2153,6 +2213,39 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function normalize(s){
     return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
   }
+  // v2.89: tolerant guess checking. Spaces, hyphens and punctuation don't
+  // count ("hó-ember" = "hóember"), a short Hungarian ending is fine
+  // ("hóemberek", "biciklit"), and a long word forgives one typo.
+  function squash(s){ return normalize(String(s || '')).replace(/[^a-z0-9]/g, ''); }
+  function editDistance(a, b, cap){
+    if(Math.abs(a.length - b.length) > cap) return cap + 1;
+    let prev = Array.from({length: b.length + 1}, (_, j)=>j);
+    for(let i = 1; i <= a.length; i++){
+      const cur = [i];
+      let rowMin = i;
+      for(let j = 1; j <= b.length; j++){
+        const v = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+        cur.push(v);
+        if(v < rowMin) rowMin = v;
+      }
+      if(rowMin > cap) return cap + 1;
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+  // 'correct' | 'close' | 'wrong'
+  function guessVerdict(guess, word){
+    const g = squash(guess), w = squash(word);
+    if(!w) return normalize(String(guess)) === normalize(String(word)) ? 'correct' : 'wrong';
+    if(!g) return 'wrong';
+    if(g === w) return 'correct';
+    if(w.length >= 4 && g.startsWith(w) && g.length - w.length <= 3) return 'correct';
+    const d = editDistance(g, w, 3);
+    if(w.length >= 6 && d <= 1) return 'correct';
+    if(w.length >= 4 && d <= (w.length >= 8 ? 3 : 2)) return 'close';
+    if(g.length >= 4 && w.length >= 4 && (w.includes(g) || g.includes(w))) return 'close';
+    return 'wrong';
+  }
   function genRoomCode(){
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let s = '';
@@ -2173,7 +2266,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // Network payload ceilings (a hostile or buggy peer must not be able to
   // freeze the page with one giant message).
   const MAX_STROKES = 600;             // strokes per drawing
-  const STROKE_TYPES = ['fill','line','circle'];   // v2.55: non-freehand strokes (freehand has no t)
+  const STROKE_TYPES = ['fill','line','circle','rect'];   // v2.89: + rect   // v2.55: non-freehand strokes (freehand has no t)
   const MAX_POINTS_PER_STROKE = 1500;  // points per stroke
   const MAX_TOTAL_POINTS = 40000;      // points in one drawing
   const MAX_CHAT_CHARS = 400;
@@ -3535,7 +3628,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let roomCode = '';
   let currentRoomName = '';
   let isHost = false;
-  let settings = { difficulties:['konnyu','kozepes'], totalRounds:4, roundTime:60, maxPlayers:0, hintsEnabled:true, wordChoices:3 };
+  let settings = { difficulties:['konnyu','kozepes'], totalRounds:4, roundTime:60, maxPlayers:0, hintsEnabled:true, wordChoices:3, guessMode:'first', drawerHalf:false };
   const WORD_CHOICE_OPTIONS = [1,2,3,5,7,10];
   let roomIsPublic = false;
 
@@ -3894,6 +3987,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         difficulties: [...document.querySelectorAll('#difficulty-row .pill.active')].map(b=>b.dataset.tier),
         totalRounds: settings.totalRounds, roundTime: settings.roundTime,
         hintsEnabled: settings.hintsEnabled, maxPlayers: settings.maxPlayers, wordChoices: settings.wordChoices,
+        guessMode: settings.guessMode, drawerHalf: settings.drawerHalf,
         visibility: vis ? vis.dataset.visibility : 'private',
         roomName: document.getElementById('room-name-input').value.slice(0,30)
       }));
@@ -3918,6 +4012,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     settings.hintsEnabled = pick('hints-row', 'hints', p.hintsEnabled === false ? 'off' : 'on', 'on') === 'on';
     settings.maxPlayers = parseInt(pick('maxplayers-row', 'maxplayers', p.maxPlayers, 0), 10);
     settings.wordChoices = parseInt(pick('choices-row', 'choices', p.wordChoices, 3), 10);
+    settings.guessMode = pick('guessmode-row', 'guessmode', p.guessMode === 'all' ? 'all' : 'first', 'first') === 'all' ? 'all' : 'first';
+    settings.drawerHalf = pick('drawerpts-row', 'drawerpts', p.drawerHalf === true ? 'half' : 'same', 'same') === 'half';
     roomIsPublic = pick('visibility-row', 'visibility', p.visibility, 'private') === 'public';
     if(typeof p.roomName === 'string') document.getElementById('room-name-input').value = p.roomName.slice(0,30);
   }
@@ -3963,6 +4059,22 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       sndClick();
       settings.hintsEnabled = btn.dataset.hints === 'on';
       document.querySelectorAll('#hints-row .pill').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  document.querySelectorAll('#guessmode-row .pill').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      sndClick();
+      settings.guessMode = btn.dataset.guessmode === 'all' ? 'all' : 'first';
+      document.querySelectorAll('#guessmode-row .pill').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  document.querySelectorAll('#drawerpts-row .pill').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      sndClick();
+      settings.drawerHalf = btn.dataset.drawerpts === 'half';
+      document.querySelectorAll('#drawerpts-row .pill').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
     });
   });
@@ -4360,7 +4472,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     hintAction.onMessage = (data, {peerId})=>{
       // only the person actually drawing may reveal letters
       if(!isPlainObject(data) || !currentRound || peerId !== currentRound.drawerId) return;
-      const mask = cleanText(data.mask, 120);
+      const mask = cleanText(data.mask, 200);
       if(!mask) return;
       showHint(mask);
     };
@@ -4447,32 +4559,83 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(tooOften(peerId, 'guess', 250)) return;           // no guess flooding
       const text = cleanText(data.text, 80);
       if(!text.trim()) return;
+      const multi = settings.guessMode === 'all';
+      // v2.89: someone who already found the word this round is done guessing
+      // (their further "guesses" could only give the answer away)
+      if(multi && roundHits.some(h=>h.pid === peerId)) return;
       const name = displayNameFor(peerId, data && data.name);
-      const correct = normalize(text) === normalize(currentRound.word);
+      const verdict = guessVerdict(text, currentRound.word);
+      const correct = verdict === 'correct';
       const gid = ++guessSeq;
-      feedAction.send({ pid:peerId, name, text, correct, gid, r: roundKey(currentRound) });
-      routeGuessEntry(peerId, name, text, correct, gid);
-      if(correct){
-        // First correct guess to reach the drawer wins — one referee, one
-        // answer, so two people typing the word at the same moment can't end
-        // up with different winners. Timing uses the drawer's own clock.
-        const elapsed = (Date.now()-currentRound.roundStartAt)/1000;
-        finishRoundAsDrawer({ type:'correct', correctPlayerId:peerId, correctPlayerName:name,
-          pointsForGuesser: roundPoints(elapsed), elapsedMs: elapsed*1000 });
+      const rk = roundKey(currentRound);
+      if(multi && correct){
+        // In "everyone can guess" mode the round goes on, so the right answer
+        // must not reach the others: only the guesser gets their own text back.
+        // (the guesser has found it, so they may now get the exact word too —
+        // their chat filter needs it, their guess may have been a ragged form)
+        try{ feedAction.send({ pid:peerId, name, text, correct:true, gid, r: rk, w: currentRound.word }, { target: peerId }); }catch(e){}
+        let others = [];
+        try{ others = Object.keys((room && room.getPeers && room.getPeers()) || {}).filter(id=>id !== peerId); }catch(e){}
+        others.forEach(id=>{ try{ feedAction.send({ pid:peerId, name, text:'', correct:true, gid, r: rk }, { target: id }); }catch(e){} });
+        routeGuessEntry(peerId, name, '', true, gid);
+      } else {
+        feedAction.send({ pid:peerId, name, text, correct, gid, r: rk });
+        routeGuessEntry(peerId, name, text, correct, gid);
       }
+      if(verdict === 'close'){
+        // the drawer no longer has to spot near-misses by hand
+        applyCloseMark(gid);
+        try{ if(closeMarkAction) closeMarkAction.send({ gid, r: rk }); }catch(err){}
+      }
+      if(!correct) return;
+      // Timing uses the drawer's own clock.
+      const elapsedMs = Date.now() - currentRound.roundStartAt;
+      if(multi){
+        roundHits.push({ pid:peerId, ms:elapsedMs });
+        drawerCheckAllGuessed();
+        return;
+      }
+      // First correct guess to reach the drawer wins — one referee, one
+      // answer, so two people typing the word at the same moment can't end
+      // up with different winners.
+      finishRoundAsDrawer({ type:'correct', correctPlayerId:peerId, correctPlayerName:name,
+        pointsForGuesser: roundPoints(elapsedMs/1000), elapsedMs });
     };
     feedAction.onMessage = (data, {peerId})=>{
       // only the current drawer may put entries into the guess feed
       if(!currentRound || peerId !== currentRound.drawerId || !isPlainObject(data)) return;
       const pid = cleanPeerId(data.pid);
       const gid = data.r === roundKey(currentRound) ? clampNum(data.gid, 1, 1e6, 0) : 0;
-      routeGuessEntry(pid, cleanText(data.name, 16), cleanText(data.text, 80), !!data.correct, gid);
+      const text = cleanText(data.text, 80);
+      if(data.correct && pid === selfId && settings.guessMode === 'all') markMyRoundHit(cleanText(data.w, 60) || text);
+      routeGuessEntry(pid, cleanText(data.name, 16), text, !!data.correct, gid);
     };
     resultAction.onMessage = (data, {peerId})=>{
       // The drawer alone decides how a round ends (see guessAction below).
       if(!currentRound || !isPlainObject(data) || peerId !== currentRound.drawerId) return;
       const type = data.type === 'correct' ? 'correct' : (data.type === 'pass' ? 'pass' : 'timeout');
       const clean = { type, word: cleanText(data.word, 60) };
+      const maxMsAll = Math.max(1, Number(settings && settings.roundTime) || 1) * 1000;
+      if(type === 'correct' && settings.guessMode === 'all'){
+        // v2.89: every hit is checked and re-scored here, like the single one
+        const seen = new Set();
+        clean.hits = (Array.isArray(data.hits) ? data.hits : []).slice(0, 40).map(h=>{
+          if(!isPlainObject(h)) return null;
+          const pid = cleanPeerId(h.pid);
+          if(!meta || !meta.playerNames[pid] || pid === peerId || seen.has(pid)) return null;
+          seen.add(pid);
+          return { pid, ms: clampNum(h.ms, 0, maxMsAll, maxMsAll) };
+        }).filter(Boolean);
+        if(!clean.hits.length) return;
+        clean.hits.sort((a,b)=>a.ms-b.ms);
+        clean.n = clampNum(data.n, clean.hits.length, 40, clean.hits.length);
+        clean.correctPlayerId = clean.hits[0].pid;
+        clean.correctPlayerName = displayNameFor(clean.hits[0].pid, '');
+        clean.elapsedMs = clean.hits[0].ms;
+        clean.pointsForGuesser = roundPoints(clean.elapsedMs / 1000);
+        onRoundResolved(clean);
+        return;
+      }
       if(type === 'correct'){
         const pid = cleanPeerId(data.correctPlayerId);
         if(!meta || !meta.playerNames[pid]) return;        // a winner nobody knows
@@ -4744,7 +4907,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       roundTime: clampNum(s.roundTime, 10, 900, 60),
       maxPlayers: clampNum(s.maxPlayers, 0, 20, 0),
       hintsEnabled: s.hintsEnabled !== false,
-      wordChoices: WORD_CHOICE_OPTIONS.includes(Number(s.wordChoices)) ? Number(s.wordChoices) : 3
+      wordChoices: WORD_CHOICE_OPTIONS.includes(Number(s.wordChoices)) ? Number(s.wordChoices) : 3,
+      guessMode: s.guessMode === 'all' ? 'all' : 'first',
+      drawerHalf: s.drawerHalf === true
     };
     if(out.difficulties.length === 0) out.difficulties = ['konnyu','kozepes'];
     return out;
@@ -4862,7 +5027,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
 
   function currentHintMask(){
-    if(currentRound && currentRound.drawerId === selfId && hintRevealedCount > 0 && currentRound.word){
+    if(currentRound && currentRound.drawerId === selfId && hintSentInitial && currentRound.word){
       return computeHintMask(currentRound.word, hintRevealedCount);
     }
     return lastHintMask;
@@ -6158,10 +6323,29 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     else if(btn.classList.contains('react-chip')){ sndClick(); toggleMyChatReaction(mid, btn.dataset.emoji); }
   });
 
+  // v2.89: the answer can't be given away in the chat — not by the drawer,
+  // and (in "everyone can guess" mode) not by someone who has already found it.
+  function roundSecretForChat(){
+    if(!currentRound || processedResultRounds.has(roundKey(currentRound))) return null;
+    if(currentRound.drawerId === selfId && currentRound.phase === 'drawing' && currentRound.word) return squash(currentRound.word);
+    if(myRoundHit && myRoundHit.key === roundKey(currentRound) && myRoundHit.text) return myRoundHit.text;
+    return null;
+  }
+  function voiceLockedNow(){
+    if(!currentRound || processedResultRounds.has(roundKey(currentRound))) return false;
+    if(currentRound.drawerId === selfId && currentRound.phase === 'drawing') return true;
+    return !!(myRoundHit && myRoundHit.key === roundKey(currentRound));
+  }
   function sendChatText(){
     const input = document.getElementById('chat-text-input');
     const text = input.value.trim().slice(0, MAX_CHAT_CHARS);
     if(!text || !chatAction) return;
+    const secret = roundSecretForChat();
+    if(secret && secret.length >= 2 && squash(text).includes(secret)){
+      addSystemChatMessage('🤫 A megoldást nem írhatod a chatbe, amíg tart a kör!');
+      try{ shakeEl(input); }catch(e){}
+      return;
+    }
     input.value = '';
     stopTypingNotice();
     const data = { type:'text', id:newMsgId(), name:myName, text, ts:Date.now() };
@@ -6241,6 +6425,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       return;
     }
     if(recordStarting) return;                       // double tap: one recorder at a time
+    if(voiceLockedNow()){ addSystemChatMessage('🤫 Amíg tart a kör, hangüzenetet nem küldhetsz — így a megoldás sem csúszhat ki.'); return; }
     if(!chatAction){ addChatMessage({ name:'Rendszer', text:'Hangüzenetet csak szobában tudsz küldeni.' }, false); return; }
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined'){
       addChatMessage({ name:'Rendszer', text:'Ez a böngésző nem támogatja a hangfelvételt — írj inkább szöveges üzenetet.' }, false);
@@ -6293,6 +6478,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
           const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
           const dataUrl = await blobToDataUrl(blob);
           if(gen !== roomGeneration || !chatAction) return;
+          if(voiceLockedNow()){ addSystemChatMessage('🤫 A hangüzenet nem ment el: amíg tart a kör, nem küldhetsz hangüzenetet.'); return; }
           if(typeof dataUrl !== 'string' || dataUrl.length > MAX_VOICE_CHARS){
             addChatMessage({ name:'Rendszer', text:'Ez a hangüzenet túl nagy lett — próbáld meg rövidebben.' }, false);
             return;
@@ -6633,6 +6819,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(customColor) customColor.value = FD_DEFAULT_COLOR;
     const eraserBtn = document.getElementById('fd-btn-eraser');
     if(eraserBtn){ eraserBtn.style.background = ''; eraserBtn.style.color = ''; }
+    try{ updateSizeDot(); }catch(e){}
   }
   let fdLastFlush=0;
   let fdRoundTimeTotal=60, fdRoundStartAt=null;
@@ -6739,8 +6926,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
 
   function enterDrawingMine(idx, rd){
     showOnly(['screen-fulldraw']);
+    roundHits = [];
     fdStrokes = []; fdCurrentStroke = null; fdDrawing = false; fdLastFlush = 0; fdShapeBase = null;
     fdResetStreamState();
+    fdResetHistory(); painterReset(fdPainter);
+    requestAnimationFrame(()=>{ try{ updateFdHistoryButtons(); updateSizeDot(); }catch(e){} });
     document.getElementById('fd-guess-feed').innerHTML = '';
     renderRosters();
     // The drawer keeps seeing the word while drawing (set BEFORE the canvas is
@@ -6879,11 +7069,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     ctx.strokeStyle = color; ctx.lineWidth = lw;
     const pts = s.points;
-    if((s.t === 'line' || s.t === 'circle') && pts.length >= 2){
+    if((s.t === 'line' || s.t === 'circle' || s.t === 'rect') && pts.length >= 2){
       const a = pts[0], z = pts[pts.length-1];
       ctx.beginPath();
       if(s.t === 'line'){
         ctx.moveTo(a.x*w, a.y*h); ctx.lineTo(z.x*w, z.y*h);
+      } else if(s.t === 'rect'){
+        ctx.rect(Math.min(a.x,z.x)*w, Math.min(a.y,z.y)*h, Math.max(0.5, Math.abs(z.x-a.x)*w), Math.max(0.5, Math.abs(z.y-a.y)*h));
       } else {
         const cx = (a.x+z.x)/2*w, cy = (a.y+z.y)/2*h;
         const rx = Math.max(0.5, Math.abs(z.x-a.x)/2*w), ry = Math.max(0.5, Math.abs(z.y-a.y)/2*h);
@@ -6899,18 +7091,68 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       ctx.fill();
       return;
     }
+    // v2.89: smooth freehand — a curve through the midpoints between the
+    // sampled points instead of straight segments, so fast strokes don't
+    // come out as polygons (same data on the wire, just nicer painting)
     ctx.beginPath();
-    for(let i=0;i<pts.length;i++){
-      const px = pts[i].x*w, py = pts[i].y*h;
-      if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    ctx.moveTo(pts[0].x*w, pts[0].y*h);
+    for(let i=1; i<pts.length-1; i++){
+      ctx.quadraticCurveTo(pts[i].x*w, pts[i].y*h, (pts[i].x+pts[i+1].x)/2*w, (pts[i].y+pts[i+1].y)/2*h);
     }
+    const lp = pts[pts.length-1];
+    ctx.lineTo(lp.x*w, lp.y*h);
     ctx.stroke();
   }
+  // v2.89: the "paper". Every finished stroke is painted ONCE into a
+  // fixed-size offscreen canvas that is the same size on every device; the
+  // screen just shows it scaled. So (1) a paint-bucket fill comes out
+  // identical everywhere (it used to depend on each screen's resolution and
+  // could leak through a hairline gap on one phone but not on another), and
+  // (2) a new message no longer repaints — and re-fills — the whole drawing.
+  const PAPER_RES = 1200;
+  function strokeSig(s){
+    const p = s.points, a = p[0], z = p[p.length-1];
+    return [s.t||'', s.color, s.sizeFrac, s.eraser?1:0, p.length, a.x, a.y, z.x, z.y].join('|');
+  }
+  function makePainter(){ return { cv:null, ctx:null, sigs:[], dark:null }; }
+  function painterReset(P){ P.sigs = []; P.dark = null; }
+  function painterSync(P, strokes, bakeCount){
+    if(!P.cv){
+      P.cv = document.createElement('canvas');
+      P.cv.width = P.cv.height = PAPER_RES;
+      try{ P.ctx = P.cv.getContext('2d', { willReadFrequently:true }); }catch(e){ P.ctx = null; }
+      if(!P.ctx) P.ctx = P.cv.getContext('2d');
+    }
+    if(!P.ctx) return false;
+    let reset = P.dark !== darkMode;
+    if(!reset){
+      const lim = Math.min(P.sigs.length, bakeCount);
+      let keep = 0;
+      while(keep < lim && P.sigs[keep] === strokeSig(strokes[keep])) keep++;
+      if(keep < P.sigs.length) reset = true;
+    }
+    if(reset){
+      P.ctx.setTransform(1,0,0,1,0,0);
+      P.ctx.fillStyle = paperColor(); P.ctx.fillRect(0,0,PAPER_RES,PAPER_RES);
+      P.sigs = []; P.dark = darkMode;
+    }
+    for(let i = P.sigs.length; i < bakeCount; i++){
+      drawStrokeOn(P.ctx, strokes[i], PAPER_RES, PAPER_RES);
+      P.sigs.push(strokeSig(strokes[i]));
+    }
+    return true;
+  }
+  function painterShow(P, ctx, w, h){
+    try{ ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; }catch(e){}
+    ctx.drawImage(P.cv, 0, 0, w, h);
+  }
+  const fdPainter = makePainter(), watchPainter = makePainter();
   function fdRedrawAll(){
     if(!fdCtx) return;
     clearFdCanvas();
     const { w, h } = fdCanvasSize();
-    fdStrokes.forEach(s=>drawStrokeOn(fdCtx, s, w, h));
+    if(painterSync(fdPainter, fdStrokes, fdStrokes.length)) painterShow(fdPainter, fdCtx, w, h);
+    else fdStrokes.forEach(s=>drawStrokeOn(fdCtx, s, w, h));
     if(fdCurrentStroke) drawStrokeOn(fdCtx, fdCurrentStroke, w, h);
   }
   function fdCanvasPosNorm(e){
@@ -6929,7 +7171,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // traffic and memory on every single re-send.
   const FD_MIN_POINT_DIST = 0.0035;
   // v2.55 tools + limits
-  let fdTool = 'pen';            // pen | fill | line | circle
+  let fdTool = 'pen';            // pen | fill | line | circle | rect
   let fdShapeBase = null;        // canvas pixels under a shape being dragged
   let fdPointBudget = MAX_TOTAL_POINTS;
   let fdLimitWarned = false;     // "almost full" warning shown this round
@@ -6984,7 +7226,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(fdTool === 'fill'){
       const st = { t:'fill', color: fdBrushColor, sizeFrac: 0.01, eraser:false, points:[pos] };
       fdStrokes.push(st);
-      drawStrokeOn(fdCtx, st, w, h);
+      fdAfterNewStroke();
+      fdRedrawAll();                       // filled on the shared paper, like everyone else's
       fdStrokesDirty = true;
       sndClick();
       maybeFlushStrokes(true);
@@ -6992,8 +7235,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     }
     fdDrawing = true;
     fdPointerId = e.pointerId;
-    if(fdTool === 'line' || fdTool === 'circle'){
-      try{ fdShapeBase = fdCtx.getImageData(0,0,fdCanvasEl.width,fdCanvasEl.height); }catch(err){ fdShapeBase = null; }
+    if(fdTool === 'line' || fdTool === 'circle' || fdTool === 'rect'){
+      fdShapeBase = null;                  // the cached paper makes the live preview cheap
       fdCurrentStroke = { t: fdTool, color: fdBrushColor, sizeFrac: fdBrushSize/w, eraser:false, points:[pos, pos] };
     } else {
       fdCurrentStroke = { color: fdBrushColor, sizeFrac: fdBrushSize/w, eraser: fdEraser, points:[pos] };
@@ -7004,14 +7247,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   fdCanvasEl.addEventListener('pointermove', (e)=>{
     if(!fdDrawing || !fdCurrentStroke || !fdCtx) return;
     if(fdPointerId !== null && e.pointerId !== fdPointerId) return;
-    if(fdCurrentStroke.t === 'line' || fdCurrentStroke.t === 'circle'){
+    if(fdCurrentStroke.t === 'line' || fdCurrentStroke.t === 'circle' || fdCurrentStroke.t === 'rect'){
       fdCurrentStroke.points[1] = fdCanvasPosNorm(e);
       noteDrawActivity();
       fdStrokesDirty = true;
-      const { w, h } = fdCanvasSize();
-      if(fdShapeBase){ try{ fdCtx.putImageData(fdShapeBase, 0, 0); }catch(err){ fdRedrawAll(); } }
-      else { fdRedrawAll(); }
-      drawStrokeOn(fdCtx, fdCurrentStroke, w, h);
+      fdRedrawAll();                       // paper + the shape being dragged
       maybeFlushStrokes(false);
       return;
     }
@@ -7030,11 +7270,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // live preview through the same two helpers keeps it identical either way.
     fdCtx.strokeStyle = fdCurrentStroke.eraser ? paperColor() : renderColorFor(fdCurrentStroke.color);
     fdCtx.lineWidth = Math.max(0.5, fdCurrentStroke.sizeFrac * w);
+    // v2.89: the same midpoint curve drawStrokeOn paints, piece by piece
     const pts = fdCurrentStroke.points; const n = pts.length;
-    if(n>=2){
+    if(n>=3){
+      const a = pts[n-3], b = pts[n-2], c = pts[n-1];
+      const sx = n === 3 ? a.x : (a.x+b.x)/2, sy = n === 3 ? a.y : (a.y+b.y)/2;
       fdCtx.beginPath();
-      fdCtx.moveTo(pts[n-2].x*w, pts[n-2].y*h);
-      fdCtx.lineTo(pts[n-1].x*w, pts[n-1].y*h);
+      fdCtx.moveTo(sx*w, sy*h);
+      fdCtx.quadraticCurveTo(b.x*w, b.y*h, (b.x+c.x)/2*w, (b.y+c.y)/2*h);
       fdCtx.stroke();
     }
     maybeFlushStrokes(false);
@@ -7042,18 +7285,16 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function fdEndStroke(e){
     if(e && fdPointerId !== null && e.pointerId !== undefined && e.pointerId !== fdPointerId) return;
     const finished = fdCurrentStroke;
-    if(fdDrawing && finished && fdStrokes.length < MAX_STROKES){
+    const added = !!(fdDrawing && finished && fdStrokes.length < MAX_STROKES);
+    if(added){
       fdStrokes.push(finished);
       fdStrokesDirty = true;
-      // a tap without any movement: paint the dot that the line path alone
-      // would never show
-      if(finished.t) fdShapeBase = null;
-      if(finished.points.length === 1 && fdCtx){
-        const { w, h } = fdCanvasSize();
-        drawStrokeOn(fdCtx, finished, w, h);
-      }
+      fdAfterNewStroke();
     }
     fdDrawing = false; fdCurrentStroke = null; fdShapeBase = null;
+    // the finished stroke goes onto the paper: from here on the drawer sees
+    // exactly what the guessers see (a tap becomes its dot, too)
+    if(added) fdRedrawAll();
     if(fdPointerId !== null){
       try{ fdCanvasEl.releasePointerCapture(fdPointerId); }catch(err){}
       fdPointerId = null;
@@ -7140,13 +7381,79 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const btn = document.getElementById('fd-btn-eraser');
     btn.style.background = fdEraser ? 'var(--yellow)' : ''; btn.style.color = fdEraser ? '#16302A' : '';
   });
-  document.getElementById('fd-btn-undo').addEventListener('click', ()=>{ sndClick(); fdStrokes.pop(); fdStrokesDirty = true; fdNeedFull = true; noteDrawActivity(); fdRedrawAll(); maybeFlushStrokes(true); });
-  document.getElementById('fd-btn-clear').addEventListener('click', ()=>{ sndClick(); fdStrokes=[]; fdStrokesDirty = true; fdNeedFull = true; noteDrawActivity(); fdRedrawAll(); maybeFlushStrokes(true); });
+  // v2.89: history. "Törlés" can be undone (the ↶ button brings the whole
+  // drawing back), and anything undone can be redone (↷) until a new stroke.
+  let fdRedo = [], fdClearedBackup = null;
+  function fdAfterNewStroke(){ fdRedo = []; fdClearedBackup = null; requestAnimationFrame(updateFdHistoryButtons); }
+  function fdResetHistory(){ fdRedo = []; fdClearedBackup = null; }
+  function fdHistoryChanged(){
+    fdStrokesDirty = true; fdNeedFull = true; noteDrawActivity(); fdRedrawAll(); maybeFlushStrokes(true); updateFdHistoryButtons();
+  }
+  function fdUndo(){
+    if(fdDrawing) return;
+    if(!fdStrokes.length && fdClearedBackup){
+      fdStrokes = fdClearedBackup; fdClearedBackup = null;
+      fdRedo.push({ clear:true });
+      showDrawToast('↶ A rajz visszakerült.');
+    } else if(fdStrokes.length){
+      fdRedo.push({ stroke: fdStrokes.pop() });
+    } else return;
+    sndClick(); fdHistoryChanged();
+  }
+  function fdRedoStep(){
+    if(fdDrawing || !fdRedo.length) return;
+    const e = fdRedo.pop();
+    if(e.clear){ fdClearedBackup = fdStrokes; fdStrokes = []; }
+    else if(e.stroke){
+      if(fdStrokes.length >= MAX_STROKES || fdTotalPoints() + e.stroke.points.length > MAX_TOTAL_POINTS){ showDrawToast(fdLimitReachedText()); fdRedo.push(e); return; }
+      fdStrokes.push(e.stroke);
+    }
+    sndClick(); fdHistoryChanged();
+  }
+  function fdClearAll(){
+    if(fdDrawing || !fdStrokes.length) return;
+    fdClearedBackup = fdStrokes; fdStrokes = []; fdRedo = [];
+    showDrawToast('🗑️ Törölve — a ↶ Vissza gombbal visszahozhatod.');
+    sndClick(); fdHistoryChanged();
+  }
+  function updateFdHistoryButtons(){
+    const u = document.getElementById('fd-btn-undo'), r = document.getElementById('fd-btn-redo');
+    if(u) u.disabled = !(fdStrokes.length || fdClearedBackup);
+    if(r) r.disabled = !fdRedo.length;
+  }
+  document.getElementById('fd-btn-undo').addEventListener('click', fdUndo);
+  document.getElementById('fd-btn-redo').addEventListener('click', fdRedoStep);
+  document.getElementById('fd-btn-clear').addEventListener('click', fdClearAll);
+  // desktop: Ctrl/⌘+Z, Ctrl/⌘+Shift+Z and Ctrl+Y
+  document.addEventListener('keydown', (e)=>{
+    if(!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    if(document.getElementById('screen-fulldraw').classList.contains('hidden')) return;
+    const t = e.target;
+    if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    const k = String(e.key || '').toLowerCase();
+    if(k === 'z' && !e.shiftKey){ e.preventDefault(); fdUndo(); }
+    else if((k === 'z' && e.shiftKey) || k === 'y'){ e.preventDefault(); fdRedoStep(); }
+  });
+  // live preview of the brush: its real size and colour next to the slider
+  function updateSizeDot(){
+    const dot = document.querySelector('#fd-size-dot i');
+    if(!dot) return;
+    const px = Math.max(2, Math.min(28, fdBrushSize));
+    dot.style.width = dot.style.height = px + 'px';
+    dot.style.background = fdEraser ? paperColor() : renderColorFor(fdBrushColor);
+    dot.classList.toggle('eraser', !!fdEraser);
+  }
+  const fdToolbarEl = document.querySelector('#screen-fulldraw .fd-toolbar');
+  if(fdToolbarEl){
+    fdToolbarEl.addEventListener('click', ()=>requestAnimationFrame(()=>{ updateSizeDot(); updateFdHistoryButtons(); }));
+    fdToolbarEl.addEventListener('input', ()=>requestAnimationFrame(updateSizeDot));
+  }
   document.getElementById('btn-fd-giveup').addEventListener('click', ()=>{
     // guarded: this button is also reachable for a moment after the round
     // has already been decided, and currentRound can be null by then
     if(!currentRound || currentRound.drawerId !== selfId) return;
     if(processedResultRounds.has(roundKey(currentRound))) return;
+    if(settings.guessMode === 'all'){ finishMultiRound('pass'); return; }
     finishRoundAsDrawer({ type:'pass' });
   });
 
@@ -7225,6 +7532,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     stopTicker();
     lastTickPlayed = null;
     hintRevealedCount = 0;
+    hintSentInitial = false;
+    hintOrder = null;
     if(!fdRoundStartAt) fdRoundStartAt = Date.now();   // never produce NaN on the clock
     localTickTimer = setInterval(()=>{
       if(!fdRoundStartAt || !currentRound){ stopTicker(); return; }
@@ -7234,21 +7543,26 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(remaining<=10 && remaining>0 && remaining!==lastTickPlayed){ sndTick(remaining<=5); lastTickPlayed=remaining; }
       if(isDrawerSide && settings.hintsEnabled && hintAction && currentRound && currentRound.word){
         const frac = elapsed / fdRoundTimeTotal;
-        const wordLen = currentRound.word.length;
+        const wordLen = hintLetterIndexes(currentRound.word).length;
         // Never reveal more than roughly half the word, and always leave at
         // least one letter hidden — a hint, not the answer.
         const maxHints = Math.max(0, Math.min(2, Math.ceil(wordLen/2)-1));
         let targetHints = 0;
         if(frac >= 0.7) targetHints = maxHints;
         else if(frac >= 0.4) targetHints = Math.min(1, maxHints);
-        if(targetHints > hintRevealedCount){
-          hintRevealedCount = targetHints;
+        // v2.89: the length (just blanks) is shown from the very start
+        if(!hintSentInitial || targetHints > hintRevealedCount){
+          hintSentInitial = true;
+          hintRevealedCount = Math.max(hintRevealedCount, targetHints);
           hintAction.send({ mask: computeHintMask(currentRound.word, hintRevealedCount) });
         }
       }
       if(isDrawerSide && remaining<=0 && currentRound && !processedResultRounds.has(roundKey(currentRound))){
-        finishRoundAsDrawer({ type:'timeout' });
+        if(settings.guessMode === 'all') finishMultiRound('timeout');
+        else finishRoundAsDrawer({ type:'timeout' });
       }
+      // somebody may have left: the rest could all have found it already
+      if(isDrawerSide) drawerCheckAllGuessed();
       // Safety net: the drawer normally ends the round the moment time is up. If
       // their end-of-round message never arrives (phone asleep, lost message),
       // don't let everybody else stare at 0 forever.
@@ -7294,8 +7608,26 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     chip.textContent = mask;
     chip.classList.remove('hidden');
   }
+  // v2.89: letters are revealed in a random order (not always from the
+  // left), a space shows as a gap, a hyphen as itself, and the letter count
+  // is written after the blanks.
+  let hintSentInitial = false;
+  let hintOrder = null;
+  function hintLetterIndexes(word){
+    const out = [];
+    Array.from(String(word)).forEach((ch,i)=>{ if(!/[\s\-]/.test(ch)) out.push(i); });
+    return out;
+  }
   function computeHintMask(word, revealedCount){
-    return word.split('').map((ch,i)=> i<revealedCount ? ch : '_').join(' ');
+    const chars = Array.from(String(word));
+    const letters = hintLetterIndexes(word);
+    if(!hintOrder || hintOrder.length !== letters.length){
+      hintOrder = letters.slice();
+      for(let i = hintOrder.length - 1; i > 0; i--){ const j = Math.floor(Math.random()*(i+1)); [hintOrder[i], hintOrder[j]] = [hintOrder[j], hintOrder[i]]; }
+    }
+    const shown = new Set(hintOrder.slice(0, revealedCount));
+    const body = chars.map((ch,i)=> /\s/.test(ch) ? '\u2003' : (ch === '-' ? '-' : (shown.has(i) ? ch.toUpperCase() : '_'))).join(' ');
+    return `${body}  (${letters.length})`;
   }
 
   // ---------------------------------------------------------------
@@ -7306,6 +7638,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function enterWatching(idx, rd){
     if(!meta) return;
     showOnly(['screen-watch']);
+    if(!myRoundHit || myRoundHit.key !== roundKey(rd)) resetMyRoundHit();
     document.getElementById('watch-round-indicator').textContent = `Kör ${idx+1} / ${meta.turnOrder.length}`;
     document.getElementById('watch-hint-chip').classList.add('hidden');
     lastHintMask = null;
@@ -7389,7 +7722,18 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     }
     watchCtx.clearRect(0,0,cssW,cssH);
     watchCtx.fillStyle = paperColor(); watchCtx.fillRect(0,0,cssW,cssH);
-    lastWatchStrokes.forEach(s=>drawStrokeOn(watchCtx, s, cssW, cssH));
+    // v2.89: finished strokes come from the cached paper; only the last one
+    // (possibly still being drawn) is painted live on top. A fill is never
+    // "in progress", so it always goes onto the paper.
+    const n = lastWatchStrokes.length;
+    const last = n ? lastWatchStrokes[n-1] : null;
+    const bake = last && last.t === 'fill' ? n : Math.max(0, n-1);
+    if(painterSync(watchPainter, lastWatchStrokes, bake)){
+      painterShow(watchPainter, watchCtx, cssW, cssH);
+      if(bake < n) drawStrokeOn(watchCtx, last, cssW, cssH);
+    } else {
+      lastWatchStrokes.forEach(s=>drawStrokeOn(watchCtx, s, cssW, cssH));
+    }
   }
 
   // Avatar bubble: the player's colour + first letter, so a guess can be
@@ -7511,11 +7855,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     div.innerHTML = `${avatarHtml(peerId, who)}
       <div class="gbody" style="flex:1;min-width:0;">
         <div class="gname" style="display:flex;gap:6px;align-items:center;">${escapeHtml(who)}${mine ? ' (Te)' : ''}</div>
-        <div class="gtext">${correct ? '✅ ' : ''}${escapeHtml(text)}${correct ? ' — eltalálta!' : ''}</div>
+        <div class="gtext">${correct ? '✅ ' : ''}${escapeHtml(text)}${correct ? (text ? ' — eltalálta!' : 'kitalálta!') : ''}</div>
       </div>${closeControlHtml(gid, peerId, correct)}`;
     document.getElementById('watch-guess-feed').prepend(div);
     pulseRosterChip(peerId);
     if(!correct){ sndWrong(); flash('red'); if(mine) shakeEl(div); }
+    else if(!mine && settings.guessMode === 'all') sndChatPing();
   }
 
   // Compact, quiet feed shown to the drawer in fullscreen mode — no sound or
@@ -7526,7 +7871,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const div = document.createElement('div');
     div.className = 'fd-guess-line' + (correct ? ' correct' : '');
     if(gid){ div.dataset.gid = gid; div.dataset.pid = peerId; }
-    div.innerHTML = `${avatarHtml(peerId, who, 'sm')}<b>${escapeHtml(who)}</b><span class="gt">${correct ? '✅ ' : ''}${escapeHtml(text)}</span>${closeControlHtml(gid, peerId, correct)}`;
+    div.innerHTML = `${avatarHtml(peerId, who, 'sm')}<b>${escapeHtml(who)}</b><span class="gt">${correct ? '✅ ' : ''}${escapeHtml(text || (correct ? 'kitalálta!' : ''))}</span>${closeControlHtml(gid, peerId, correct)}`;
     feed.appendChild(div);
     const keep = (window.matchMedia && window.matchMedia('(min-width:860px)').matches) ? 40 : 4;
     while(feed.children.length > keep) feed.removeChild(feed.firstChild);
@@ -7604,6 +7949,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!text || !currentRound || !guessAction) return;
     if(currentRound.drawerId === selfId) return;
     if(processedResultRounds.has(roundKey(currentRound))) return;   // the round is already decided
+    if(myRoundHit && myRoundHit.key === roundKey(currentRound)) return;   // already found it
     input.value = '';
     // This device doesn't know the word. The guess goes to the drawer, who
     // checks it and shows it to everyone (me included) with the verdict.
@@ -7635,33 +7981,98 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     resultAction.send(result);
     onRoundResolved(result);
   }
+  // v2.89: who gets what for a round — worked out the same way on every
+  // device from the checked result. "Everyone can guess" mode: each guesser
+  // is scored on their own time, the drawer gets the average over everyone
+  // who could have guessed (so a drawing only half the room got is worth
+  // half). The optional "drawer gets half" rule halves the drawer's share.
+  function roundAward(result){
+    if(!result || result.type !== 'correct') return { guessers:[], drawerPts:0 };
+    const hits = Array.isArray(result.hits) && result.hits.length
+      ? result.hits
+      : [{ pid: result.correctPlayerId, ms: Number(result.elapsedMs) || 0 }];
+    const guessers = hits.filter(h=>h && h.pid).map(h=>({ pid:h.pid, ms:Number(h.ms)||0, pts: roundPoints((Number(h.ms)||0)/1000) }));
+    let drawerPts = 0;
+    if(guessers.length){
+      drawerPts = Array.isArray(result.hits) && result.hits.length
+        ? Math.round(guessers.reduce((n,g)=>n+g.pts, 0) / Math.max(guessers.length, Number(result.n) || guessers.length))
+        : guessers[0].pts;
+    }
+    if(settings.drawerHalf) drawerPts = Math.round(drawerPts / 2);
+    return { guessers, drawerPts };
+  }
+  // "Everyone can guess" mode, on the drawer's device: the round is over as
+  // soon as every guesser still in the game has found the word.
+  let roundHits = [];
+  function drawerCheckAllGuessed(){
+    if(settings.guessMode !== 'all' || !currentRound || currentRound.drawerId !== selfId || !meta) return;
+    if(processedResultRounds.has(roundKey(currentRound)) || !roundHits.length) return;
+    const eligible = [...activePlayerIds].filter(id=>id !== selfId && meta.playerNames[id]);
+    if(eligible.length && eligible.every(id=>roundHits.some(h=>h.pid === id))) finishMultiRound('all');
+  }
+  function finishMultiRound(kind){
+    const eligible = meta ? [...activePlayerIds].filter(id=>id !== selfId && meta.playerNames[id]) : [];
+    if(!roundHits.length){ finishRoundAsDrawer({ type: kind === 'pass' ? 'pass' : 'timeout' }); return; }
+    const hits = roundHits.slice().sort((a,b)=>a.ms-b.ms);
+    const first = hits[0];
+    finishRoundAsDrawer({ type:'correct', hits, n: Math.max(hits.length, eligible.length),
+      correctPlayerId:first.pid, correctPlayerName: displayNameFor(first.pid, ''),
+      pointsForGuesser: roundPoints(first.ms/1000), elapsedMs: first.ms });
+  }
+  // A guesser who found the word in "everyone can guess" mode: no more
+  // guessing, and the chat won't let the answer slip out either.
+  let myRoundHit = null;
+  function markMyRoundHit(text){
+    if(!currentRound) return;
+    myRoundHit = { key: roundKey(currentRound), text: squash(text) };
+    const input = document.getElementById('watch-guess-input');
+    if(input && input.dataset.ph0 === undefined) input.dataset.ph0 = input.placeholder;
+    if(input){ input.value = ''; input.disabled = true; input.placeholder = '✅ Kitaláltad! Várd meg a többieket…'; }
+    const btn = document.getElementById('btn-watch-guess');
+    if(btn) btn.disabled = true;
+    sndCorrect(); burstConfetti(60);
+  }
+  function resetMyRoundHit(){
+    myRoundHit = null;
+    const input = document.getElementById('watch-guess-input');
+    if(input){ input.disabled = false; if(input.dataset.ph0 === undefined) input.dataset.ph0 = input.placeholder; input.placeholder = input.dataset.ph0; }
+    const btn = document.getElementById('btn-watch-guess');
+    if(btn) btn.disabled = false;
+  }
   function onRoundResolved(result){
     if(!currentRound || !meta || !isPlainObject(result)) return;
     const key = roundKey(currentRound);
     if(processedResultRounds.has(key)) return;
     processedResultRounds.add(key);
     stopTicker();
-    try{ captureGalleryItem(result); }catch(e){}
+    resetMyRoundHit();
 
     if(result.type === 'correct'){
       result.pointsForGuesser = Number(result.pointsForGuesser) || 0;
       result.elapsedMs = Number(result.elapsedMs) || 0;
     }
+    const award = roundAward(result);
+    result.award = award;
+    if(result.type === 'correct' && award.guessers.length > 1){
+      result.correctPlayerName = award.guessers.map(g=>displayNameFor(g.pid, '')).join(', ');
+    }
+    try{ captureGalleryItem(result); }catch(e){}
     if(result.word){
       result.word = String(result.word).slice(0,60);
       revealedWords.push(result.word);
     }
     let myDelta = 0;
     if(result.type === 'correct'){
-      if(result.correctPlayerId === selfId) myDelta += result.pointsForGuesser;
-      if(currentRound.drawerId === selfId) myDelta += result.pointsForGuesser;
-      // v2.72: every device books the points of the guesser and the drawer
+      // v2.72: every device books the points of the guessers and the drawer
       // itself, from the verified result — nobody's self-reported total is
       // needed for that any more.
-      [result.correctPlayerId, currentRound.drawerId].forEach(pid=>{
-        if(!pid || pid === selfId) return;
-        scores[pid] = (scores[pid]||0) + result.pointsForGuesser;
-      });
+      const book = (pid, pts)=>{
+        if(!pid || !pts) return;
+        if(pid === selfId) myDelta += pts;
+        else scores[pid] = (scores[pid]||0) + pts;
+      };
+      award.guessers.forEach(g=>book(g.pid, g.pts));
+      book(currentRound.drawerId, award.drawerPts);
     }
     if(myDelta > 0){
       scores[selfId] = (scores[selfId]||0) + myDelta;
@@ -7672,20 +8083,21 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       // Tracked identically on every device from the same broadcast result,
       // so everyone ends up with the same "fun stats" at game end without
       // any extra network messages.
-      if(!gameStats.fastestGuess || result.elapsedMs < gameStats.fastestGuess.ms){
-        gameStats.fastestGuess = { playerId: result.correctPlayerId, ms: result.elapsedMs };
-      }
-      gameStats.drawerPoints[currentRound.drawerId] = (gameStats.drawerPoints[currentRound.drawerId]||0) + result.pointsForGuesser;
+      award.guessers.forEach(g=>{
+        if(!gameStats.fastestGuess || g.ms < gameStats.fastestGuess.ms){
+          gameStats.fastestGuess = { playerId: g.pid, ms: g.ms };
+        }
+      });
+      gameStats.drawerPoints[currentRound.drawerId] = (gameStats.drawerPoints[currentRound.drawerId]||0) + award.drawerPts;
     }
 
     if(result.type === 'correct'){
       sndCorrect(); flash('green'); burstConfetti(120);
-      const iGuessed = result.correctPlayerId === selfId, iDrew = currentRound.drawerId === selfId;
-      const who = displayNameFor(result.correctPlayerId, result.correctPlayerName);
+      const iGuessed = award.guessers.some(g=>g.pid === selfId), iDrew = currentRound.drawerId === selfId;
       // v2.85: no pop-up text here — the round-end screen already says it
       fireworkShow(iGuessed || iDrew ? 5 : 3, 260);
       if(iGuessed || iDrew) burstEmoji(['⭐','🎉','✨','🏅'], 14);
-      [result.correctPlayerId, currentRound.drawerId].forEach(pid=>setTimeout(()=>pulseRosterChip(pid), 300));
+      award.guessers.map(g=>g.pid).concat([currentRound.drawerId]).forEach(pid=>setTimeout(()=>pulseRosterChip(pid), 300));
     }
     else { sndTimeout(); flash('red'); }
 
@@ -7897,10 +8309,19 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const wordEl = document.getElementById('roundend-word');
     const shownWord = result.word || (currentRound.drawerId === selfId ? currentRound.word : '');
     if(result.type === 'correct'){
-      banner.textContent = result.correctPlayerId === selfId ? '🎉 Eltaláltad!'
-        : (currentRound.drawerId === selfId ? `🎨 ${result.correctPlayerName} kitalálta a rajzodat!` : `🎉 ${result.correctPlayerName} kitalálta!`);
+      const award = result.award || roundAward(result);
+      const gs = award.guessers;
+      const many = gs.length > 1;
+      const iGuessed = gs.some(g=>g.pid === selfId);
+      banner.textContent = iGuessed ? '🎉 Eltaláltad!'
+        : (currentRound.drawerId === selfId
+            ? (many ? `🎨 ${gs.length} játékos kitalálta a rajzodat!` : `🎨 ${result.correctPlayerName} kitalálta a rajzodat!`)
+            : (many ? `🎉 ${gs.length} játékos kitalálta!` : `🎉 ${result.correctPlayerName} kitalálta!`));
       banner.className = 'result-banner win';
-      wordEl.innerHTML = `A szó: <span class="word-reveal-final">${escapeHtml(shownWord)}</span> — +${Number(result.pointsForGuesser)||0} pont a tippelőnek, és ugyanennyi a rajzolónak (${escapeHtml(currentRound.drawerName)})`;
+      const drawerPart = `+${award.drawerPts} a rajzolónak (${escapeHtml(currentRound.drawerName)})`;
+      wordEl.innerHTML = many
+        ? `A szó: <span class="word-reveal-final">${escapeHtml(shownWord)}</span> — ${gs.map(g=>`${escapeHtml(displayNameFor(g.pid, ''))} +${g.pts}`).join(', ')}; ${drawerPart}`
+        : `A szó: <span class="word-reveal-final">${escapeHtml(shownWord)}</span> — +${gs.length ? gs[0].pts : 0} pont a tippelőnek, ${drawerPart}`;
     } else {
       banner.textContent = result.type === 'pass' ? '⏭️ A rajzoló passzolt!' : '⌛ Lejárt az idő!';
       banner.className = 'result-banner lose';
@@ -8366,6 +8787,18 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.89', changes:[
+      'Új beállítás szobanyitáskor: „Mindenki kitalálhatja” — a kör addig tart, amíg mindenki eltalálta (vagy lejár az idő), és mindenki a saját gyorsasága szerint kap pontot. A rajzoló az átlagot kapja. A megoldás közben senkinél nem látszik.',
+      'Új beállítás: a rajzoló kaphat fele annyi pontot, mint a tippelő. Két játékosnál így lesz győztes (eddig mindig döntetlen lett).',
+      'Engedékenyebb tippellenőrzés: a szóköz és kötőjel nem számít, egy rövid rag belefér („hóemberek”, „biciklit”), hosszabb szónál egy elütés is. A nagyon közeli tippek automatikusan „közel!” jelölést kapnak.',
+      'Betű-súgó: a szó hossza már a kör elejétől látszik, a betűk pedig véletlenszerű helyen nyílnak fel, nem mindig balról.',
+      'Rajzolás közben a rajzoló nem írhatja be a megoldást a chatbe, és hangüzenetet sem küldhet. A „Mindenki kitalálhatja” módban ugyanez vonatkozik arra, aki már eltalálta.',
+      'A Törlés visszavonható: a ↶ gomb visszahozza az egész rajzot. Új ↷ Újra gomb, gépen Ctrl+Z / Ctrl+Y.',
+      'Új eszköz: téglalap. A vastagság mellett élő előnézet mutatja az ecset méretét és színét.',
+      'Simább vonalak: a gyors mozdulat nem lesz szögletes.',
+      'A festékes vödör minden eszközön pontosan ugyanúgy tölt ki, és hosszú rajznál sem lassul be a tippelők telefonja.',
+      'Ha a játék motorja nem tud betöltődni (hálózati tiltás, reklámblokkoló), üres képernyő helyett érthető hibaüzenet és Újratöltés gomb jelenik meg.'
+    ]},
     { version:'2.88', changes:[
       'Admin: élő áttekintés (online játékosok, nyitott szobák, folyamatban lévő játékok, szó- és zeneszámok).',
       'Admin: közlemény a kezdőképernyőre, lejárati idővel — a játékosok bezárhatják.',
