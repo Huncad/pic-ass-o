@@ -1400,20 +1400,12 @@
       </div>
     </div>
     <div class="setup-section">
-      <label class="field-label">Ki tippelhet egy körben?</label>
+      <label class="field-label">Mikor ér véget a kör?</label>
       <div class="pill-row" id="guessmode-row">
-        <button class="pill active" data-guessmode="first">Aki elsőként kitalálja 🏁</button>
-        <button class="pill" data-guessmode="all">Mindenki kitalálhatja 👥</button>
+        <button class="pill active" data-guessmode="first">Az első helyes tippnél 🏁</button>
+        <button class="pill" data-guessmode="all">Ha már mindenki kitalálta 👥</button>
       </div>
-      <p class="setup-hint">Mindenki kitalálhatja: a kör addig tart, amíg mindenki eltalálta vagy lejár az idő, és aki gyorsabb, több pontot kap.</p>
-    </div>
-    <div class="setup-section">
-      <label class="field-label">Mennyi pontot kap a rajzoló?</label>
-      <div class="pill-row" id="drawerpts-row">
-        <button class="pill active" data-drawerpts="same">Ugyanannyit, mint a tippelő</button>
-        <button class="pill" data-drawerpts="half">Fele annyit ½</button>
-      </div>
-      <p class="setup-hint">Két játékosnál a „Fele annyit” kell, különben mindig döntetlen lesz a vége.</p>
+      <p class="setup-hint">Tippelni mindig mindenki tud. Az első esetben az első jó tipp lezárja a kört, a másodikban a kör addig tart, amíg mindenki eltalálta (vagy lejár az idő). Minél gyorsabb valaki, annál több pontot kap. A rajzoló pontja attól függ, milyen gyorsan rajzolta le a szót: az utolsó módosításáig mérjük, és csak akkor jár, ha valaki kitalálta.</p>
     </div>
     <div class="start-btn-wrap" style="display:flex;justify-content:center;margin-top:24px;">
       <button class="big" id="btn-create-room" style="background:var(--green);">Szoba létrehozása 🎉</button>
@@ -3628,7 +3620,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let roomCode = '';
   let currentRoomName = '';
   let isHost = false;
-  let settings = { difficulties:['konnyu','kozepes'], totalRounds:4, roundTime:60, maxPlayers:0, hintsEnabled:true, wordChoices:3, guessMode:'first', drawerHalf:false };
+  let settings = { difficulties:['konnyu','kozepes'], totalRounds:4, roundTime:60, maxPlayers:0, hintsEnabled:true, wordChoices:3, guessMode:'first' };
   const WORD_CHOICE_OPTIONS = [1,2,3,5,7,10];
   let roomIsPublic = false;
 
@@ -3987,7 +3979,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         difficulties: [...document.querySelectorAll('#difficulty-row .pill.active')].map(b=>b.dataset.tier),
         totalRounds: settings.totalRounds, roundTime: settings.roundTime,
         hintsEnabled: settings.hintsEnabled, maxPlayers: settings.maxPlayers, wordChoices: settings.wordChoices,
-        guessMode: settings.guessMode, drawerHalf: settings.drawerHalf,
+        guessMode: settings.guessMode,
         visibility: vis ? vis.dataset.visibility : 'private',
         roomName: document.getElementById('room-name-input').value.slice(0,30)
       }));
@@ -4013,7 +4005,6 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     settings.maxPlayers = parseInt(pick('maxplayers-row', 'maxplayers', p.maxPlayers, 0), 10);
     settings.wordChoices = parseInt(pick('choices-row', 'choices', p.wordChoices, 3), 10);
     settings.guessMode = pick('guessmode-row', 'guessmode', p.guessMode === 'all' ? 'all' : 'first', 'first') === 'all' ? 'all' : 'first';
-    settings.drawerHalf = pick('drawerpts-row', 'drawerpts', p.drawerHalf === true ? 'half' : 'same', 'same') === 'half';
     roomIsPublic = pick('visibility-row', 'visibility', p.visibility, 'private') === 'public';
     if(typeof p.roomName === 'string') document.getElementById('room-name-input').value = p.roomName.slice(0,30);
   }
@@ -4067,14 +4058,6 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       sndClick();
       settings.guessMode = btn.dataset.guessmode === 'all' ? 'all' : 'first';
       document.querySelectorAll('#guessmode-row .pill').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-    });
-  });
-  document.querySelectorAll('#drawerpts-row .pill').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      sndClick();
-      settings.drawerHalf = btn.dataset.drawerpts === 'half';
-      document.querySelectorAll('#drawerpts-row .pill').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
     });
   });
@@ -4633,6 +4616,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         clean.correctPlayerName = displayNameFor(clean.hits[0].pid, '');
         clean.elapsedMs = clean.hits[0].ms;
         clean.pointsForGuesser = roundPoints(clean.elapsedMs / 1000);
+        clean.drawMs = clampNum(data.drawMs, 0, maxMsAll, clean.elapsedMs);
         onRoundResolved(clean);
         return;
       }
@@ -4647,6 +4631,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         const maxMs = Math.max(1, Number(settings && settings.roundTime) || 1) * 1000;
         clean.elapsedMs = clampNum(data.elapsedMs, 0, maxMs, maxMs);
         clean.pointsForGuesser = roundPoints(clean.elapsedMs / 1000);
+        clean.drawMs = clampNum(data.drawMs, 0, maxMs, clean.elapsedMs);
       }
       onRoundResolved(clean);
     };
@@ -4908,8 +4893,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       maxPlayers: clampNum(s.maxPlayers, 0, 20, 0),
       hintsEnabled: s.hintsEnabled !== false,
       wordChoices: WORD_CHOICE_OPTIONS.includes(Number(s.wordChoices)) ? Number(s.wordChoices) : 3,
-      guessMode: s.guessMode === 'all' ? 'all' : 'first',
-      drawerHalf: s.drawerHalf === true
+      guessMode: s.guessMode === 'all' ? 'all' : 'first'
     };
     if(out.difficulties.length === 0) out.difficulties = ['konnyu','kozepes'];
     return out;
@@ -6930,6 +6914,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     fdStrokes = []; fdCurrentStroke = null; fdDrawing = false; fdLastFlush = 0; fdShapeBase = null;
     fdResetStreamState();
     fdResetHistory(); painterReset(fdPainter);
+    fdLastModAt = null;
     requestAnimationFrame(()=>{ try{ updateFdHistoryButtons(); updateSizeDot(); }catch(e){} });
     document.getElementById('fd-guess-feed').innerHTML = '';
     renderRosters();
@@ -7384,9 +7369,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // v2.89: history. "Törlés" can be undone (the ↶ button brings the whole
   // drawing back), and anything undone can be redone (↷) until a new stroke.
   let fdRedo = [], fdClearedBackup = null;
-  function fdAfterNewStroke(){ fdRedo = []; fdClearedBackup = null; requestAnimationFrame(updateFdHistoryButtons); }
+  function fdAfterNewStroke(){ fdRedo = []; fdClearedBackup = null; noteDrawingChanged(); requestAnimationFrame(updateFdHistoryButtons); }
   function fdResetHistory(){ fdRedo = []; fdClearedBackup = null; }
   function fdHistoryChanged(){
+    noteDrawingChanged();
     fdStrokesDirty = true; fdNeedFull = true; noteDrawActivity(); fdRedrawAll(); maybeFlushStrokes(true); updateFdHistoryButtons();
   }
   function fdUndo(){
@@ -7974,32 +7960,38 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   // Only the drawer knows the word, so only the drawer ends a round — and the
   // end-of-round message is the moment the word is finally revealed to everyone.
+  // v2.90: the moment of the drawer's last change to the drawing
+  let fdLastModAt = null;
+  function noteDrawingChanged(){ fdLastModAt = Date.now(); }
   function finishRoundAsDrawer(result){
     if(!currentRound || currentRound.drawerId !== selfId) return;
     if(processedResultRounds.has(roundKey(currentRound))) return;
     result.word = currentRound.word;
+    if(result.type === 'correct' && currentRound.roundStartAt){
+      // nothing drawn at all: the drawing "took" as long as the first guess
+      result.drawMs = fdLastModAt ? Math.max(0, fdLastModAt - currentRound.roundStartAt) : (Number(result.elapsedMs) || 0);
+    }
     resultAction.send(result);
     onRoundResolved(result);
   }
-  // v2.89: who gets what for a round — worked out the same way on every
-  // device from the checked result. "Everyone can guess" mode: each guesser
-  // is scored on their own time, the drawer gets the average over everyone
-  // who could have guessed (so a drawing only half the room got is worth
-  // half). The optional "drawer gets half" rule halves the drawer's share.
+  // v2.90: who gets what for a round — worked out the same way on every
+  // device from the checked result. Every guesser is scored on how fast
+  // THEY found the word; the drawer on how fast they finished the drawing:
+  // the moment of their last change (stroke, fill, undo, clear…). The
+  // drawer only scores if at least one person found the word.
   function roundAward(result){
     if(!result || result.type !== 'correct') return { guessers:[], drawerPts:0 };
     const hits = Array.isArray(result.hits) && result.hits.length
       ? result.hits
       : [{ pid: result.correctPlayerId, ms: Number(result.elapsedMs) || 0 }];
     const guessers = hits.filter(h=>h && h.pid).map(h=>({ pid:h.pid, ms:Number(h.ms)||0, pts: roundPoints((Number(h.ms)||0)/1000) }));
-    let drawerPts = 0;
+    let drawerPts = 0, drawMs = null;
     if(guessers.length){
-      drawerPts = Array.isArray(result.hits) && result.hits.length
-        ? Math.round(guessers.reduce((n,g)=>n+g.pts, 0) / Math.max(guessers.length, Number(result.n) || guessers.length))
-        : guessers[0].pts;
+      const dm = Number(result.drawMs);
+      drawMs = Number.isFinite(dm) && dm >= 0 ? dm : guessers[0].ms;
+      drawerPts = roundPoints(drawMs / 1000);
     }
-    if(settings.drawerHalf) drawerPts = Math.round(drawerPts / 2);
-    return { guessers, drawerPts };
+    return { guessers, drawerPts, drawMs };
   }
   // "Everyone can guess" mode, on the drawer's device: the round is over as
   // soon as every guesser still in the game has found the word.
@@ -8015,7 +8007,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!roundHits.length){ finishRoundAsDrawer({ type: kind === 'pass' ? 'pass' : 'timeout' }); return; }
     const hits = roundHits.slice().sort((a,b)=>a.ms-b.ms);
     const first = hits[0];
-    finishRoundAsDrawer({ type:'correct', hits, n: Math.max(hits.length, eligible.length),
+    finishRoundAsDrawer({ type:'correct', hits,
       correctPlayerId:first.pid, correctPlayerName: displayNameFor(first.pid, ''),
       pointsForGuesser: roundPoints(first.ms/1000), elapsedMs: first.ms });
   }
@@ -8318,7 +8310,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
             ? (many ? `🎨 ${gs.length} játékos kitalálta a rajzodat!` : `🎨 ${result.correctPlayerName} kitalálta a rajzodat!`)
             : (many ? `🎉 ${gs.length} játékos kitalálta!` : `🎉 ${result.correctPlayerName} kitalálta!`));
       banner.className = 'result-banner win';
-      const drawerPart = `+${award.drawerPts} a rajzolónak (${escapeHtml(currentRound.drawerName)})`;
+      const drawSecs = Number.isFinite(award.drawMs) ? ` — ${Math.max(1, Math.round(award.drawMs/1000))} mp alatt rajzolta meg` : '';
+      const drawerPart = `+${award.drawerPts} a rajzolónak (${escapeHtml(currentRound.drawerName)}${drawSecs})`;
       wordEl.innerHTML = many
         ? `A szó: <span class="word-reveal-final">${escapeHtml(shownWord)}</span> — ${gs.map(g=>`${escapeHtml(displayNameFor(g.pid, ''))} +${g.pts}`).join(', ')}; ${drawerPart}`
         : `A szó: <span class="word-reveal-final">${escapeHtml(shownWord)}</span> — +${gs.length ? gs[0].pts : 0} pont a tippelőnek, ${drawerPart}`;
@@ -8787,6 +8780,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.90', changes:[
+      'Új pontozás a rajzolónak: annyi pontot kap, amilyen gyorsan lerajzolta a szót — az utolsó módosításáig mérve (vonal, kitöltés, visszavonás, törlés). Csak akkor jár, ha valaki kitalálta. A „Mennyi pontot kap a rajzoló?” beállítás megszűnt.',
+      'Érthetőbb beállítás: „Mikor ér véget a kör? — Az első helyes tippnél / Ha már mindenki kitalálta”. Tippelni mindkét esetben mindenki tud.'
+    ]},
     { version:'2.89', changes:[
       'Új beállítás szobanyitáskor: „Mindenki kitalálhatja” — a kör addig tart, amíg mindenki eltalálta (vagy lejár az idő), és mindenki a saját gyorsasága szerint kap pontot. A rajzoló az átlagot kapja. A megoldás közben senkinél nem látszik.',
       'Új beállítás: a rajzoló kaphat fele annyi pontot, mint a tippelő. Két játékosnál így lesz győztes (eddig mindig döntetlen lett).',
