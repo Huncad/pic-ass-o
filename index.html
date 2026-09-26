@@ -3500,102 +3500,158 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   resizeFx();
   window.addEventListener('resize', resizeFx);
+  // =====================================================================
+  // v2.95 effects engine. The old one choked phones (seconds of stutter,
+  // worst at the end of a game): up to ~1200 particles at once, a canvas
+  // save/restore for EVERY piece on EVERY frame, emoji re-rendered as text
+  // each frame (the most expensive thing a canvas can draw), and motion
+  // tied to frames, so a slow phone got a longer show and fell further
+  // behind. Now: a hard particle budget, direct transforms instead of
+  // save/restore, emoji pre-drawn once into small images, time-based
+  // motion, automatic thinning when frames get slow, and a stop when the
+  // page is hidden.
+  // =====================================================================
+  const FX_MAX = IS_MOBILE ? 320 : 600;          // live particles at most
+  const FX_SCALE = IS_MOBILE ? 0.6 : 0.8;        // fewer pieces per burst than before
   let confetti = [];
   const CONFETTI_COLORS = ['#FF6FA0','#FFD166','#5FB6DE','#7BD389','#C79CF0'];
+  const REDUCED_MOTION = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const FW_PALETTES = [['#FFD166','#FF6FA0','#fff'],['#5FB6DE','#4FD6E8','#fff'],['#7BD389','#FFD166','#fff'],['#C79CF0','#FF6FA0','#fff'],['#FF6B5B','#F5A623','#FFD166']];
+  let fxRunning = false, fxLast = 0, fxSlowFrames = 0;
+  function fxRoom(n){ return Math.max(0, Math.min(Math.round(n), FX_MAX - confetti.length)); }
   function burstConfetti(count, originY){
-    if(!fxCtx) return;
-    if(confetti.length > 1200) return;   // a burst storm must not eat the frame budget
-    for(let i=0;i<count;i++){
+    if(!fxCtx || document.hidden) return;
+    const n = fxRoom(count * FX_SCALE);
+    for(let i=0;i<n;i++){
       confetti.push({
+        kind:'paper',
         x: Math.random()*fxCanvas.width, y: originY!==undefined?originY:-20-Math.random()*200,
         vx:(Math.random()-0.5)*4, vy:2+Math.random()*4, size:6+Math.random()*8,
         color: CONFETTI_COLORS[Math.floor(Math.random()*CONFETTI_COLORS.length)],
-        rot:Math.random()*Math.PI*2, vrot:(Math.random()-0.5)*0.3, life:0
+        rot:Math.random()*Math.PI*2, vrot:(Math.random()-0.5)*0.3, life:0, max:200+Math.random()*80
       });
     }
     startFx();
   }
-  // The animation loop only runs while there is confetti on screen; an
-  // idle page used to keep a requestAnimationFrame loop going forever
-  // (pointless battery/CPU drain on phones).
-  let fxRunning = false;
-  function animateFx(){
-    fxCtx.clearRect(0,0,fxCanvas.width,fxCanvas.height);
-    confetti.forEach(c=>{
-      if(c.kind === 'spark'){
-        // v2.73: firework spark — drag, gravity, fading glowing dot + trail
-        c.vx*=0.965; c.vy=c.vy*0.965+0.06; c.x+=c.vx; c.y+=c.vy; c.life++;
-        const a = Math.max(0, 1 - c.life/c.max);
-        fxCtx.globalAlpha = a;
-        fxCtx.strokeStyle = c.color; fxCtx.lineWidth = c.size*0.6;
-        fxCtx.beginPath(); fxCtx.moveTo(c.x - c.vx*3, c.y - c.vy*3); fxCtx.lineTo(c.x, c.y); fxCtx.stroke();
-        fxCtx.fillStyle = '#fff';
-        fxCtx.beginPath(); fxCtx.arc(c.x, c.y, c.size*0.35, 0, Math.PI*2); fxCtx.fill();
-        fxCtx.globalAlpha = 1;
-        return;
-      }
-      if(c.kind === 'emoji'){
-        c.x+=c.vx; c.y+=c.vy; c.vy+=0.12; c.rot+=c.vrot; c.life++;
-        fxCtx.save(); fxCtx.globalAlpha = Math.max(0, 1 - c.life/c.max);
-        fxCtx.translate(c.x,c.y); fxCtx.rotate(c.rot);
-        fxCtx.font = `${c.size}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
-        fxCtx.textAlign = 'center'; fxCtx.textBaseline = 'middle';
-        fxCtx.fillText(c.text, 0, 0);
-        fxCtx.restore();
-        return;
-      }
-      c.x+=c.vx; c.y+=c.vy; c.vy+=0.03; c.rot+=c.vrot; c.life++;
-      fxCtx.save(); fxCtx.translate(c.x,c.y); fxCtx.rotate(c.rot);
-      // a tumbling piece of paper: its width follows the spin
-      const w = c.size * Math.abs(Math.cos(c.rot*1.7)) + 1;
-      fxCtx.fillStyle=c.color; fxCtx.fillRect(-w/2,-c.size/4,w,c.size/2);
-      fxCtx.restore();
-    });
-    confetti = confetti.filter(c=>c.y<fxCanvas.height+60 && c.life<(c.max||500));
-    if(confetti.length === 0){ fxRunning = false; return; }
-    requestAnimationFrame(animateFx);
+  // each emoji is drawn as text ONCE, into a small image; afterwards only the image is used
+  const emojiSprites = new Map();
+  function emojiSprite(ch){
+    let im = emojiSprites.get(ch);
+    if(im) return im;
+    im = document.createElement('canvas');
+    im.width = im.height = 72;
+    const x = im.getContext('2d');
+    if(x){
+      x.font = '58px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+      x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillText(ch, 36, 40);
+    }
+    emojiSprites.set(ch, im);
+    return im;
   }
-  function startFx(){
-    if(fxRunning || !fxCtx) return;
-    fxRunning = true;
-    requestAnimationFrame(animateFx);
-  }
-  // v2.73: fancier effects. All local and cheap; skipped when the phone asks
-  // for reduced motion.
-  const REDUCED_MOTION = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const FW_PALETTES = [['#FFD166','#FF6FA0','#fff'],['#5FB6DE','#4FD6E8','#fff'],['#7BD389','#FFD166','#fff'],['#C79CF0','#FF6FA0','#fff'],['#FF6B5B','#F5A623','#FFD166']];
+  // pre-draw the emoji the game uses while the page is idle, so the first
+  // celebration doesn't pay for it
+  setTimeout(()=>{
+    const warm = ()=>{ try{ ['⭐','🎉','✨','🏅','🏆','👑','🥇'].forEach(emojiSprite); }catch(e){} };
+    if(window.requestIdleCallback) requestIdleCallback(warm, { timeout:4000 }); else warm();
+  }, 2500);
   function burstFirework(x, y, count){
-    if(!fxCtx || REDUCED_MOTION || confetti.length > 1400) return;
+    if(!fxCtx || REDUCED_MOTION || document.hidden) return;
     const pal = FW_PALETTES[Math.floor(Math.random()*FW_PALETTES.length)];
-    const n = count || 70;
+    const n = fxRoom((count || 70) * (IS_MOBILE ? 0.5 : 0.65));
     for(let i=0;i<n;i++){
       const ang = (i/n)*Math.PI*2 + Math.random()*0.2;
       const sp = 3 + Math.random()*4.5;
       confetti.push({ kind:'spark', x, y, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp,
-        size:2.5+Math.random()*2.5, color:pal[i%pal.length], life:0, max:55+Math.random()*35 });
+        size:2.5+Math.random()*2.5, color:pal[i%pal.length], life:0, max:50+Math.random()*30 });
     }
     startFx();
   }
   function fireworkShow(times, gap){
     if(REDUCED_MOTION) return;
-    for(let i=0;i<times;i++){
+    const t = Math.min(times, IS_MOBILE ? 4 : 6);
+    for(let i=0;i<t;i++){
       setTimeout(()=>burstFirework(
         fxCanvas.width*(0.15+Math.random()*0.7), fxCanvas.height*(0.12+Math.random()*0.4),
         60+Math.floor(Math.random()*40)), i*gap);
     }
   }
   function burstEmoji(list, count, originX, originY){
-    if(!fxCtx || REDUCED_MOTION) return;
+    if(!fxCtx || REDUCED_MOTION || document.hidden) return;
     const x0 = originX !== undefined ? originX : fxCanvas.width/2;
     const y0 = originY !== undefined ? originY : fxCanvas.height*0.55;
-    for(let i=0;i<count;i++){
-      confetti.push({ kind:'emoji', text:list[i%list.length], x:x0, y:y0,
+    const n = fxRoom(Math.min(count, IS_MOBILE ? 8 : 12));
+    for(let i=0;i<n;i++){
+      confetti.push({ kind:'emoji', img: emojiSprite(list[i%list.length]), x:x0, y:y0,
         vx:(Math.random()-0.5)*9, vy:-6-Math.random()*6, rot:(Math.random()-0.5), vrot:(Math.random()-0.5)*0.15,
-        size:26+Math.random()*18, life:0, max:110 });
+        size:26+Math.random()*18, life:0, max:100 });
     }
     startFx();
   }
-  // big centred banner that pops, wobbles and fades ("Eltalálta!", "Lejárt az idő")
+  function animateFx(ts){
+    if(document.hidden){                          // nothing to see: drop it all
+      confetti = []; fxRunning = false; fxLast = 0;
+      fxCtx.setTransform(1,0,0,1,0,0); fxCtx.clearRect(0,0,fxCanvas.width,fxCanvas.height);
+      return;
+    }
+    // motion measured in "60 fps frames", whatever the real frame rate
+    const dt = fxLast ? Math.min(3, Math.max(0.25, (ts - fxLast) / 16.667)) : 1;
+    fxLast = ts;
+    // a slow frame three times in a row: thin the show out by half
+    if(dt > 2.2){
+      if(++fxSlowFrames >= 3 && confetti.length > 40){ confetti = confetti.filter((_, i)=>i % 2 === 0); fxSlowFrames = 0; }
+    } else fxSlowFrames = 0;
+    const ctx = fxCtx, W = fxCanvas.width, H = fxCanvas.height;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0,0,W,H);
+    ctx.lineCap = 'round';
+    const drag = Math.pow(0.965, dt);
+    let keep = 0;
+    for(let i=0;i<confetti.length;i++){
+      const c = confetti[i];
+      c.life += dt;
+      if(c.kind === 'spark'){
+        c.vx *= drag; c.vy = c.vy*drag + 0.06*dt; c.x += c.vx*dt; c.y += c.vy*dt;
+        const a = 1 - c.life/c.max;
+        if(a <= 0 || c.y > H + 60) continue;
+        ctx.setTransform(1,0,0,1,0,0);
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = c.color; ctx.lineWidth = c.size*0.8;
+        ctx.beginPath(); ctx.moveTo(c.x - c.vx*3, c.y - c.vy*3); ctx.lineTo(c.x, c.y); ctx.stroke();
+      } else if(c.kind === 'emoji'){
+        c.x += c.vx*dt; c.y += c.vy*dt; c.vy += 0.12*dt; c.rot += c.vrot*dt;
+        const a = 1 - c.life/c.max;
+        if(a <= 0 || c.y > H + 80) continue;
+        const cs = Math.cos(c.rot), sn = Math.sin(c.rot);
+        ctx.setTransform(cs, sn, -sn, cs, c.x, c.y);
+        ctx.globalAlpha = a;
+        ctx.drawImage(c.img, -c.size/2, -c.size/2, c.size, c.size);
+      } else {
+        c.x += c.vx*dt; c.y += c.vy*dt; c.vy += 0.03*dt; c.rot += c.vrot*dt;
+        if(c.y > H + 60 || c.life >= c.max) continue;
+        const cs = Math.cos(c.rot), sn = Math.sin(c.rot);
+        ctx.setTransform(cs, sn, -sn, cs, c.x, c.y);
+        ctx.globalAlpha = Math.min(1, (c.max - c.life) / 40);   // gentle fade at the end
+        // a tumbling piece of paper: its width follows the spin
+        const w = c.size * Math.abs(Math.cos(c.rot*1.7)) + 1;
+        ctx.fillStyle = c.color; ctx.fillRect(-w/2, -c.size/4, w, c.size/2);
+      }
+      confetti[keep++] = c;
+    }
+    confetti.length = keep;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalAlpha = 1;
+    if(keep === 0){ fxRunning = false; fxLast = 0; ctx.clearRect(0,0,W,H); return; }
+    requestAnimationFrame(animateFx);
+  }
+  function startFx(){
+    if(fxRunning || !fxCtx) return;
+    fxRunning = true;
+    fxLast = 0;
+    requestAnimationFrame(animateFx);
+  }
+
   function showFxBanner(text, sub, kind){
     const el = document.getElementById('fx-banner');
     if(!el) return;
@@ -8276,7 +8332,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       sndCorrect(); flash('green'); burstConfetti(120);
       const iGuessed = award.guessers.some(g=>g.pid === selfId), iDrew = currentRound.drawerId === selfId;
       // v2.85: no pop-up text here — the round-end screen already says it
-      fireworkShow(iGuessed || iDrew ? 5 : 3, 260);
+      fireworkShow(iGuessed || iDrew ? 3 : 2, 300);
       if(iGuessed || iDrew) burstEmoji(['⭐','🎉','✨','🏅'], 14);
       award.guessers.map(g=>g.pid).concat([currentRound.drawerId]).forEach(pid=>setTimeout(()=>pulseRosterChip(pid), 300));
     }
@@ -8570,11 +8626,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     refreshRematchUI();
     if(quiet) return;   // someone who joins after the end doesn't get the fanfare
     sndFanfare();
-    burstConfetti(80,-20); setTimeout(()=>burstConfetti(80,-20),300);
-    setTimeout(()=>burstConfetti(100,-20),700); setTimeout(()=>burstConfetti(100,-20),1200);
+    // v2.95: spread out over time instead of everything at once
+    burstConfetti(90,-20); setTimeout(()=>burstConfetti(90,-20),900);
     const iWon = winners.some(w=>w.id === selfId);
-    fireworkShow(iWon ? 10 : 6, 330);
-    if(iWon) burstEmoji(['🏆','👑','⭐','🥇'], 18);
+    fireworkShow(iWon ? 6 : 4, 450);
+    if(iWon) setTimeout(()=>burstEmoji(['🏆','👑','⭐','🥇'], 10), 400);
   }
 
   // =====================================================================
@@ -8969,6 +9025,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.95', changes:[
+      'Javítva: a tűzijáték és a konfetti (főleg a játék végén) másodpercekre belassította, beszaggatta a játékot, leginkább telefonon. Az effektek most jóval kevesebb erőforrást használnak, kevesebb, de ugyanolyan látványos részecskével, időben elosztva; ha a készülék mégis lassulna, maguktól ritkulnak.'
+    ]},
     { version:'2.94', changes:[
       'Új, megbízhatóbb szobalista: a szobák közvetlenül az MQTT-szervereken keresztül látszanak, közvetlen eszköz–eszköz kapcsolat nélkül. Telefonon a régi, WebRTC-s szobalista már nem fut: az iPhone egy idő után ettől nem tudott új kapcsolatot építeni, ezért nem látta a PC-n nyitott szobát, és csatlakozni sem tudott. A telefon most csak akkor épít kapcsolatot, amikor ténylegesen belép egy szobába.',
       'Fontos: a régi verziót futtató eszközök a régi listán látszanak — mindenki frissítse az oldalt.'
