@@ -1894,7 +1894,7 @@
 
     <div class="admin-note" id="admin-notify-box">
       <strong style="color:var(--chalk);">🔔 Értesítés, ha valaki szobát nyit</strong><br>
-      Amikor bárki szobát nyit a játékban, egy értesítés érkezik a telefonodra az ingyenes
+      Amikor bárki szobát nyit a játékban, egy értesítés érkezik a telefonodra (vagy a gépedre) az ingyenes
       <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> appon keresztül (regisztráció nem kell).
       <ol style="margin:6px 0 0 18px;padding:0;line-height:1.45;">
         <li>Telepítsd a telefonodra az <b>ntfy</b> appot (App Store / Google Play).</li>
@@ -1910,7 +1910,6 @@
         <button class="ghost small" id="admin-notify-newtopic" type="button" title="Új, véletlen csatornanév">🎲 Új név</button>
         <button class="ghost small" id="admin-notify-copy" type="button">📋 Másolás</button>
       </div>
-      <input type="email" id="admin-notify-email" placeholder="E-mail cím (nem kötelező)" maxlength="120" autocomplete="off" style="width:100%;margin-top:6px;">
       <label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer;font-size:.9rem;">
         <input type="checkbox" id="admin-notify-skipown"> Az ezen az eszközön nyitott szobáimról ne kapjak értesítést
       </label>
@@ -1922,7 +1921,8 @@
       <div style="font-size:.78rem;color:var(--chalk-dim);margin-top:6px;line-height:1.35;">
         A csatornanév az élő tárhelyre kerül, amit a játék minden eszköze beolvas — aki kinyomozza, küldhetne rá
         értesítést. Ezért legyen hosszú és véletlen (🎲); ha kéretlen üzenetek jönnének, adj meg új nevet.
-        Az e-mail küldés az ntfy.sh ingyenes szolgáltatása, napi korláttal.
+        Gépen az ntfy weboldalán (ntfy.sh/app) is feliratkozhatsz ugyanerre a névre. E-mailt az ntfy.sh 2026 óta
+        csak regisztrált, hitelesített fiókkal küld, ezért azt a játék nem használja.
       </div>
     </div>
 
@@ -2378,7 +2378,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // so the caller knows to fall back to the local .txt files instead of
   // wiping out the word bank.
   // v2.98: admin push-notification settings (declared before the gist is read)
-  let notifyCfg = { on:false, topic:'', email:'' };
+  let notifyCfg = { on:false, topic:'' };
   const NOTIFY_SKIP_OWN_KEY = 'picasso-notify-skip-own';
   async function loadWordsFromGist(){
     if(!WORDS_GIST_ID) return null;
@@ -3011,10 +3011,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // live store (ertesites.json), set on the admin page.
   // =====================================================================
   function cleanNotifyTopic(t){ const s = String(t || '').trim(); return /^[A-Za-z0-9_-]{8,64}$/.test(s) ? s : ''; }
-  function cleanNotifyEmail(e){ const s = String(e || '').trim(); return /^[^\s@<>]{1,64}@[^\s@<>]{1,120}\.[A-Za-z]{2,}$/.test(s) ? s : ''; }
   function setNotifyCfg(raw){
     const c = isPlainObject(raw) ? raw : {};
-    notifyCfg = { on: c.on === true, topic: cleanNotifyTopic(c.topic), email: cleanNotifyEmail(c.email) };
+    // (an "email" saved by v2.98 is ignored: ntfy.sh rejects anonymous e-mail
+    // since March 2026, and would then reject the WHOLE notification)
+    notifyCfg = { on: c.on === true, topic: cleanNotifyTopic(c.topic) };
     fillAdminNotifyForm(false);
   }
   function newNotifyTopic(){
@@ -3022,20 +3023,27 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ crypto.getRandomValues(a); }catch(e){ for(let i=0;i<a.length;i++) a[i] = Math.floor(Math.random()*256); }
     return 'picasso-' + Array.from(a).map(b=>b.toString(36).padStart(2,'0')).join('').slice(0, 20);
   }
+  // returns { ok, detail } — detail says what went wrong, in words
   async function sendPush(cfg, title, message, clickUrl){
-    if(!cfg || !cfg.topic) return false;
+    if(!cfg || !cfg.topic) return { ok:false, detail:'nincs csatornanév' };
     // query parameters instead of headers: accents and emoji travel safely,
     // and a plain-text POST needs no CORS pre-flight
     const q = new URLSearchParams({ title, tags:'art,bell' });
     if(clickUrl) q.set('click', clickUrl);
-    if(cfg.email) q.set('email', cfg.email);
+    let res;
     try{
-      const res = await fetch(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}?${q.toString()}`, {
+      res = await fetch(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}?${q.toString()}`, {
         method:'POST', body: message, keepalive:true,
         headers:{ 'Content-Type':'text/plain;charset=utf-8' }
       });
-      return res.ok;
-    }catch(e){ return false; }
+    }catch(e){
+      return { ok:false, detail:'a böngésző nem érte el az ntfy.sh-t (nincs internet, vagy tiltja egy reklámblokkoló / céges hálózat)' };
+    }
+    if(res.ok) return { ok:true, detail:'' };
+    let why = '';
+    try{ const j = await res.json(); why = (j && (j.error || j.message)) || ''; }catch(e){}
+    if(res.status === 429) why = 'túl sok üzenet ma erről a hálózatról (ntfy napi korlát) — holnap újra megy';
+    return { ok:false, detail:`az ntfy.sh visszautasította (HTTP ${res.status}${why ? ': ' + why : ''})` };
   }
   function notifyRoomOpened(roomName, hostName, isPublic, code){
     if(!notifyCfg.on || !notifyCfg.topic) return;
@@ -3051,21 +3059,18 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function fillAdminNotifyForm(force){
     const on = document.getElementById('admin-notify-on');
     const tp = document.getElementById('admin-notify-topic');
-    const em = document.getElementById('admin-notify-email');
     const sk = document.getElementById('admin-notify-skipown');
     if(!on || !tp) return;
     if(!force && tp.dataset.touched === '1') return;     // don't overwrite what the admin is typing
     on.checked = notifyCfg.on;
     tp.value = notifyCfg.topic || '';
-    em.value = notifyCfg.email || '';
     try{ sk.checked = localStorage.getItem(NOTIFY_SKIP_OWN_KEY) === '1'; }catch(e){}
   }
   (function(){
     const tp = document.getElementById('admin-notify-topic');
-    const em = document.getElementById('admin-notify-email');
     const st = document.getElementById('admin-notify-status');
     const on = document.getElementById('admin-notify-on');
-    [tp, em, on].forEach(el=>el.addEventListener('input', ()=>{ tp.dataset.touched = '1'; }));
+    [tp, on].forEach(el=>el.addEventListener('input', ()=>{ tp.dataset.touched = '1'; }));
     on.addEventListener('change', ()=>{ tp.dataset.touched = '1'; if(on.checked && !cleanNotifyTopic(tp.value)) tp.value = newNotifyTopic(); });
     document.getElementById('admin-notify-newtopic').addEventListener('click', ()=>{
       sndClick(); tp.dataset.touched = '1'; tp.value = newNotifyTopic();
@@ -3078,10 +3083,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     document.getElementById('admin-notify-skipown').addEventListener('change', (e)=>{
       try{ localStorage.setItem(NOTIFY_SKIP_OWN_KEY, e.target.checked ? '1' : '0'); }catch(err){}
     });
-    const formCfg = ()=>({ on: on.checked, topic: cleanNotifyTopic(tp.value), email: cleanNotifyEmail(em.value) });
+    const formCfg = ()=>({ on: on.checked, topic: cleanNotifyTopic(tp.value) });
     const check = (c)=>{
       if(!c.topic){ st.style.color = 'var(--red)'; st.textContent = 'A csatornanév 8–64 karakter legyen, csak betű, szám, - és _ (vagy nyomd meg: 🎲 Új név).'; return false; }
-      if(em.value.trim() && !c.email){ st.style.color = 'var(--red)'; st.textContent = 'Az e-mail cím nem tűnik érvényesnek.'; return false; }
       return true;
     };
     document.getElementById('admin-notify-save').addEventListener('click', async ()=>{
@@ -3101,9 +3105,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const c = formCfg();
       if(!check(c)) return;
       st.style.color = 'var(--chalk-dim)'; st.textContent = 'Küldés…';
-      const ok = await sendPush(c, '🔔 PIC-ASS-O próbaértesítés', 'Ha ezt látod, működik az értesítés! 🎨', location.origin + location.pathname);
-      st.style.color = ok ? 'var(--green)' : 'var(--red)';
-      st.textContent = ok ? '✅ Elküldve — néhány másodpercen belül meg kell jelennie a telefonodon.' : 'Nem sikerült elküldeni (nincs internet, vagy az ntfy.sh nem érhető el).';
+      const r = await sendPush(c, '🔔 PIC-ASS-O próbaértesítés', 'Ha ezt látod, működik az értesítés! 🎨', location.origin + location.pathname);
+      st.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+      st.textContent = r.ok ? '✅ Elküldve — néhány másodpercen belül meg kell jelennie a telefonodon (ha már feliratkoztál a csatornára az ntfy appban).'
+                            : `Nem sikerült elküldeni: ${r.detail}.`;
     });
   })();
   async function adminWriteGistFile(name, content){
@@ -9288,8 +9293,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.99', changes:[
+      'Javítva: az admin próbaértesítése hibát jelzett, mert e-mail cím is meg volt adva — az ntfy.sh 2026 óta fiók nélkül nem küld e-mailt, és ilyenkor az egész értesítést visszautasítja. Az e-mail opció kikerült; a hibaüzenet ezentúl azt is kiírja, mit válaszolt a szerver.'
+    ]},
     { version:'2.98', changes:[
-      'Új admin-beállítás: értesítés a telefonra (az ingyenes ntfy appon keresztül), és ha kéred, e-mailben is, amikor valaki szobát nyit a játékban. Nyilvános szobánál az értesítésre koppintva egyből be is léphetsz.'
+      'Új admin-beállítás: értesítés a telefonra (az ingyenes ntfy appon keresztül), amikor valaki szobát nyit a játékban. Nyilvános szobánál az értesítésre koppintva egyből be is léphetsz.'
     ]},
     { version:'2.97', changes:[
       'Javítva: aki csatlakozáskor előbb egy másik játékossal kapcsolódott össze, mint a szobanyitóval, azt a játék „bent lévőnek” vette, pedig a szobanyitó nem látta (a többiek viszont igen). Most a csatlakozás csak akkor sikeres, ha a szobanyitóval is létrejött a kapcsolat; addig a játék tovább próbálkozik.',
