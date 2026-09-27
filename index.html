@@ -3271,19 +3271,22 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   ['pointerdown','touchend','keydown'].forEach(ev=>
     document.addEventListener(ev, onAudioGesture, { capture:true, passive:true }));
   // v2.76: music and sounds stop while the game is in the background (other
-  // app, locked screen, other tab) and come back when it returns. iOS keeps
-  // an <audio> element playing in the background unless it is paused.
+  // app, locked screen) and come back when it returns. iOS keeps an <audio>
+  // element playing in the background unless it is paused.
+  // v3.00: only on phones and tablets. On a computer, switching to another
+  // tab or window keeps the music going (closing the page still stops it).
+  const MUTE_IN_BACKGROUND = IS_MOBILE;
   function onPageHiddenAudio(){
     try{ musicStopNow(); }catch(e){}
     try{ if(actx && actx.state === 'running') actx.suspend(); }catch(e){}
   }
   document.addEventListener('visibilitychange', ()=>{
-    if(document.visibilityState === 'hidden'){ onPageHiddenAudio(); return; }
+    if(document.visibilityState === 'hidden'){ if(MUTE_IN_BACKGROUND) onPageHiddenAudio(); return; }
     if(masterSoundEnabled) wakeAudio();
     try{ if(musicWanted) musicSync(); }catch(e){}
   });
   window.addEventListener('pagehide', onPageHiddenAudio);
-  window.addEventListener('blur', ()=>{ if(document.visibilityState === 'hidden') onPageHiddenAudio(); });
+  window.addEventListener('blur', ()=>{ if(MUTE_IN_BACKGROUND && document.visibilityState === 'hidden') onPageHiddenAudio(); });
   function audioCtx(){
     if(!actx){
       applyAudioSession();
@@ -9293,6 +9296,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.00', changes:[
+      'Gépen a zene és a hangok akkor is szólnak, ha másik lapfülre vagy ablakra váltasz. Telefonon és tableten továbbra is elhallgatnak, amikor a játék a háttérbe kerül (másik app, lezárt képernyő).'
+    ]},
     { version:'2.99', changes:[
       'Javítva: az admin próbaértesítése hibát jelzett, mert e-mail cím is meg volt adva — az ntfy.sh 2026 óta fiók nélkül nem küld e-mailt, és ilyenkor az egész értesítést visszautasítja. Az e-mail opció kikerült; a hibaüzenet ezentúl azt is kiírja, mit válaszolt a szerver.'
     ]},
