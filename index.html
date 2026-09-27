@@ -56,10 +56,10 @@
     --bg:#0C0C0E; --bg2:#131315; --panel:#1B1B1F; --paper:#1A1A1A; --canvas-paper:#141414;
     --chalk:#ECECEC; --chalk-dim:#9A9AA0;
   }
-  html.dark-mode input[type=text], html.dark-mode input[type=password], html.dark-mode textarea{
+  html.dark-mode input[type=text], html.dark-mode input[type=password], html.dark-mode input[type=email], html.dark-mode textarea{
     background:#242428; color:#ECECEC;
   }
-  html.dark-mode input[type=text]::placeholder, html.dark-mode input[type=password]::placeholder,
+  html.dark-mode input[type=text]::placeholder, html.dark-mode input[type=password]::placeholder, html.dark-mode input[type=email]::placeholder,
   html.dark-mode textarea::placeholder{ color:#8a8a90; }
   html.dark-mode #theme-toggle-btn, html.dark-mode #theme-picker{ display:none !important; }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
@@ -145,7 +145,7 @@
     color:var(--chalk); font-weight:800; cursor:pointer; font-family:'Nunito',sans-serif; box-shadow:none; }
   .pill.active{ background:var(--pink); border-color:var(--pink); color:#3a0f22; }
 
-  input[type=text], input[type=password]{
+  input[type=text], input[type=password], input[type=email]{
     font-family:'Nunito',sans-serif; padding:12px 14px; border-radius:10px; border:none;
     font-size:1rem; width:100%;
   }
@@ -1892,6 +1892,40 @@
       <div id="admin-announce-status" class="admin-warning" style="text-align:left;"></div>
     </div>
 
+    <div class="admin-note" id="admin-notify-box">
+      <strong style="color:var(--chalk);">🔔 Értesítés, ha valaki szobát nyit</strong><br>
+      Amikor bárki szobát nyit a játékban, egy értesítés érkezik a telefonodra az ingyenes
+      <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> appon keresztül (regisztráció nem kell).
+      <ol style="margin:6px 0 0 18px;padding:0;line-height:1.45;">
+        <li>Telepítsd a telefonodra az <b>ntfy</b> appot (App Store / Google Play).</li>
+        <li>Kapcsold be lent az értesítést, és nyomd meg a <b>Mentés élesben</b> gombot.</li>
+        <li>Az appban a <b>+</b> gombbal iratkozz fel a lenti csatornanévre (szerver: ntfy.sh).</li>
+        <li>A <b>Próbaértesítés</b> gombbal ellenőrizheted, hogy megérkezik-e.</li>
+      </ol>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:8px;cursor:pointer;">
+        <input type="checkbox" id="admin-notify-on"> Értesítés bekapcsolva
+      </label>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+        <input type="text" id="admin-notify-topic" placeholder="Csatornanév" maxlength="64" autocomplete="off" spellcheck="false" style="flex:1;min-width:180px;font-family:monospace;">
+        <button class="ghost small" id="admin-notify-newtopic" type="button" title="Új, véletlen csatornanév">🎲 Új név</button>
+        <button class="ghost small" id="admin-notify-copy" type="button">📋 Másolás</button>
+      </div>
+      <input type="email" id="admin-notify-email" placeholder="E-mail cím (nem kötelező)" maxlength="120" autocomplete="off" style="width:100%;margin-top:6px;">
+      <label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer;font-size:.9rem;">
+        <input type="checkbox" id="admin-notify-skipown"> Az ezen az eszközön nyitott szobáimról ne kapjak értesítést
+      </label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="secondary small" id="admin-notify-save" type="button">☁️ Mentés élesben</button>
+        <button class="ghost small" id="admin-notify-test" type="button">🔔 Próbaértesítés</button>
+      </div>
+      <div id="admin-notify-status" class="admin-warning" style="text-align:left;"></div>
+      <div style="font-size:.78rem;color:var(--chalk-dim);margin-top:6px;line-height:1.35;">
+        A csatornanév az élő tárhelyre kerül, amit a játék minden eszköze beolvas — aki kinyomozza, küldhetne rá
+        értesítést. Ezért legyen hosszú és véletlen (🎲); ha kéretlen üzenetek jönnének, adj meg új nevet.
+        Az e-mail küldés az ntfy.sh ingyenes szolgáltatása, napi korláttal.
+      </div>
+    </div>
+
     <div class="admin-note" id="admin-health-box">
       <div class="admin-panel-header" style="margin-bottom:6px;">
         <strong style="color:var(--chalk);">🩺 Szólista-ellenőrzés</strong>
@@ -2343,6 +2377,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // via the admin panel. Returns null (not an empty array) on any failure
   // so the caller knows to fall back to the local .txt files instead of
   // wiping out the word bank.
+  // v2.98: admin push-notification settings (declared before the gist is read)
+  let notifyCfg = { on:false, topic:'', email:'' };
+  const NOTIFY_SKIP_OWN_KEY = 'picasso-notify-skip-own';
   async function loadWordsFromGist(){
     if(!WORDS_GIST_ID) return null;
     try{
@@ -2353,6 +2390,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       try{
         const mf = data.files && data.files['zene.json'];
         if(mf && mf.content) musicPlaylistChanged(JSON.parse(mf.content));
+      }catch(e){}
+      // v2.98: "someone opened a room" push notifications for the admin
+      try{
+        const nf = data.files && data.files['ertesites.json'];
+        setNotifyCfg(nf && nf.content ? JSON.parse(nf.content) : null);
       }catch(e){}
       // v2.88: home-screen announcement from the admin
       try{
@@ -2960,6 +3002,110 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   document.getElementById('admin-dash-refresh').addEventListener('click', ()=>{ sndClick(); renderAdminDash(); });
 
   // ---- announcement ----
+  // =====================================================================
+  // v2.98: push notification to the admin's phone when anyone opens a room.
+  // The game has no server, so the device that opens the room sends it
+  // itself, to ntfy.sh (free, no account): the ntfy app on the admin's
+  // phone subscribed to the same channel name shows it at once, and ntfy
+  // can also forward it as an e-mail. The channel name comes from the
+  // live store (ertesites.json), set on the admin page.
+  // =====================================================================
+  function cleanNotifyTopic(t){ const s = String(t || '').trim(); return /^[A-Za-z0-9_-]{8,64}$/.test(s) ? s : ''; }
+  function cleanNotifyEmail(e){ const s = String(e || '').trim(); return /^[^\s@<>]{1,64}@[^\s@<>]{1,120}\.[A-Za-z]{2,}$/.test(s) ? s : ''; }
+  function setNotifyCfg(raw){
+    const c = isPlainObject(raw) ? raw : {};
+    notifyCfg = { on: c.on === true, topic: cleanNotifyTopic(c.topic), email: cleanNotifyEmail(c.email) };
+    fillAdminNotifyForm(false);
+  }
+  function newNotifyTopic(){
+    const a = new Uint8Array(12);
+    try{ crypto.getRandomValues(a); }catch(e){ for(let i=0;i<a.length;i++) a[i] = Math.floor(Math.random()*256); }
+    return 'picasso-' + Array.from(a).map(b=>b.toString(36).padStart(2,'0')).join('').slice(0, 20);
+  }
+  async function sendPush(cfg, title, message, clickUrl){
+    if(!cfg || !cfg.topic) return false;
+    // query parameters instead of headers: accents and emoji travel safely,
+    // and a plain-text POST needs no CORS pre-flight
+    const q = new URLSearchParams({ title, tags:'art,bell' });
+    if(clickUrl) q.set('click', clickUrl);
+    if(cfg.email) q.set('email', cfg.email);
+    try{
+      const res = await fetch(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}?${q.toString()}`, {
+        method:'POST', body: message, keepalive:true,
+        headers:{ 'Content-Type':'text/plain;charset=utf-8' }
+      });
+      return res.ok;
+    }catch(e){ return false; }
+  }
+  function notifyRoomOpened(roomName, hostName, isPublic, code){
+    if(!notifyCfg.on || !notifyCfg.topic) return;
+    try{ if(localStorage.getItem(NOTIFY_SKIP_OWN_KEY) === '1') return; }catch(e){}
+    const base = location.origin + location.pathname;
+    // the code of a closed room is not put in the message
+    const title = `🎨 Új szoba: ${String(roomName).slice(0, 60)}`;
+    const msg = isPublic
+      ? `${hostName} nyitott egy nyilvános szobát. Koppints ide a csatlakozáshoz!`
+      : `${hostName} nyitott egy zárt szobát.`;
+    sendPush(notifyCfg, title, msg, isPublic ? `${base}?join=${encodeURIComponent(code)}` : base);
+  }
+  function fillAdminNotifyForm(force){
+    const on = document.getElementById('admin-notify-on');
+    const tp = document.getElementById('admin-notify-topic');
+    const em = document.getElementById('admin-notify-email');
+    const sk = document.getElementById('admin-notify-skipown');
+    if(!on || !tp) return;
+    if(!force && tp.dataset.touched === '1') return;     // don't overwrite what the admin is typing
+    on.checked = notifyCfg.on;
+    tp.value = notifyCfg.topic || '';
+    em.value = notifyCfg.email || '';
+    try{ sk.checked = localStorage.getItem(NOTIFY_SKIP_OWN_KEY) === '1'; }catch(e){}
+  }
+  (function(){
+    const tp = document.getElementById('admin-notify-topic');
+    const em = document.getElementById('admin-notify-email');
+    const st = document.getElementById('admin-notify-status');
+    const on = document.getElementById('admin-notify-on');
+    [tp, em, on].forEach(el=>el.addEventListener('input', ()=>{ tp.dataset.touched = '1'; }));
+    on.addEventListener('change', ()=>{ tp.dataset.touched = '1'; if(on.checked && !cleanNotifyTopic(tp.value)) tp.value = newNotifyTopic(); });
+    document.getElementById('admin-notify-newtopic').addEventListener('click', ()=>{
+      sndClick(); tp.dataset.touched = '1'; tp.value = newNotifyTopic();
+      st.style.color = 'var(--yellow)'; st.textContent = 'Új csatornanév — mentsd el, és iratkozz fel rá az ntfy appban.';
+    });
+    document.getElementById('admin-notify-copy').addEventListener('click', async ()=>{
+      try{ await navigator.clipboard.writeText(tp.value.trim()); st.style.color = 'var(--green)'; st.textContent = '📋 Kimásolva.'; }
+      catch(e){ tp.select(); }
+    });
+    document.getElementById('admin-notify-skipown').addEventListener('change', (e)=>{
+      try{ localStorage.setItem(NOTIFY_SKIP_OWN_KEY, e.target.checked ? '1' : '0'); }catch(err){}
+    });
+    const formCfg = ()=>({ on: on.checked, topic: cleanNotifyTopic(tp.value), email: cleanNotifyEmail(em.value) });
+    const check = (c)=>{
+      if(!c.topic){ st.style.color = 'var(--red)'; st.textContent = 'A csatornanév 8–64 karakter legyen, csak betű, szám, - és _ (vagy nyomd meg: 🎲 Új név).'; return false; }
+      if(em.value.trim() && !c.email){ st.style.color = 'var(--red)'; st.textContent = 'Az e-mail cím nem tűnik érvényesnek.'; return false; }
+      return true;
+    };
+    document.getElementById('admin-notify-save').addEventListener('click', async ()=>{
+      sndClick();
+      const c = formCfg();
+      if(c.on && !check(c)) return;
+      st.style.color = 'var(--chalk-dim)'; st.textContent = 'Mentés…';
+      try{
+        await adminWriteGistFile('ertesites.json', JSON.stringify(c));
+        notifyCfg = c; tp.dataset.touched = '';
+        st.style.color = 'var(--green)';
+        st.textContent = c.on ? '✅ Elmentve — mostantól minden új szobáról értesítést kapsz (a többiek a következő betöltéskor kapják meg a beállítást).' : '✅ Elmentve — az értesítés ki van kapcsolva.';
+      }catch(e){ st.style.color = 'var(--red)'; st.textContent = e.message; }
+    });
+    document.getElementById('admin-notify-test').addEventListener('click', async ()=>{
+      sndClick();
+      const c = formCfg();
+      if(!check(c)) return;
+      st.style.color = 'var(--chalk-dim)'; st.textContent = 'Küldés…';
+      const ok = await sendPush(c, '🔔 PIC-ASS-O próbaértesítés', 'Ha ezt látod, működik az értesítés! 🎨', location.origin + location.pathname);
+      st.style.color = ok ? 'var(--green)' : 'var(--red)';
+      st.textContent = ok ? '✅ Elküldve — néhány másodpercen belül meg kell jelennie a telefonodon.' : 'Nem sikerült elküldeni (nincs internet, vagy az ntfy.sh nem érhető el).';
+    });
+  })();
   async function adminWriteGistFile(name, content){
     const token = adminGhToken();
     if(!token) throw new Error('Add meg fent a GitHub tokent.');
@@ -6803,6 +6949,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       announceMyRoom();
       sndRoomCreated();
       enterLobby();
+      try{ notifyRoomOpened(roomName, myName, roomIsPublic, roomCode); }catch(e){}
     }catch(e){
       fatalError('Nem sikerült csatlakozni a hálózathoz: ' + ((e && e.message) || 'ismeretlen hiba'));
     }finally{
@@ -9141,6 +9288,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'2.98', changes:[
+      'Új admin-beállítás: értesítés a telefonra (az ingyenes ntfy appon keresztül), és ha kéred, e-mailben is, amikor valaki szobát nyit a játékban. Nyilvános szobánál az értesítésre koppintva egyből be is léphetsz.'
+    ]},
     { version:'2.97', changes:[
       'Javítva: aki csatlakozáskor előbb egy másik játékossal kapcsolódott össze, mint a szobanyitóval, azt a játék „bent lévőnek” vette, pedig a szobanyitó nem látta (a többiek viszont igen). Most a csatlakozás csak akkor sikeres, ha a szobanyitóval is létrejött a kapcsolat; addig a játék tovább próbálkozik.',
       'A szobanyitó a váróteremben látja, ha valaki épp csatlakozni próbál („⏳ … csatlakozik…”).'
