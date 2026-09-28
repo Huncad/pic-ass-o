@@ -2220,6 +2220,7 @@ const MQTT_CFG     = { appId: APP_ID, rtcConfig: RTC_CONFIG, relayConfig: { redu
 //   K11 unfinished round handed on (drawer left, or came back with a reloaded page)
 //   K12 a player came back with a reloaded page (new network id, same name)
 //   K13 a player's page said it is closing / reloading
+//   P01/P02 pen/mouse input timing on the drawing paper (P02 = something was slow)
 // =====================================================================
 const CONNLOG_KEY = 'picasso-connlog';
 const CONNLOG_MAX = 400;
@@ -7931,6 +7932,47 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     pts.push(pos);
     return true;
   }
+  // =====================================================================
+  // v3.08: input timing log for pens / drawing tablets. For the first
+  // events after each pen-down it records how late each event reached the
+  // page (the gap between when the device produced it and when the page
+  // got it) and how long our own handling took. A big delivery gap means
+  // the system (Windows Ink / the tablet driver) held the pen back; a big
+  // handling time means it was the game. Written to the connection log.
+  // =====================================================================
+  const penDiag = { active:false, n:0, maxLate:0, maxLateType:'', maxWork:0, gaps:[], downAt:0, firstMoveAfter:-1, noButtonMoves:0, info:'' };
+  function penDiagStart(e){
+    if(e.pointerType !== 'pen' && e.pointerType !== 'mouse') return;
+    Object.assign(penDiag, { active:true, n:0, maxLate:0, maxLateType:'', maxWork:0, gaps:[], downAt: performance.now(), firstMoveAfter:-1, noButtonMoves:0,
+      info: `${e.pointerType} · nyomás ${Math.round((Number(e.pressure)||0)*100)/100} · gomb ${e.button}/${e.buttons} · dőlés ${e.tiltX||0}/${e.tiltY||0}` });
+  }
+  function penDiagEvent(e, workMs){
+    if(!penDiag.active) return;
+    const late = Math.max(0, performance.now() - e.timeStamp - workMs);
+    if(late > penDiag.maxLate){ penDiag.maxLate = late; penDiag.maxLateType = e.type; }
+    penDiag.maxWork = Math.max(penDiag.maxWork, workMs);
+    if(e.type === 'pointermove'){
+      if(penDiag.firstMoveAfter < 0) penDiag.firstMoveAfter = performance.now() - penDiag.downAt;
+      if(e.buttons === 0) penDiag.noButtonMoves++;
+    }
+    penDiag.n++;
+    if(e.type === 'pointerup' || e.type === 'pointercancel' || penDiag.n >= 60) penDiagEnd(e.type);
+  }
+  function penDiagEnd(how){
+    if(!penDiag.active) return;
+    penDiag.active = false;
+    const slow = penDiag.maxLate > 400 || penDiag.maxWork > 200 || penDiag.firstMoveAfter > 1500;
+    clog(slow ? 'P02' : 'P01', `toll: ${penDiag.info} · első mozgás ${penDiag.firstMoveAfter < 0 ? '—' : Math.round(penDiag.firstMoveAfter) + ' ms'} múlva · ` +
+      `legnagyobb kézbesítési késés ${Math.round(penDiag.maxLate)} ms (${penDiag.maxLateType || '—'}) · leghosszabb saját feldolgozás ${Math.round(penDiag.maxWork)} ms · ` +
+      `gomb nélküli mozgás ${penDiag.noButtonMoves} · ${penDiag.n} esemény · vége: ${how}`);
+  }
+  ['pointerdown','pointermove','pointerup','pointercancel'].forEach(type=>{
+    // measured around the real handlers: the start on the way DOWN (document,
+    // capture phase — before the paper's own handlers), the end on the way
+    // back UP (document, bubble phase — after them)
+    document.addEventListener(type, (e)=>{ if(e.target !== fdCanvasEl) return; e.__t0 = performance.now(); if(type === 'pointerdown') penDiagStart(e); }, true);
+    document.addEventListener(type, (e)=>{ if(e.target !== fdCanvasEl) return; penDiagEvent(e, e.__t0 ? performance.now() - e.__t0 : 0); }, false);
+  });
   fdCanvasEl.addEventListener('pointerdown', (e)=>{
     const penEraser = isPenEraser(e);
     // main button only — except the eraser end of a pen (Wacom reports it as button 5)
@@ -9607,6 +9649,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.08', changes:[
+      'Új a kapcsolati naplóban: rajzolás közben a játék méri, mennyi idő alatt érnek el hozzá a toll (rajztábla) és az egér jelzései, és mennyi ideig dolgozza fel őket. Ha a toll lenyomása után késve reagál a rajz, a ☰ Menü → 📋 Kapcsolati napló megmutatja, hogy a rendszer (Windows / rajztábla-illesztőprogram) vagy a játék okozza.'
+    ]},
     { version:'3.07', changes:[
       'Rajzolás közben jóval kevesebb adat megy a hálózaton (a pontok pozícióját a játék a látható pontosság felett nem küldi). Rajztáblával, ami sokkal több pontot mér, mint az egér, ez gyengébb kapcsolaton sokat számít.'
     ]},
