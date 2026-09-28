@@ -8200,6 +8200,24 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     canvas.parentElement.style.height = '';
   }
 
+  // v3.01: the guesser's time bar runs along the top edge of the PAPER, like
+  // the drawer's. It used to span the whole drawing area, so since the paper
+  // became square it stuck out on both sides (and floated above the paper).
+  let lastWatchBarKey = '';
+  function placeWatchTimebar(container, canvas){
+    const tb = document.getElementById('watch-timebar');
+    if(!tb) return;
+    const cr = container.getBoundingClientRect(), kr = canvas.getBoundingClientRect();
+    if(!kr.width) return;
+    const left = Math.round(kr.left - cr.left - container.clientLeft);
+    const top = Math.round(kr.top - cr.top - container.clientTop);
+    const key = left + ',' + top + ',' + Math.round(kr.width);
+    if(key === lastWatchBarKey) return;
+    lastWatchBarKey = key;
+    tb.style.left = left + 'px'; tb.style.top = top + 'px';
+    tb.style.width = Math.round(kr.width) + 'px'; tb.style.right = 'auto';
+    tb.style.borderRadius = '3px 3px 0 0';
+  }
   function watchRedraw(strokes){
     if(!watchCtx) return;                        // the live view isn't up yet
     lastWatchStrokes = Array.isArray(strokes) ? strokes : [];
@@ -8216,6 +8234,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     cssW = Math.max(1, cssW); cssH = Math.max(1, cssH);
     canvas.style.width = cssW + 'px';
     canvas.style.height = cssH + 'px';
+    placeWatchTimebar(container, canvas);
     const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
     const wantW = Math.max(1, Math.round(cssW*dpr)), wantH = Math.max(1, Math.round(cssH*dpr));
     if(canvas.width !== wantW || canvas.height !== wantH){
@@ -9296,6 +9315,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.01', changes:[
+      'Javítva: a tippelők visszaszámláló csíkja nem a rajzlap tetején futott, hanem túllógott rajta mindkét oldalon (főleg gépen). Most pontosan a rajzlap felső szélén halad, ahogy a rajzolónál.'
+    ]},
     { version:'3.00', changes:[
       'Gépen a zene és a hangok akkor is szólnak, ha másik lapfülre vagy ablakra váltasz. Telefonon és tableten továbbra is elhallgatnak, amikor a játék a háttérbe kerül (másik app, lezárt képernyő).'
     ]},
