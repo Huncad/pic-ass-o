@@ -7932,7 +7932,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const penEraser = isPenEraser(e);
     // main button only — except the eraser end of a pen (Wacom reports it as button 5)
     if(e.button !== undefined && e.button !== 0 && !penEraser) return;
-    if(fdDrawing) return;                                   // one stroke at a time
+    if(fdDrawing){
+      // v3.06: a NEW contact from the same pen/mouse while a stroke is still
+      // open means its lift was never reported (seen with drawing tablets):
+      // close the old stroke and start a new one — instead of ignoring this
+      // touch and letting the next movement continue (and join) the old line.
+      // A second finger on a touch screen still can't hijack a stroke.
+      if(e.pointerType !== 'touch' || e.pointerId === fdPointerId) fdEndStroke();
+      else return;
+    }
     if(!fdCtx && !setupFdCanvas()) return;                  // no usable canvas
     // hard ceilings, keeps memory/traffic sane — and now they say so
     fdPointBudget = MAX_TOTAL_POINTS - fdTotalPoints();
@@ -7973,6 +7981,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   fdCanvasEl.addEventListener('pointermove', (e)=>{
     if(!fdDrawing || !fdCurrentStroke || !fdCtx) return;
     if(fdPointerId !== null && e.pointerId !== fdPointerId) return;
+    // v3.06: the pen (or mouse button) is up — the lift event got lost. A
+    // hovering pen must not keep drawing; this is where the stroke ends.
+    if(e.pointerType !== 'touch' && e.buttons === 0){ fdEndStroke(); return; }
     if(fdCurrentStroke.t === 'line' || fdCurrentStroke.t === 'circle' || fdCurrentStroke.t === 'rect'){
       fdCurrentStroke.points[1] = fdCanvasPosNorm(e);
       noteDrawActivity();
@@ -9593,6 +9604,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.06', changes:[
+      'Javítva: rajztáblával (és néha egérrel) előfordult, hogy a játék nem vette észre a toll felemelését, így a következő érintés összekötötte az új vonalat az előzővel. Most a felemelt toll lebegése már nem rajzol, és az új érintés mindig új vonalat kezd.'
+    ]},
     { version:'3.05', changes:[
       'Rajztábla (Wacom és más tollas eszközök) támogatása: a vonal vastagsága követi a toll nyomását (a tippelők is így látják), a toll radír vége radírként működik, és a gyors tollmozdulatok is simák maradnak, mert a játék a toll minden mért pozícióját felhasználja. A toll oldalsó gombja nem nyit menüt a rajzlapon.'
     ]},
