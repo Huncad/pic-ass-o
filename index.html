@@ -1345,6 +1345,7 @@
     <div class="setup-section" id="room-name-section">
       <label class="field-label">Szoba neve</label>
       <input type="text" id="room-name-input" maxlength="30" placeholder="pl. Anna bulija">
+      <p class="setup-hint hidden" id="room-name-warning" style="color:var(--red);opacity:1;"></p>
     </div>
     <div class="setup-section" id="room-visibility-section">
       <label class="field-label">Szoba láthatósága</label>
@@ -4642,12 +4643,19 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         }catch(e){}
         // take over the room's entry in the public room list
         const listName = currentRoomName || `${myName} szobája`;
-        if(roomIsPublic){
+        // v3.09: …but not a finished game's room with fewer than two players
+        // left — nobody could play in it (it used to reappear on the list
+        // after the old host timed out of the rematch vote)
+        const deadRoom = gameEnded && [...activePlayerIds].filter(id=>id !== oldHostId).length < 2;
+        if(deadRoom){
+          myHostedRoomAnnouncement = null;
+        } else if(roomIsPublic){
           myHostedRoomAnnouncement = { code:roomCode, name:listName, hostName:myName };
           announceMyRoom();
         } else {
           roomFingerprint(roomCode).then(fp=>{
             if(room !== thisRoom || !isHost) return;
+            if(gameEnded && activePlayerIds.size < 2) return;
             myHostedRoomAnnouncement = { id:fp, isPrivate:true, name:listName, hostName:myName };
             announceMyRoom();
           }).catch(()=>{});
@@ -7120,8 +7128,33 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   });
 
   let roomActionInProgress = false;   // guards against double taps on create/join
+  // v3.09: is a room with this name already on the list? (not counting my own)
+  function roomNameTaken(name){
+    const norm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const n = norm(name);
+    if(!n) return false;
+    try{ pruneKnownRooms(); }catch(e){}
+    for(const info of knownRooms.values()){
+      if(norm(info.name) === n && !(myHostedRoomAnnouncement && info.code && info.code === myHostedRoomAnnouncement.code)) return true;
+    }
+    return false;
+  }
+  document.getElementById('room-name-input').addEventListener('input', ()=>{
+    document.getElementById('room-name-warning').classList.add('hidden');
+  });
   document.getElementById('btn-create-room').addEventListener('click', async ()=>{
     if(roomActionInProgress) return;
+    {
+      const typed = document.getElementById('room-name-input').value.trim();
+      const warnEl = document.getElementById('room-name-warning');
+      if(typed && roomNameTaken(typed)){
+        warnEl.textContent = `Már van „${typed}” nevű szoba a listán. Válassz másik nevet, hogy ne keverjétek össze!`;
+        warnEl.classList.remove('hidden');
+        try{ document.getElementById('room-name-input').focus(); }catch(e){}
+        return;
+      }
+      warnEl.classList.add('hidden');
+    }
     const createBtn = document.getElementById('btn-create-room');
     roomActionInProgress = true;
     createBtn.disabled = true;
@@ -7132,7 +7165,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     joinOrderIds = [selfId];
     lobbyPlayers = { [selfId]: myName };
     const nameInput = document.getElementById('room-name-input');
-    const roomName = nameInput.value.trim() || `${myName} szobája`;
+    let roomName = nameInput.value.trim() || `${myName} szobája`;
+    // the default name is made unique by itself: "Adam szobája (2)"
+    if(!nameInput.value.trim() && roomNameTaken(roomName)){
+      for(let i = 2; i < 20; i++){ const c = `${myName} szobája (${i})`; if(!roomNameTaken(c)){ roomName = c; break; } }
+    }
     currentRoomName = roomName;
     askNotifyPermission();   // right inside the click, as browsers require
     // Read the visibility straight from the toggle, so it can never disagree
@@ -9303,6 +9340,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const question = document.getElementById('rematch-question');
     const leaveWrap = document.getElementById('leave-to-home-wrap');
     if(!canRematch || hostGone){
+      // v3.09: nobody can play in this room any more — take it off the list
+      if(isHost) withdrawMyRoom();
       // v2.82: no rematch possible → no rematch question either
       question.classList.add('hidden');
       leaveWrap.classList.remove('hidden');
@@ -9649,6 +9688,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.09', changes:[
+      'Javítva: ha a játék végi szavazásnál a szobanyitót az időtúllépés kiléptette, a szoba a maradék egy játékossal a listán maradt, pedig már nem lehetett benne játszani. Most az ilyen szoba lekerül a listáról.',
+      'Szobanyitáskor a játék szól, ha már van ugyanilyen nevű szoba a listán, hogy ne legyen két egyforma. Az automatikus névből („Adam szobája”) ilyenkor „Adam szobája (2)” lesz.'
+    ]},
     { version:'3.08', changes:[
       'Új a kapcsolati naplóban: rajzolás közben a játék méri, mennyi idő alatt érnek el hozzá a toll (rajztábla) és az egér jelzései, és mennyi ideig dolgozza fel őket. Ha a toll lenyomása után késve reagál a rajz, a ☰ Menü → 📋 Kapcsolati napló megmutatja, hogy a rendszer (Windows / rajztábla-illesztőprogram) vagy a játék okozza.'
     ]},
