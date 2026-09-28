@@ -7872,7 +7872,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const rect = document.getElementById('fd-canvas').getBoundingClientRect();
     const w = rect.width || 1, h = rect.height || 1;
     const clamp01 = (v)=> Math.min(1, Math.max(0, v));
-    const pos = { x: clamp01((e.clientX-rect.left)/w), y: clamp01((e.clientY-rect.top)/h) };
+    // v3.07: 4 decimals (a tenth of a pixel on the biggest paper) — the full
+    // 17-digit numbers made every point ~40% bigger on the wire for nothing
+    const r4 = (v)=> Math.round(v * 10000) / 10000;
+    const pos = { x: r4(clamp01((e.clientX-rect.left)/w)), y: r4(clamp01((e.clientY-rect.top)/h)) };
     // v3.05: a pen's pressure travels with the point (2 decimals is plenty)
     if(withPressure) pos.p = Math.round(clamp01(Number(e.pressure) || 0.5) * 100) / 100;
     return pos;
@@ -9604,6 +9607,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.07', changes:[
+      'Rajzolás közben jóval kevesebb adat megy a hálózaton (a pontok pozícióját a játék a látható pontosság felett nem küldi). Rajztáblával, ami sokkal több pontot mér, mint az egér, ez gyengébb kapcsolaton sokat számít.'
+    ]},
     { version:'3.06', changes:[
       'Javítva: rajztáblával (és néha egérrel) előfordult, hogy a játék nem vette észre a toll felemelését, így a következő érintés összekötötte az új vonalat az előzővel. Most a felemelt toll lebegése már nem rajzol, és az új érintés mindig új vonalat kezd.'
     ]},
