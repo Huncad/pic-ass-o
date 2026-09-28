@@ -2217,6 +2217,9 @@ const MQTT_CFG     = { appId: APP_ID, rtcConfig: RTC_CONFIG, relayConfig: { redu
 //   K10 player came back within the grace period
 //   M01/M02 direct MQTT broker up/down     N01/N02 browser offline/online
 //   V01/V02 page to background/foreground  J01 room join/create  J02 round start  J03 game end
+//   K11 unfinished round handed on (drawer left, or came back with a reloaded page)
+//   K12 a player came back with a reloaded page (new network id, same name)
+//   K13 a player's page said it is closing / reloading
 // =====================================================================
 const CONNLOG_KEY = 'picasso-connlog';
 const CONNLOG_MAX = 400;
@@ -3924,6 +3927,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   const roomAliveOnMqtt = new Map();          // peerId -> last heard (ms)
   let roomPresenceKey = '', roomPresenceCode = '';
   let currentIsSilent = null;                 // the live room's own silence check
+  let currentScheduleGrace = null;            // the live room's grace starter
+  const goneOnMqtt = new Map();               // v3.04: peerId -> when its page said "I'm closing"
   let dirTransports = [];   // [{ name, action, peers:Set, getSockets }]
   let dirChannel = null;
   let dirStartedAt = Date.now();
@@ -4486,6 +4491,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       return (t !== undefined) && (Date.now() - t > ALIVE_STALE_MS);
     }
     currentIsSilent = isSilent;
+    currentScheduleGrace = (id)=>{ try{ scheduleGraceLeave(id); }catch(e){} };
 
     // Someone who deliberately leaves tells everyone first (see
     // leaveRoomAndGoHome), so we can remove them immediately instead of
@@ -4546,6 +4552,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const graceExtended = new Map();
     function scheduleGraceLeave(peerId){
       if(pendingLeaveTimers.has(peerId)) return;
+      // v3.04: a reloaded page rejoins BEFORE its old connection is noticed
+      // as dropped. When the old copy drops while a same-name copy is here
+      // and connected, it's the same person: merge them now instead of
+      // letting the old copy hold everyone up for the grace period.
+      if(isHost && meta && !gameEnded && hostReplaceReloadedPlayer(peerId)) return;
       noteLost(peerId);
       // what's left of the overall deadline (a rebuilt connection doesn't restart it)
       const graceMs = Math.min(PEER_LEAVE_GRACE_MS, Math.max(5000, LOST_LIMIT_MS - lostFor(peerId)));
@@ -5104,9 +5115,19 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         setupNextRoundControls(currentRound.idx);
       }
     }
-    if(currentRound && currentRound.drawerId === peerId && !processedResultRounds.has(roundKey(currentRound))){
+    handOffAbandonedRound(peerId, name, 'left');
+  }
+
+  // The current round's drawer is gone (left, or came back with a reloaded
+  // page that no longer knows the word): the next active player takes the
+  // pencil with a new word. Runs on every device with the same inputs, so
+  // everyone picks the same person.
+  function handOffAbandonedRound(goneId, name, why){
+    if(!meta || gameEnded) return;
+    if(currentRound && currentRound.drawerId === goneId && !processedResultRounds.has(roundKey(currentRound))){
       processedResultRounds.add(roundKey(currentRound));
       stopTicker();
+      try{ clog('K11', `félbemaradt kör átadva — ${why === 'reload' ? 'a rajzoló oldala újratöltődött' : 'a rajzoló kilépett'}: ${name}`); }catch(e){}
       const { id: takeoverId, borrowedPos } = pickNextActiveDrawer(currentRound.idx);
       const takeoverName = meta.playerNames[takeoverId] || 'Valaki';
       // The takeover person is "spending" one of their own future turns to
@@ -5120,7 +5141,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         meta.turnOrder.splice(borrowedPos, 1);
       }
       const HANDOFF_DELAY = 2200;
-      showHandoffNotice(`🔌 ${escapeHtml(name)} kilépett rajzolás közben.<br>🎨 ${escapeHtml(takeoverName)} veszi át, új szóval folytatjuk!`, HANDOFF_DELAY);
+      showHandoffNotice(why === 'reload'
+        ? `🔄 ${escapeHtml(name)} oldala rajzolás közben újratöltődött.<br>🎨 ${escapeHtml(takeoverName)} veszi át, új szóval folytatjuk!`
+        : `🔌 ${escapeHtml(name)} kilépett rajzolás közben.<br>🎨 ${escapeHtml(takeoverName)} veszi át, új szóval folytatjuk!`, HANDOFF_DELAY);
       addSystemChatMessage(`🎨 ${takeoverName} veszi át a rajzolást — új szóval folytatjuk!`);
       if(takeoverId === selfId){
         const takeoverIdx = currentRound.idx;
@@ -5359,17 +5382,28 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // coming back: they keep their points and their place in the order
     // instead of appearing twice with the score split in two.
     const norm = n => String(n||'').trim().toLowerCase();
+    // v3.04: a quick reload comes back while the old copy is still waiting
+    // out its grace period (still "active"). A same-name player we have no
+    // live connection with any more is that old copy, not a second person.
+    let livePeers = {};
+    try{ livePeers = (room && room.getPeers && room.getPeers()) || {}; }catch(e){}
     const replaces = Object.keys(meta.playerNames).find(id=>
-      id !== peerId && !activePlayerIds.has(id) && norm(meta.playerNames[id]) === norm(name)) || null;
+      id !== peerId && id !== selfId && norm(meta.playerNames[id]) === norm(name) &&
+      (!activePlayerIds.has(id) || !(id in livePeers) || (goneOnMqtt.has(id) && Date.now() - goneOnMqtt.get(id) < 120000))) || null;
+    if(replaces) clog('K12', `${name} visszatért új oldallal — a régi példánya (${String(replaces).slice(0,5)}) helyett`);
     if(replaces) mergeReturningPlayer(replaces, peerId);
     meta.playerNames[peerId] = name;
     activePlayerIds.add(peerId);
     if(scores[peerId] === undefined) scores[peerId] = 0;
     if(!gameEnded) rebuildFutureTurns();
-    const info = { peerId, name, avatar: playerAvatars[peerId] || '', turnOrder: meta.turnOrder, replaces };
+    const info = { peerId, name, avatar: playerAvatars[peerId] || '', turnOrder: meta.turnOrder.slice(), replaces };
     lateJoinAction.send(info);                                    // everybody in the room
     lateSyncAction.send(buildLateSnapshot(), { target:peerId });  // the newcomer
     applyLateJoinInfo(info);                                      // and me
+    // v3.04: the returning player was drawing this very round — their new
+    // page doesn't know the word, so the round is handed on (the others do
+    // the same in applyLateJoinInfo, from the same turn order)
+    if(replaces) handOffAbandonedRound(replaces, name, 'reload');
     announceMyRoom();
   }
 
@@ -5390,6 +5424,29 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     delete meta.playerNames[oldId];
   }
 
+  // HOST: oldId's connection dropped and a same-name player is connected —
+  // a page reload. Announce it like a returning player (applyLateJoinInfo
+  // merges it everywhere and hands on the round if they were drawing).
+  function hostReplaceReloadedPlayer(oldId){
+    if(!isHost || !meta || gameEnded || !meta.playerNames[oldId]) return false;
+    let live = {};
+    try{ live = (room && room.getPeers && room.getPeers()) || {}; }catch(e){}
+    const norm = n => String(n||'').trim().toLowerCase();
+    const name = meta.playerNames[oldId];
+    const twin = Object.keys(meta.playerNames).find(id=>
+      id !== oldId && id !== selfId && activePlayerIds.has(id) && (id in live) && norm(meta.playerNames[id]) === norm(name));
+    if(!twin) return false;
+    clog('K12', `${name} visszatért új oldallal — a régi példánya (${String(oldId).slice(0,5)}) helyett`);
+    mergeReturningPlayer(oldId, twin);
+    if(!gameEnded) rebuildFutureTurns();
+    const info = { peerId: twin, name, avatar: playerAvatars[twin] || '', turnOrder: meta.turnOrder.slice(), replaces: oldId };
+    try{ lateJoinAction.send(info); }catch(e){}
+    addSystemChatMessage(`🔄 ${name} visszatért a játékba — a pontjai megmaradtak.`);
+    renderRosters();
+    handOffAbandonedRound(oldId, name, 'reload');
+    announceMyRoom();
+    return true;
+  }
   // EVERYONE already in the game: a player has been added by the host.
   function applyLateJoinInfo(info){
     if(!meta) return;
@@ -5397,7 +5454,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!id || id === selfId && !isHost) return;    // the newcomer learns everything from the snapshot
     const name = cleanText(info.name || 'Valaki', 16) || 'Valaki';
     const oldId = info.replaces ? cleanPeerId(info.replaces) : null;
-    const returning = !!(oldId && meta.playerNames[oldId] && !activePlayerIds.has(oldId) && !isHost);
+    // the host decides who is returning (it may be an old copy that still
+    // looked active here, waiting out its grace period)
+    const returning = !!(oldId && meta.playerNames[oldId] && oldId !== selfId && !isHost);
     if(returning) mergeReturningPlayer(oldId, id);
     const isNewToGame = !meta.playerNames[id] && !returning;
     if(returning && id !== selfId) addSystemChatMessage(`🔄 ${name} visszatért a játékba — a pontjai megmaradtak.`);
@@ -5413,6 +5472,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // only say it out loud the first time
     if(id !== selfId && isNewToGame) addSystemChatMessage(`🟢 ${name} csatlakozott a játékhoz.`);
     renderRosters();
+    if(returning && id !== selfId) handOffAbandonedRound(oldId, name, 'reload');
     if(gameEnded){
       renderScoreTable('gameend-scores', scoreRows());
       refreshRematchUI();
@@ -6137,6 +6197,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     }
     if(m.t === 'inroom' && typeof m.k === 'string' && roomPresenceKey && m.k === roomPresenceKey){
       roomAliveOnMqtt.set(from, Date.now());
+    }
+    // v3.04: a page in this room is closing / reloading — no need to wait
+    // for its connection to time out
+    if(m.t === 'gone' && typeof m.k === 'string' && roomPresenceKey && m.k === roomPresenceKey &&
+       !(goneOnMqtt.has(from) && Date.now() - goneOnMqtt.get(from) < 5000)){      // once, not once per broker
+      roomAliveOnMqtt.delete(from);
+      goneOnMqtt.set(from, Date.now());
+      clog('K13', `${(meta && meta.playerNames[from]) || lobbyPlayers[from] || '?'} (${String(from).slice(0,5)}) oldala bezárult vagy újratöltődik`);
+      if(room && currentScheduleGrace && ((meta && activePlayerIds.has(from)) || lobbyPlayers[from] !== undefined)) currentScheduleGrace(from);
     }
     if(m.t === 'knockack' && m.to === selfId && typeof m.k === 'string' && pendingKnockKey && m.k === pendingKnockKey){
       knockAckedAt = Date.now();
@@ -9470,6 +9539,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.04', changes:[
+      'Javítva: aki gyorsan újratöltötte az oldalt (vagy összeomlott nála), azt a játék egy második, azonos nevű játékosként engedte vissza, a régi „szellem” példánya pedig mindenkit várakoztatott. Most a visszatérőt felismeri, és a régi helyére lép.',
+      'Javítva: ha a rajzoló oldala rajzolás közben újratöltődött (összeomlott vagy frissítette), a játék visszaengedte, de tippelőként a saját körébe, így nem tudott rajzolni, a többiek pedig a kör végéig vártak. Most ilyenkor a félbemaradt kört azonnal a következő játékos veszi át új szóval, a visszatérő pedig megtartja a pontjait és a későbbi köreit.'
+    ]},
     { version:'3.03', changes:[
       'Új: kapcsolati napló. A játék időbélyeggel és hibakóddal feljegyzi, mi történt a kapcsolatokkal (ki kapcsolódott, kinek szakadt meg, próbálta-e újraépíteni, háttérbe került-e a lap, volt-e internet). A ☰ Menü → 📋 Kapcsolati napló másolása gombbal vágólapra tehető, és újratöltés után is megmarad. Megszakadáskor a chat-üzenet a hibakódot is kiírja.',
       'Javítva: ha a hálózati könyvtár jelezte egy kapcsolat bontását, a játék nem nézte meg, hogy a játékos a háttércsatornán még jelez-e, így a kapcsolat újraépítése közben is kilépettnek vehette. Most minden esetben ugyanaz a türelmi idő jár.'
@@ -10212,6 +10285,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   window.__picassoCleanup = function(){
     try{ stopRecording(true); }catch(e){}
     try{ if(isHost) withdrawMyRoom(); }catch(e){}
+    // v3.04: tell the room right away that this page is going (a reload
+    // comes back with a new id — see hostReplaceReloadedPlayer)
+    try{ if(roomPresenceKey) dirqPublish({ t:'gone', k: roomPresenceKey }); }catch(e){}
   };
 
   // v2.82: long word on the drawer's bar → slow back-and-forth scroll
