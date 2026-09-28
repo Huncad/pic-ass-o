@@ -1177,7 +1177,8 @@
      a computer — the toolbar keeps clear of them, and the four action
      buttons are icons (with tooltips) like on the phone, so it all fits */
   body:not(.fabs-top) #screen-fulldraw .fd-toolbar{ padding-right:140px; gap:6px; }
-  body:not(.fabs-top) #screen-fulldraw .fd-toolbar .swatches{ gap:4px; }
+  body:not(.fabs-top) #screen-fulldraw .fd-toolbar .swatches{ gap:3px; }
+  body:not(.fabs-top) #screen-fulldraw .fd-toolbar .swatch{ width:25px; height:25px; }   /* v3.02: room for the 11th colour */
   body:not(.fabs-top) .fd-act{ padding:0; width:44px; height:38px; font-size:0 !important; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
   body:not(.fabs-top) .fd-act::before{ font-size:1.15rem; }
   body:not(.fabs-top) #fd-btn-eraser::before{ content:"🧽"; }
@@ -3884,6 +3885,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let pendingKnockKey = '';                   // guest: key of the room I'm trying to get into
   let knockAckedAt = 0;
   const knocksHeard = new Map();              // host: peerId -> { name, count, first, last }
+  // v3.02: "I'm still in this room" heard over the direct MQTT channel
+  const roomAliveOnMqtt = new Map();          // peerId -> last heard (ms)
+  let roomPresenceKey = '', roomPresenceCode = '';
+  let currentIsSilent = null;                 // the live room's own silence check
   let dirTransports = [];   // [{ name, action, peers:Set, getSockets }]
   let dirChannel = null;
   let dirStartedAt = Date.now();
@@ -4445,6 +4450,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const t = peerLastAlive.get(peerId);
       return (t !== undefined) && (Date.now() - t > ALIVE_STALE_MS);
     }
+    currentIsSilent = isSilent;
 
     // Someone who deliberately leaves tells everyone first (see
     // leaveRoomAndGoHome), so we can remove them immediately instead of
@@ -4500,6 +4506,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // Before, a phone coming back from another app — its links still being
     // rebuilt, so the live list momentarily empty — removed EVERYONE else
     // right away, ended the game on its own screen and "kicked itself out".
+    const graceExtended = new Map();
     function scheduleGraceLeave(peerId){
       if(pendingLeaveTimers.has(peerId)) return;
       const timer = setTimeout(()=>{
@@ -4507,6 +4514,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         if(room !== thisRoom) return;
         const again = livePeerIdSet();
         if(again && again.has(peerId) && !isSilent(peerId)) return;   // came back in the meantime
+        // v3.02: still in the room according to the direct MQTT channel —
+        // only the connection broke. One more grace period while it's rebuilt.
+        if(peerAliveOnMqtt(peerId) && (graceExtended.get(peerId) || 0) < 1){
+          graceExtended.set(peerId, (graceExtended.get(peerId) || 0) + 1);
+          scheduleGraceLeave(peerId);
+          return;
+        }
         removePeerNow(peerId);
       }, PEER_LEAVE_GRACE_MS);
       pendingLeaveTimers.set(peerId, timer);
@@ -6075,10 +6089,58 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         dirqPublish({ t:'knockack', k: m.k, to: from });
       }
     }
+    if(m.t === 'inroom' && typeof m.k === 'string' && roomPresenceKey && m.k === roomPresenceKey){
+      roomAliveOnMqtt.set(from, Date.now());
+    }
     if(m.t === 'knockack' && m.to === selfId && typeof m.k === 'string' && pendingKnockKey && m.k === pendingKnockKey){
       knockAckedAt = Date.now();
     }
   }
+  // =====================================================================
+  // v3.02: keeping a game alive through a broken connection.
+  // Every device in a room says "I'm here" every 4 s over the direct MQTT
+  // channel (no WebRTC involved). If the direct link to a player dies but
+  // that player is evidently still in the room, it isn't a leave: this
+  // device rejoins the room, which makes the signalling servers introduce
+  // the two again right away (left alone, a long-running room can take
+  // minutes to notice). The game state is kept; the returning connection
+  // gets the current state the same way a late joiner does.
+  // =====================================================================
+  function peerAliveOnMqtt(id){ const t = roomAliveOnMqtt.get(id); return !!t && Date.now() - t < 12000; }
+  const missingSince = new Map();
+  let lastRebuildAt = 0, rebuildTimes = [];
+  setInterval(async ()=>{
+    // presence
+    const code = (room && roomCode) ? String(roomCode) : '';
+    if(code !== roomPresenceCode){
+      roomPresenceCode = code; roomAliveOnMqtt.clear(); missingSince.clear();
+      roomPresenceKey = code ? await knockKeyFor(code + '|room') : '';
+    }
+    if(!roomPresenceKey) return;
+    dirqPublish({ t:'inroom', k: roomPresenceKey });
+    // watchdog
+    const expected = new Set(meta ? [...activePlayerIds] : Object.keys(lobbyPlayers));
+    expected.delete(selfId);
+    let peers = {};
+    try{ peers = (room && room.getPeers && room.getPeers()) || {}; }catch(e){}
+    const now = Date.now();
+    let broken = [];
+    expected.forEach(id=>{
+      const cut = !(id in peers) || (currentIsSilent && currentIsSilent(id));
+      if(cut && peerAliveOnMqtt(id)){
+        if(!missingSince.has(id)) missingSince.set(id, now);
+        if(now - missingSince.get(id) >= 6000) broken.push(id);
+      } else missingSince.delete(id);
+    });
+    rebuildTimes = rebuildTimes.filter(t=>now - t < 300000);
+    if(broken.length && now - lastRebuildAt > 25000 && rebuildTimes.length < 5 && roomCode){
+      lastRebuildAt = now; rebuildTimes.push(now);
+      broken.forEach(id=>missingSince.delete(id));
+      const names = broken.map(id=>displayNameFor(id, '')).filter(Boolean).join(', ');
+      addSystemChatMessage(`🔄 Megszakadt a kapcsolat${names ? ' ' + names + ' felé' : ''}, de még itt van — újraépítem…`);
+      try{ await connect(roomCode); }catch(e){}
+    }
+  }, 4000);
   // the room code is never sent in the clear, only a short hash of it
   async function knockKeyFor(code){
     try{
@@ -7846,7 +7908,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ strokeAction.send(payload); }catch(e){}
   }
 
-  const FD_SWATCHES = ['#222222','#8b5a2b','#e63946','#f4a300','#ffd166','#2a9d8f','#457b9d','#7b2cbf','#f77fbe','#ffffff'];   // v2.81: + brown
+  const FD_SWATCHES = ['#222222','#8b5a2b','#e63946','#f4a300','#ffd166','#2fa84f','#2a9d8f','#457b9d','#7b2cbf','#f77fbe','#ffffff'];   // v2.81: + brown, v3.02: + green
   const fdSwatchesEl = document.getElementById('fd-swatches');
   function refreshSwatchColors(){
     Array.from(fdSwatchesEl.children).forEach((el,i)=>{ if(FD_SWATCHES[i]) el.style.background = renderColorFor(FD_SWATCHES[i]); });
@@ -9315,6 +9377,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.02', changes:[
+      'Új szín a rajzolásnál: zöld.',
+      'Javítva: ha játék közben megszakadt a két eszköz közötti kapcsolat, mindketten azt látták, hogy a másik kilépett, pedig mindketten ott voltak. Most a játék a háttércsatornán ellenőrzi, hogy a másik még a szobában van-e; ha igen, nem jelzi kilépésnek, hanem magától újraépíti a kapcsolatot, és a játék onnan folytatódik.'
+    ]},
     { version:'3.01', changes:[
       'Javítva: a tippelők visszaszámláló csíkja nem a rajzlap tetején futott, hanem túllógott rajta mindkét oldalon (főleg gépen). Most pontosan a rajzlap felső szélén halad, ahogy a rajzolónál.'
     ]},
