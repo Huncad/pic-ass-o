@@ -1790,6 +1790,7 @@
           <div class="vol-row"><button type="button" class="ghost small vol-mute vol-music-mute" aria-label="Zene némítása">🔊</button>
           <input type="range" class="vol-music" min="0" max="100" step="1" aria-label="Zene hangereje"></div></div>
       </div>
+      <button class="ghost" id="menu-btn-connlog" style="width:100%;text-align:left;">📋 Kapcsolati napló másolása</button>
       <button class="ghost leave-game-link" id="menu-btn-leave" style="width:100%;text-align:left;color:var(--red);">🚪 Kilépés a szobából</button>
     </div>
   </div>
@@ -2204,6 +2205,40 @@ const MQTT_CFG     = { appId: APP_ID, rtcConfig: RTC_CONFIG, relayConfig: { redu
 // network keeps a pool of 20 pre-built WebRTC connections, so running two of
 // them means 40 at once — enough to make iOS Safari crash the page
 // ("A problem repeatedly occurred on this webpage").
+// =====================================================================
+// v3.03: connection log. Every event that matters for "why did we lose
+// each other" is written here with a short code, kept across reloads
+// (localStorage), and can be copied from the in-game menu to send on.
+//   K01 connected to a player        K02 connection to a player dropped
+//   K03 player went silent (no "alive" for 20 s)
+//   K04 grace period started          K05 grace extended (still in the room per MQTT)
+//   K06 player removed (treated as gone)   K07 player left on purpose
+//   K08 rebuilding the room connection     K09 connection error (from the network library)
+//   K10 player came back within the grace period
+//   M01/M02 direct MQTT broker up/down     N01/N02 browser offline/online
+//   V01/V02 page to background/foreground  J01 room join/create  J02 round start  J03 game end
+// =====================================================================
+const CONNLOG_KEY = 'picasso-connlog';
+const CONNLOG_MAX = 400;
+let connLog = [];
+try{ const old = JSON.parse(localStorage.getItem(CONNLOG_KEY) || '[]'); if(Array.isArray(old)) connLog = old.slice(-CONNLOG_MAX); }catch(e){}
+let connLogSaveTimer = 0;
+function clog(code, text){
+  const d = new Date();
+  const ts = d.toLocaleDateString('hu-HU', { month:'2-digit', day:'2-digit' }).replace(/\s/g,'') + ' ' + d.toLocaleTimeString('hu-HU');
+  connLog.push(`${ts} ${code} ${String(text || '').slice(0, 200)}`);
+  if(connLog.length > CONNLOG_MAX) connLog.splice(0, connLog.length - CONNLOG_MAX);
+  if(!connLogSaveTimer) connLogSaveTimer = setTimeout(()=>{
+    connLogSaveTimer = 0;
+    try{ localStorage.setItem(CONNLOG_KEY, JSON.stringify(connLog)); }catch(e){}
+  }, 1000);
+}
+function clogNow(){ try{ localStorage.setItem(CONNLOG_KEY, JSON.stringify(connLog)); }catch(e){} }
+clog('----', 'oldal betöltve');
+window.addEventListener('online', ()=>clog('N02', 'a böngésző szerint VAN internet'));
+window.addEventListener('offline', ()=>clog('N01', 'a böngésző szerint NINCS internet'));
+document.addEventListener('visibilitychange', ()=>clog(document.visibilityState === 'hidden' ? 'V01' : 'V02', document.visibilityState === 'hidden' ? 'háttérbe került' : 'újra előtérben'));
+window.addEventListener('pagehide', ()=>{ clog('V01', 'oldal elhagyva / bezárva'); clogNow(); });
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
   (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 // Apple's browser engine (every browser on iPhone/iPad, and Safari on Mac)
@@ -4455,8 +4490,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // Someone who deliberately leaves tells everyone first (see
     // leaveRoomAndGoHome), so we can remove them immediately instead of
     // waiting out the grace period meant for accidental disconnects.
-    function removePeerNow(peerId){
+    function removePeerNow(peerId, why){
       if(room !== thisRoom) return;
+      lostSince.delete(peerId);
+      clog(why === 'bye' ? 'K07' : 'K06', `${why === 'bye' ? 'szándékosan kilépett' : 'kilépettnek véve'}: ${(meta && meta.playerNames[peerId]) || lobbyPlayers[peerId] || '?'} (${String(peerId).slice(0,5)}) · MQTT-jelenlét: ${peerAliveOnMqtt(peerId) ? 'IGEN' : 'nincs'}`);
       if(pendingLeaveTimers.has(peerId)){
         clearTimeout(pendingLeaveTimers.get(peerId));
         pendingLeaveTimers.delete(peerId);
@@ -4509,6 +4546,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const graceExtended = new Map();
     function scheduleGraceLeave(peerId){
       if(pendingLeaveTimers.has(peerId)) return;
+      noteLost(peerId);
+      // what's left of the overall deadline (a rebuilt connection doesn't restart it)
+      const graceMs = Math.min(PEER_LEAVE_GRACE_MS, Math.max(5000, LOST_LIMIT_MS - lostFor(peerId)));
+      clog('K04', `türelmi idő indul (${Math.round(graceMs/1000)} mp; ${Math.round(lostFor(peerId)/1000)} mp óta nincs kapcsolat): ${(meta && meta.playerNames[peerId]) || lobbyPlayers[peerId] || '?'}${isSilent(peerId) ? ' — csendben van (K03)' : ''}`);
       const timer = setTimeout(()=>{
         pendingLeaveTimers.delete(peerId);
         if(room !== thisRoom) return;
@@ -4516,13 +4557,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         if(again && again.has(peerId) && !isSilent(peerId)) return;   // came back in the meantime
         // v3.02: still in the room according to the direct MQTT channel —
         // only the connection broke. One more grace period while it's rebuilt.
-        if(peerAliveOnMqtt(peerId) && (graceExtended.get(peerId) || 0) < 1){
+        if(peerAliveOnMqtt(peerId) && (graceExtended.get(peerId) || 0) < 1 && lostFor(peerId) < LOST_LIMIT_MS - 5000){
           graceExtended.set(peerId, (graceExtended.get(peerId) || 0) + 1);
+          clog('K05', `türelmi idő meghosszabbítva: ${(meta && meta.playerNames[peerId]) || lobbyPlayers[peerId] || '?'} az MQTT szerint még a szobában van`);
           scheduleGraceLeave(peerId);
           return;
         }
         removePeerNow(peerId);
-      }, PEER_LEAVE_GRACE_MS);
+      }, graceMs);
       pendingLeaveTimers.set(peerId, timer);
     }
     function reconcileWithLivePeers(){
@@ -4547,6 +4589,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         pendingLeaveTimers.delete(peerId);
         const name = (meta && meta.playerNames[peerId]) || lobbyPlayers[peerId] || 'Valaki';
         addSystemChatMessage(`🔌 ${name} kapcsolata helyreállt.`);
+        clog('K10', `${name} (${String(peerId).slice(0,5)}) visszatért a türelmi idő alatt`);
+      } else {
+        clog('K01', `kapcsolat létrejött: ${(meta && meta.playerNames[peerId]) || lobbyPlayers[peerId] || 'új játékos, neve még nem ismert'} (${String(peerId).slice(0,5)})`);
       }
       if(currentRound && currentRound.drawerId === selfId && currentRound.phase === 'drawing' &&
          !processedResultRounds.has(roundKey(currentRound))){
@@ -4561,14 +4606,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     };
     room.onPeerLeave = (peerId)=>{
       if(room !== thisRoom) return;
+      noteLost(peerId);
+      clog('K02', `kapcsolat bontva: ${(meta && meta.playerNames[peerId]) || lobbyPlayers[peerId] || '?'} (${String(peerId).slice(0,5)})${peerAliveOnMqtt(peerId) ? ' — MQTT szerint még a szobában van' : ''}`);
       // Two leave events for the same peer must not queue two timers.
-      if(pendingLeaveTimers.has(peerId)) clearTimeout(pendingLeaveTimers.get(peerId));
-      const timer = setTimeout(()=>{
-        pendingLeaveTimers.delete(peerId);
-        if(room !== thisRoom) return;      // we have since left this room
-        removePeerNow(peerId);
-      }, PEER_LEAVE_GRACE_MS);
-      pendingLeaveTimers.set(peerId, timer);
+      if(pendingLeaveTimers.has(peerId)){ clearTimeout(pendingLeaveTimers.get(peerId)); pendingLeaveTimers.delete(peerId); }
+      // v3.03: the same grace as a silent peer gets — including the extra
+      // time when the direct MQTT channel says they're still in the room
+      scheduleGraceLeave(peerId);
     };
     // Simple per-peer flood protection for the chatty actions.
     function electNewHost(oldHostId){
@@ -4621,7 +4665,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     }
 
     byeAction.onMessage = (data, {peerId})=>{
-      removePeerNow(peerId);
+      removePeerNow(peerId, 'bye');
     };
     rematchVoteAction.onMessage = (data, {peerId})=>{
       // A "no" vote isn't a message at all — that player just leaves (their
@@ -5035,7 +5079,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     typingPeers.delete(peerId);
     renderTypingIndicator();
     const name = meta.playerNames[peerId] || 'Valaki';
-    addSystemChatMessage(`🔌 ${name} kilépett a játékból, vagy megszakadt a kapcsolata.`);
+    addSystemChatMessage(`🔌 ${name} kilépett a játékból, vagy megszakadt a kapcsolata. (K06 — a részletek: ☰ Menü → 📋 Kapcsolati napló)`);
     renderRosters();
 
     // The game is already over (final scoreboard, or the rematch settings
@@ -5511,6 +5555,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
           joinOrderIds = [selfId];
         }
         setConnStatus('connecting', 'Kapcsolódás a hálózathoz…');
+        clog('J01', `szoba ${code}: ${expectPeer ? 'belépés vendégként' : (meta ? 'újrakapcsolódás játék közben' : 'szobanyitóként')} · hálózat: ${ROOM_NET} · TURN: ${turnIceServers.length ? 'van' : 'nincs'}`);
         room = roomJoin(ROOM_NET === 'mqtt' ? MQTT_CFG : TRYSTERO_CFG, code, {
           handshakeTimeoutMs: HANDSHAKE_TIMEOUT_MS,
           onJoinError: (d)=>{
@@ -5764,6 +5809,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   const recentConnErrors = [];
   function noteConnError(where, d){
     const msg = String((d && d.error) || 'ismeretlen hiba').slice(0, 160);
+    clog('K09', `[${where}] ${msg}`);
     recentConnErrors.push(`${new Date().toLocaleTimeString('hu-HU')} [${where}] ${msg}`);
     if(recentConnErrors.length > 4) recentConnErrors.shift();
   }
@@ -6108,6 +6154,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // =====================================================================
   function peerAliveOnMqtt(id){ const t = roomAliveOnMqtt.get(id); return !!t && Date.now() - t < 12000; }
   const missingSince = new Map();
+  // v3.03: an overall deadline per player, kept across rebuilds (each rebuild
+  // is a new room connection with fresh timers, which used to mean "retry
+  // forever" when the link never came back): after this long without a
+  // working connection the player is treated as gone after all.
+  const LOST_LIMIT_MS = 95000;
+  const lostSince = new Map();                 // peerId -> first moment without a working link
+  function noteLost(id){ if(!lostSince.has(id)) lostSince.set(id, Date.now()); }
+  function lostFor(id){ const t = lostSince.get(id); return t ? Date.now() - t : 0; }
   let lastRebuildAt = 0, rebuildTimes = [];
   setInterval(async ()=>{
     // presence
@@ -6127,7 +6181,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     let broken = [];
     expected.forEach(id=>{
       const cut = !(id in peers) || (currentIsSilent && currentIsSilent(id));
-      if(cut && peerAliveOnMqtt(id)){
+      if(cut) noteLost(id); else lostSince.delete(id);
+      if(cut && peerAliveOnMqtt(id) && lostFor(id) < LOST_LIMIT_MS - 15000){
         if(!missingSince.has(id)) missingSince.set(id, now);
         if(now - missingSince.get(id) >= 6000) broken.push(id);
       } else missingSince.delete(id);
@@ -6137,7 +6192,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       lastRebuildAt = now; rebuildTimes.push(now);
       broken.forEach(id=>missingSince.delete(id));
       const names = broken.map(id=>displayNameFor(id, '')).filter(Boolean).join(', ');
-      addSystemChatMessage(`🔄 Megszakadt a kapcsolat${names ? ' ' + names + ' felé' : ''}, de még itt van — újraépítem…`);
+      addSystemChatMessage(`🔄 Megszakadt a kapcsolat${names ? ' ' + names + ' felé' : ''}, de még itt van — újraépítem… (K08)`);
+      clog('K08', `szobakapcsolat újraépítése — elérhetetlen: ${names || broken.join(',')} (MQTT szerint a szobában vannak)`);
       try{ await connect(roomCode); }catch(e){}
     }
   }, 4000);
@@ -6180,6 +6236,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
           clientId: 'pic_' + String(selfId).slice(0,12) + '_' + Math.random().toString(36).slice(2,7)
         });
         client.on('connect', ()=>{
+          clog('M01', `MQTT kapcsolódva: ${String(url).replace(/^wss?:\/\//,'')}`);
           dirqConnectedOnce = true; dirqState = 'ok';
           try{
             client.subscribe(DIRQ_TOPIC, { qos:0 }, ()=>{ dirqPublish({ t:'here' }); announceMyRoom(); });
@@ -6189,7 +6246,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         });
         client.on('message', dirqOnMessage);
         client.on('error', ()=>{});
-        client.on('close', ()=>{ try{ updateDirectoryStatusUI(); }catch(e){} });
+        client.on('close', ()=>{ clog('M02', `MQTT kapcsolat bontva: ${String(url).replace(/^wss?:\/\//,'')}`); try{ updateDirectoryStatusUI(); }catch(e){} });
         dirqClients.push({ url, client });
       }catch(e){}
     });
@@ -6382,6 +6439,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       lines.push('5. Próbáld mobilnettel (wifi ki): ha így megy, a wifi-router/hálózat szűr.');
     }
     updateDirectoryStatusUI();
+    lines.push('— Kapcsolati napló (utolsó 25 esemény; a teljes: ☰ Menü → 📋 Kapcsolati napló) —');
+    connLog.slice(-25).forEach(l=>lines.push(l));
     const report = lines.join('\n');
     // iPhone won't let you select text in an alert, so the report is also
     // put on the clipboard when the browser allows it
@@ -7448,6 +7507,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
 
   function enterDrawingMine(idx, rd){
+    clog('J02', `${idx+1}. kör — én rajzolok · játékosok: ${[...activePlayerIds].length}`);
     showOnly(['screen-fulldraw']);
     roundHits = [];
     fdStrokes = []; fdCurrentStroke = null; fdDrawing = false; fdLastFlush = 0; fdShapeBase = null;
@@ -8221,6 +8281,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let watchCanvasAspect = 900/500; // fallback until the drawer's real aspect ratio arrives
 
   function enterWatchingLive(idx, rd){
+    clog('J02', `${idx+1}. kör — ${(rd && rd.drawerName) || '?'} rajzol · játékosok: ${[...activePlayerIds].length}`);
     document.getElementById('watch-waiting').classList.add('hidden');
     document.getElementById('watch-live').classList.remove('hidden');
     document.getElementById('watch-timer').classList.remove('hidden');
@@ -8961,6 +9022,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
 
   function renderGameEnd(rows, quiet){
+    clog('J03', 'játék vége');
     gameEnded = true;
     // A late joiner seeing an already-finished game (quiet render) must not
     // wipe votes other players have already cast for a real game end.
@@ -9366,6 +9428,37 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(e.target.id === 'ingame-menu-overlay') closeIngameMenu();
   });
   document.getElementById('btn-fd-giveup').addEventListener('click', closeIngameMenu);
+  // v3.03: the connection log, ready to paste into a message
+  function buildConnLogReport(){
+    let peers = {};
+    try{ peers = (room && room.getPeers && room.getPeers()) || {}; }catch(e){}
+    const who = id=>`${(meta && meta.playerNames[id]) || lobbyPlayers[id] || '?'} (${String(id).slice(0,5)})`;
+    const expected = meta ? [...activePlayerIds] : Object.keys(lobbyPlayers);
+    const lines = [
+      `PIC-ASS-O v${CHANGELOG[0].version} — KAPCSOLATI NAPLÓ`,
+      `Készült: ${new Date().toLocaleString('hu-HU')}`,
+      `Én: ${who(selfId)}${isHost ? ' · szobanyitó' : ''} · szoba: ${roomCode || '—'} · ${meta ? 'játék folyik' : 'nincs játék'}`,
+      `Eszköz: ${navigator.userAgent}`,
+      `Most: ${expected.filter(id=>id !== selfId).map(id=>`${who(id)} — közvetlen: ${id in peers ? 'VAN' : 'nincs'}, MQTT: ${peerAliveOnMqtt(id) ? 'él' : 'nem hallom'}`).join(' | ') || 'nincs más játékos'}`,
+      `MQTT-brókerek: ${dirqOpenCount()}/${dirqClients.length} · TURN: ${turnIceServers.length ? 'van' : 'nincs'}`,
+      '— Események (legújabb alul) —',
+      ...connLog.slice(-150)
+    ];
+    return lines.join('\n');
+  }
+  document.getElementById('menu-btn-connlog').addEventListener('click', async ()=>{
+    sndClick();
+    const report = buildConnLogReport();
+    let copied = false;
+    try{ if(navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(report); copied = true; } }catch(e){}
+    if(copied){
+      const b = document.getElementById('menu-btn-connlog');
+      const t0 = b.textContent; b.textContent = '✅ Kimásolva — illeszd be egy üzenetbe';
+      setTimeout(()=>{ b.textContent = t0; }, 2500);
+    } else {
+      alert(report);   // e.g. an iPhone without clipboard permission: select it from here
+    }
+  });
   document.getElementById('menu-btn-darkmode').addEventListener('click', ()=>{
     sndClick();
     toggleDarkMode();
@@ -9377,6 +9470,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.03', changes:[
+      'Új: kapcsolati napló. A játék időbélyeggel és hibakóddal feljegyzi, mi történt a kapcsolatokkal (ki kapcsolódott, kinek szakadt meg, próbálta-e újraépíteni, háttérbe került-e a lap, volt-e internet). A ☰ Menü → 📋 Kapcsolati napló másolása gombbal vágólapra tehető, és újratöltés után is megmarad. Megszakadáskor a chat-üzenet a hibakódot is kiírja.',
+      'Javítva: ha a hálózati könyvtár jelezte egy kapcsolat bontását, a játék nem nézte meg, hogy a játékos a háttércsatornán még jelez-e, így a kapcsolat újraépítése közben is kilépettnek vehette. Most minden esetben ugyanaz a türelmi idő jár.'
+    ]},
     { version:'3.02', changes:[
       'Új szín a rajzolásnál: zöld.',
       'Javítva: ha játék közben megszakadt a két eszköz közötti kapcsolat, mindketten azt látták, hogy a másik kilépett, pedig mindketten ott voltak. Most a játék a háttércsatornán ellenőrzi, hogy a másik még a szobában van-e; ha igen, nem jelzi kilépésnek, hanem magától újraépíti a kapcsolatot, és a játék onnan folytatódik.'
