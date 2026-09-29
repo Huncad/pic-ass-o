@@ -6320,6 +6320,20 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // =====================================================================
   function diagKeyMatches(k){ return !!k && (k === roomPresenceKey || k === myKnockKey || k === pendingKnockKey); }
   function currentDiagKey(){ return roomPresenceKey || pendingKnockKey || myKnockKey || ''; }
+  // v3.11: two devices on the same network share their public address. Only
+  // a short hash of it is sent, never the address itself.
+  let pubHashCache = { ip:'', h:'' };
+  async function publicAddrHash(){
+    const ip = lastNatInfo && lastNatInfo.pubIp;
+    if(!ip) return '';
+    if(pubHashCache.ip === ip) return pubHashCache.h;
+    try{
+      const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(APP_ID + '|net|' + ip));
+      const h = Array.from(new Uint8Array(d)).slice(0, 6).map(b=>b.toString(16).padStart(2,'0')).join('');
+      pubHashCache = { ip, h };
+      return h;
+    }catch(e){ return ''; }
+  }
   async function buildDiagSummary(){
     // a fresh look at this device's network (at most once a minute; ~8 s)
     if(!lastNatInfo || Date.now() - lastNatCheckAt > 60000){
@@ -6333,7 +6347,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     return {
       v: CHANGELOG[0].version, name: myName, dev, apple: IS_APPLE_WEBKIT, inapp: IS_IN_APP_BROWSER,
       mqtt: [dirqOpenCount(), dirqClients.length], turn: turnLoadState, turnN: turnIceServers.length,
-      probe: turnProbeInfo ? !!turnProbeInfo.relay : null, nat: lastNatInfo || null,
+      probe: turnProbeInfo ? !!turnProbeInfo.relay : null,
+      nat: lastNatInfo ? { host: lastNatInfo.host, mdns: lastNatInfo.mdns, srflx: lastNatInfo.srflx, relay: lastNatInfo.relay, ms: lastNatInfo.ms } : null,
+      net: await publicAddrHash(),
       unlocked: !!appleNetUnlocked, host: !!isHost, inRoom: !!room, peers,
       online: navigator.onLine, vis: document.visibilityState,
       errs: recentConnErrors.slice(-3), log: connLog.slice(-15)
@@ -6371,7 +6387,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
                   : d.turn === 'loading' ? 'még töltődik' : 'nem ad címet';
         out.push(`${label} eszközén nem működik a közvetítő (TURN ${why}); közvetlenül (STUN) tud kapcsolódni, de ha a másik oldal hálózata ezt nem engedi, nem jön létre a kapcsolat.`);
       }
-      if(d && d.vis === 'hidden') out.push(`${label} játéka a háttérben volt (másik app vagy lezárt képernyő).`);
+      if(d && d.vis === 'hidden' && !you) out.push(`${label} játéka a háttérben volt (másik app vagy lezárt képernyő).`);
       if(d && d.inapp) out.push(`${label} a Messenger/Instagram beépített böngészőjében ${you ? 'fut a játék' : 'játszik'} — Safariban vagy Chrome-ban megbízhatóbb.`);
     };
     if(!other){
@@ -6380,10 +6396,21 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       return out;
     }
     if(other.v && me.v && other.v !== me.v) out.push(`Eltérő verzió: nálad ${me.v}, ${who}-nál ${other.v} — frissítsétek az oldalt mindkét eszközön.`);
+    // v3.11: the same network (same public address) — the classic same-wifi case
+    const sameNet = !!(me.net && other.net && me.net === other.net);
+    if(sameNet){
+      if(me.apple && !me.unlocked){
+        out.push(`Ugyanazon a hálózaton (wifin) vagy, mint ${who}, és ezen az iPhone-on nincs bekapcsolva az „iPhone-kapcsolat javítása”. Ilyenkor az iPhone elrejti a helyi címét, a router pedig gyakran nem engedi, hogy a két eszköz a közös internetcímen át találja meg egymást. Megoldás: koppints az „iPhone-kapcsolat javítása” gombra, és engedélyezd a mikrofont (a játék nem vesz fel semmit) — vagy válts mobilnetre.`);
+      } else if(other.apple && !other.unlocked){
+        out.push(`${who} ugyanazon a hálózaton (wifin) van, mint te, és az ő iPhone-ján nincs bekapcsolva az „iPhone-kapcsolat javítása”. Ilyenkor az iPhone elrejti a helyi címét, a router pedig gyakran nem engedi, hogy a két eszköz a közös internetcímen át találja meg egymást. Megoldás: ${who} koppintson az „iPhone-kapcsolat javítása” gombra, és engedélyezze a mikrofont — vagy váltson mobilnetre.`);
+      } else {
+        out.push(`Ugyanazon a hálózaton (wifin) vagytok ${who}-val, és a router nem engedi, hogy a két eszköz a közös internetcímen át találja meg egymást. Megoldás: az egyik eszköz váltson mobilnetre, vagy a routerben kapcsold ki a kliensek elkülönítését (AP isolation / vendéghálózat).`);
+      }
+    }
     facts(me, 'A te eszközöd');
     facts(other, who);
     const mr = me.nat ? me.nat.relay : null, or = other.nat ? other.nat.relay : null;
-    if(mr > 0 && or > 0 && !out.length){
+    if(mr > 0 && or > 0 && !out.length && !sameNet){
       out.push(`Mindkét eszköz kap közvetítő címet, és mindkettő hallja a másikat, a közvetlen kapcsolat mégsem jön létre. Ilyenkor a közvetítő szerver utasíthatja el a forgalmat (Metered keret), vagy egy tűzfal/router-védelem szakítja meg a már induló kapcsolatot.`);
     }
     if(!out.length) out.push('Mindkét eszköz hálózata rendben lévőnek tűnik — valószínűleg átmeneti hiba volt. Próbáljátok újra.');
@@ -6392,7 +6419,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function fmtDiag(d){
     if(!d) return '—';
     const n = d.nat ? `helyi ${d.nat.host}, álnév ${d.nat.mdns}, STUN ${d.nat.srflx}, közvetítő ${d.nat.relay}` : 'nincs mérés';
-    return `v${d.v} · ${d.dev}${d.apple ? ' (Apple)' : ''}${d.inapp ? ' · beépített böngésző' : ''} · MQTT ${d.mqtt ? d.mqtt.join('/') : '?'} · TURN: ${d.turn} (${d.turnN}) · címek: ${n} · ${d.host ? 'szobanyitó' : 'vendég'}, kapcsolódott társak: ${d.peers} · ${d.online === false ? 'OFFLINE' : 'online'} · ${d.vis === 'hidden' ? 'háttérben' : 'előtérben'}`;
+    return `v${d.v} · ${d.dev}${d.apple ? ` (Apple, helyi-cím javítás: ${d.unlocked ? 'BE' : 'ki'})` : ''}${d.net ? ' · hálózat #' + d.net : ''}${d.inapp ? ' · beépített böngésző' : ''} · MQTT ${d.mqtt ? d.mqtt.join('/') : '?'} · TURN: ${d.turn} (${d.turnN}) · címek: ${n} · ${d.host ? 'szobanyitó' : 'vendég'}, kapcsolódott társak: ${d.peers} · ${d.online === false ? 'OFFLINE' : 'online'} · ${d.vis === 'hidden' ? 'háttérben' : 'előtérben'}`;
   }
   async function showJoinDiagnosis(){
     const box = document.getElementById('join-diag');
@@ -6405,8 +6432,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     for(let i = 0; i < 10 && !latestPeerDiag(); i++) await new Promise(r=>setTimeout(r, 500));
     const other = latestPeerDiag();
     const lines = diagnose(me, other && other.d, other && cleanText(other.d.name, 16) || 'a szobanyitó');
+    const fixHere = IS_APPLE_WEBKIT && !appleNetUnlocked && other && other.d && me.net && other.d.net === me.net;
     box.innerHTML = '🔎 <b>Diagnózis:</b><ul>' + lines.map(l=>'<li>' + escapeHtml(l) + '</li>').join('') + '</ul>' +
+      (fixHere ? '<div style="margin-top:8px;text-align:center;"><button class="secondary small" id="join-diag-fix">📶 iPhone-kapcsolat javítása és újrapróbálás</button></div>' : '') +
       '<div style="margin-top:6px;opacity:.8;">A részletek (mindkét eszközé) a fenti ⓘ jelre koppintva másolhatók.</div>';
+    const fb = document.getElementById('join-diag-fix');
+    if(fb) fb.addEventListener('click', ()=>{
+      const orig = document.getElementById('btn-apple-fix-join');
+      if(orig) orig.click(); else unlockAppleLocalNetwork();
+    });
     clog('D02', 'diagnózis: ' + lines.join(' | '));
   }
   // the freshest diagnostic from anyone else about the current situation
@@ -6553,7 +6587,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         const local = hostRaw ? 'a helyi cím látható'
           : hostMdns ? 'a helyi cím álnéven (mDNS) látszik'
           : 'a helyi cím REJTVE van' + (IS_APPLE_WEBKIT ? ' (iPhone/Safari — használd a „Kapcsolat javítása" gombot)' : '');
-        lastNatInfo = { host: hostRaw, mdns: hostMdns, srflx: srflx.length, relay: relayCount, ms: Date.now() - natT0 };
+        lastNatInfo = { host: hostRaw, mdns: hostMdns, srflx: srflx.length, relay: relayCount, ms: Date.now() - natT0,
+                        pubIp: (srflx.find(c=>!String(c.ip).includes(':')) || srflx[0] || {}).ip || '' };
         if(srflx.length === 0){
           resolve('a STUN-szerverek nem érhetők el — a hálózat blokkolhatja a WebRTC-t; ' + local + relayTxt);
         } else if(new Set(srflx.map(c=>c.ip)).size === 1 && new Set(srflx.map(c=>c.port)).size > 1){
@@ -7532,9 +7567,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         if(stuck){
           requestDiag(myKnockKey, `${stuck.name} nem tud csatlakozni`);
           const pd = peerDiags.get(stuck.id);
-          if(pd && lobbyDiagShownFor !== stuck.id + pd.at){
-            lobbyDiagShownFor = stuck.id + pd.at;
-            const lines = diagnose(await buildDiagSummary(), pd.d, stuck.name);
+          const lines = pd ? diagnose(await buildDiagSummary(), pd.d, stuck.name) : null;
+          if(lines && lobbyDiagShownFor !== stuck.id + '|' + lines.join('|')){
+            lobbyDiagShownFor = stuck.id + '|' + lines.join('|');
             box.innerHTML = `🔎 <b>Miért nem tud ${escapeHtml(stuck.name)} csatlakozni?</b><ul>` + lines.map(l=>'<li>' + escapeHtml(l) + '</li>').join('') + '</ul>';
             box.classList.remove('hidden');
             clog('D02', `diagnózis (${stuck.name}): ` + lines.join(' | '));
@@ -9869,6 +9904,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.11', changes:[
+      'A hibadiagnózis felismeri, ha a két eszköz ugyanazon a hálózaton (wifin) van. Ha ilyenkor az egyik iPhone-on nincs bekapcsolva az „iPhone-kapcsolat javítása”, ezt konkrétan kiírja, és az érintett iPhone-on ott a gomb is a bekapcsoláshoz. (A hálózat azonosításához csak a nyilvános cím egy rövid ujjlenyomata utazik, maga a cím nem.)',
+      'Javítva: a szobanyitónál ugyanaz a diagnózis másodpercenként újra bekerült a kapcsolati naplóba.'
+    ]},
     { version:'3.10', changes:[
       'Új: automatikus hibadiagnózis. Ha valaki nem tud csatlakozni, vagy játék közben megszakad a kapcsolat, a két eszköz a háttércsatornán kicseréli a hálózati adatait, és a játék megmondja, hol a gond (pl. „Szilvi eszköze semmilyen hálózati címet nem tud szerezni — a hálózata vagy egy blokkoló tiltja”). A diagnózis megjelenik a csatlakozó képernyőn, a szobanyitó várótermében és a chatben, az ⓘ jelentés pedig a másik eszköz adatait is tartalmazza — elég egy eszközről elküldeni.'
     ]},
