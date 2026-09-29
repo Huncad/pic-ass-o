@@ -2124,6 +2124,7 @@ const roomJoin = TrysteroMqtt ? TrysteroMqtt.joinRoom : joinRoom;
     ctx.textBaseline = 'middle';
     ctx.fillText('🎨', 256, 288);
     const iconUrl = canvas.toDataURL('image/png');
+    canvas.width = canvas.height = 0;   // v3.13: free its memory (iOS)
 
     const favicon = document.createElement('link');
     favicon.rel = 'icon';
@@ -2230,6 +2231,7 @@ const MQTT_CFG     = { appId: APP_ID, rtcConfig: RTC_CONFIG, relayConfig: { redu
 //   P01/P02 pen/mouse input timing on the drawing paper (P02 = something was slow)
 //   D00 asked the other side for diagnostics · D01 diagnostics arrived · D02 verdict
 //   K14 one link is broken but the others work — the room is NOT rebuilt for it
+//   C01 the browser wiped a drawing canvas's memory (iOS black canvas) — repainted
 // =====================================================================
 const CONNLOG_KEY = 'picasso-connlog';
 const CONNLOG_MAX = 400;
@@ -8004,6 +8006,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     }
     ctx.putImageData(img, 0, 0);
   }
+  // v3.13: iOS/Safari has a hard cap on the total memory all canvases may
+  // use and does NOT reliably free a canvas that is merely dropped. Once the
+  // cap is reached, new or redrawn canvases come out BLACK. A canvas shrunk
+  // to 0×0 gives its memory back immediately.
+  function releaseCanvas(cv){ try{ cv.width = 0; cv.height = 0; }catch(e){} }
   // v3.05: pen pressure (0…1) → width multiplier. A light touch is thin,
   // a normal press (≈0.5) is the chosen size, a hard press about 1.6×.
   function penWidthFactor(p){
@@ -8106,7 +8113,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       try{
         const g = P.ctx.getImageData(PAPER_RES + 2, 1, 1, 1).data;
         const pr = P.paperRGB;
-        if(g[3] < 250 || Math.abs(g[0]-pr[0]) > 8 || Math.abs(g[1]-pr[1]) > 8 || Math.abs(g[2]-pr[2]) > 8) reset = true;
+        if(g[3] < 250 || Math.abs(g[0]-pr[0]) > 8 || Math.abs(g[1]-pr[1]) > 8 || Math.abs(g[2]-pr[2]) > 8){
+          reset = true;
+          try{ clog('C01', `a rajzlap háttérmemóriáját a böngésző törölte (${g[0]},${g[1]},${g[2]},${g[3]}) — újrarajzolva`); }catch(e){}
+        }
       }catch(e){}
     }
     if(!reset){
@@ -8142,6 +8152,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   const fdPainter = makePainter(), watchPainter = makePainter();
   function fdRedrawAll(){
     if(!fdCtx) return;
+    try{ lastFdPaint = Date.now(); }catch(e){}
     clearFdCanvas();
     const { w, h } = fdPaperSize();
     if(painterSync(fdPainter, fdStrokes, fdStrokes.length)) painterShow(fdPainter, fdCtx, w, h);
@@ -8799,7 +8810,20 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     tb.style.width = Math.round(kr.width) + 'px'; tb.style.right = 'auto';
     tb.style.borderRadius = '3px 3px 0 0';
   }
+  // v3.13: the visible paper repaints itself every 2.5 s while nothing new
+  // arrives, so a canvas wiped by the browser (iOS turns it black) recovers
+  // on its own instead of waiting for the next stroke
+  let lastWatchPaint = 0;
+  setInterval(()=>{
+    try{
+      if(document.hidden) return;
+      if(!document.getElementById('screen-watch').classList.contains('hidden') && Date.now() - lastWatchPaint > 2500) watchRedraw(lastWatchStrokes);
+      if(!document.getElementById('screen-fulldraw').classList.contains('hidden') && !fdDrawing && Date.now() - lastFdPaint > 2500){ lastFdPaint = Date.now(); fdRedrawAll(); }
+    }catch(e){}
+  }, 2500);
+  let lastFdPaint = 0;
   function watchRedraw(strokes){
+    lastWatchPaint = Date.now();
     if(!watchCtx) return;                        // the live view isn't up yet
     lastWatchStrokes = Array.isArray(strokes) ? strokes : [];
     const canvas = document.getElementById('watch-canvas');
@@ -9234,8 +9258,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       ctx.fillStyle = paperColor(); ctx.fillRect(0,0,W,H);
       strokes.forEach(st=>drawStrokeOn(ctx, st, W, H));
     } finally { darkMode = prevDark; }
+    const galleryUrl = cv.toDataURL('image/jpeg', 0.9);
+    releaseCanvas(cv);                // v3.13: iOS frees canvas memory only this way
     galleryItems.push({
-      url: cv.toDataURL('image/jpeg', 0.9),
+      url: galleryUrl,
       w: W, h: H,
       word: String(result.word || (mine ? currentRound.word : '') || '?'),
       drawer: currentRound.drawerName || 'Valaki',
@@ -9366,7 +9392,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       ctx.fillStyle = '#BFD3C4'; ctx.font = "600 17px Nunito, sans-serif";
       ctx.fillText(`✏️ ${it.drawer}` + (it.guessedBy ? `  ·  ✅ ${it.guessedBy}` : '  ·  ⌛ nem találták ki'), x + cellW/2, y + imgH + 54, cellW - 10);
     });
-    return await new Promise(res=>cv.toBlob(b=>res(b), 'image/png'));
+    const out = await new Promise(res=>cv.toBlob(b=>res(b), 'image/png'));
+    releaseCanvas(cv);
+    return out;
   }
   document.getElementById('btn-gallery-download').addEventListener('click', async ()=>{
     if(!galleryItems.length) return;
@@ -9930,6 +9958,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.13', changes:[
+      'Javítva: iPhone-on néhány kör után újra fekete lehetett a rajzlap. A játék minden kör végén készít egy képet a galériához, és az iOS ezeknek a memóriáját magától nem adta vissza; ha a rajzvásznak memóriakorlátja betelt, a rajzlap feketére váltott. Most ezek a vásznak használat után azonnal felszabadulnak, és a rajzlap tétlenség idején is magától frissül, így egy esetleges törlés után pár másodpercen belül helyreáll.'
+    ]},
     { version:'3.12', changes:[
       'Javítva: ha játék közben egyetlen játékossal szakadt meg a kapcsolat (pl. egy közös wifin lévő iPhone-nal), a játék az egész szobát újraépítette, és ezzel a jó kapcsolatokat is elvágta — újra és újra. Most csak akkor épít újra, ha mindenkivel megszakadt a kapcsolat.',
       'A chatben játékosonként egyszer jelenik meg a diagnózis, és mindig az adott játékosra vonatkozó (pl. közös wifi esetén a konkrét teendővel).'
@@ -10755,7 +10786,19 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // v2.91: iOS may throw away (blacken) canvas memory while the page is in
   // the background — e.g. a quick switch to the Messenger chat. Coming back,
   // everything is repainted from the stroke list, which is never lost.
+  // v3.13: was a stored paper wiped? (checked before repainting, for the log)
+  function painterWiped(P){
+    try{
+      if(!P || !P.ctx || !P.paperRGB) return false;
+      const g = P.ctx.getImageData(PAPER_RES + 2, 1, 1, 1).data, pr = P.paperRGB;
+      return g[3] < 250 || Math.abs(g[0]-pr[0]) > 8 || Math.abs(g[1]-pr[1]) > 8 || Math.abs(g[2]-pr[2]) > 8;
+    }catch(e){ return false; }
+  }
   function repaintAfterReturn(){
+    try{
+      const w = [painterWiped(fdPainter) ? 'rajzolói' : '', painterWiped(watchPainter) ? 'tippelői' : ''].filter(Boolean);
+      if(w.length) clog('C01', `visszatéréskor: a ${w.join(' és ')} rajzlap háttérmemóriáját a böngésző törölte — újrarajzolva`);
+    }catch(e){}
     try{ painterReset(fdPainter); painterReset(watchPainter); }catch(e){}
     try{ if(!document.getElementById('screen-fulldraw').classList.contains('hidden') && setupFdCanvas()) fdRedrawAll(); }catch(e){}
     try{ if(!document.getElementById('screen-watch').classList.contains('hidden')) watchRedraw(lastWatchStrokes); }catch(e){}
