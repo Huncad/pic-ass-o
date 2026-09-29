@@ -8728,10 +8728,19 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // ---------------------------------------------------------------
   let watchCtx=null;
 
+  let guessInputRoundKey = '';
   function enterWatching(idx, rd){
     if(!meta) return;
     showOnly(['screen-watch']);
     if(!myRoundHit || myRoundHit.key !== roundKey(rd)) resetMyRoundHit();
+    // v3.14: a new round starts with an empty guess box — half-typed text
+    // from the previous round (cut short by someone else's correct guess)
+    // must not carry over. The same round shown again keeps it.
+    if(roundKey(rd) !== guessInputRoundKey){
+      guessInputRoundKey = roundKey(rd);
+      const gi = document.getElementById('watch-guess-input');
+      if(gi) gi.value = '';
+    }
     document.getElementById('watch-round-indicator').textContent = `Kör ${idx+1} / ${meta.turnOrder.length}`;
     document.getElementById('watch-hint-chip').classList.add('hidden');
     lastHintMask = null;
@@ -9958,6 +9967,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.14', changes:[
+      'Javítva: ha tipp írása közben valaki kitalálta a szót, a félig beírt tipp a következő körben is ott maradt a tippmezőben. Most minden új kör üres tippmezővel indul.'
+    ]},
     { version:'3.13', changes:[
       'Javítva: iPhone-on néhány kör után újra fekete lehetett a rajzlap. A játék minden kör végén készít egy képet a galériához, és az iOS ezeknek a memóriáját magától nem adta vissza; ha a rajzvásznak memóriakorlátja betelt, a rajzlap feketére váltott. Most ezek a vásznak használat után azonnal felszabadulnak, és a rajzlap tétlenség idején is magától frissül, így egy esetleges törlés után pár másodpercen belül helyreáll.'
     ]},
