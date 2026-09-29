@@ -2229,6 +2229,7 @@ const MQTT_CFG     = { appId: APP_ID, rtcConfig: RTC_CONFIG, relayConfig: { redu
 //   K13 a player's page said it is closing / reloading
 //   P01/P02 pen/mouse input timing on the drawing paper (P02 = something was slow)
 //   D00 asked the other side for diagnostics · D01 diagnostics arrived · D02 verdict
+//   K14 one link is broken but the others work — the room is NOT rebuilt for it
 // =====================================================================
 const CONNLOG_KEY = 'picasso-connlog';
 const CONNLOG_MAX = 400;
@@ -6258,6 +6259,26 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // gets the current state the same way a late joiner does.
   // =====================================================================
   function peerAliveOnMqtt(id){ const t = roomAliveOnMqtt.get(id); return !!t && Date.now() - t < 12000; }
+  const partialLogged = new Set();
+  // v3.12: one diagnosis per player in the chat (repeated only if it changes)
+  const chatDiagSaid = new Map();            // peerId -> text
+  const chatDiagAskedAt = new Map();         // peerId -> ms
+  function diagnoseInChat(id){
+    if(Date.now() - (chatDiagAskedAt.get(id) || 0) < 30000) return;
+    chatDiagAskedAt.set(id, Date.now());
+    requestDiag(roomPresenceKey, 'megszakadt kapcsolat');
+    setTimeout(async ()=>{
+      const pd = peerDiags.get(id);
+      if(!pd) return;
+      const name = cleanText(pd.d.name, 16) || displayNameFor(id, '');
+      const lines = diagnose(await buildDiagSummary(), pd.d, name);
+      const text = lines.join(' ');
+      if(chatDiagSaid.get(id) === text) return;
+      chatDiagSaid.set(id, text);
+      addSystemChatMessage(`🔎 ${name}: ${text}`);
+      clog('D02', `diagnózis (${name}): ` + lines.join(' | '));
+    }, 12000);
+  }
   const missingSince = new Map();
   // v3.03: an overall deadline per player, kept across rebuilds (each rebuild
   // is a new room connection with fresh timers, which used to mean "retry
@@ -6293,19 +6314,24 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       } else missingSince.delete(id);
     });
     rebuildTimes = rebuildTimes.filter(t=>now - t < 300000);
-    if(broken.length && now - lastRebuildAt > 25000 && rebuildTimes.length < 5 && roomCode){
+    // v3.12: rebuilding means leaving and re-joining the WHOLE room, which
+    // also cuts every link that still works. So only when the links to
+    // everyone are gone (the trouble is on this side). A single broken link
+    // while others work is left to the library and the grace period — it
+    // used to cut the healthy players too, again and again.
+    const healthy = [...expected].filter(id=>(id in peers) && !(currentIsSilent && currentIsSilent(id)));
+    if(broken.length && healthy.length){
+      broken.forEach(id=>{
+        if(!partialLogged.has(id)){ partialLogged.add(id); clog('K14', `kapcsolat megszakadt ${displayNameFor(id, '') || '?'} felé, de a többiekkel él — nem bontom le a szobát miatta`); }
+        diagnoseInChat(id);
+      });
+    } else partialLogged.clear();
+    if(broken.length && !healthy.length && now - lastRebuildAt > 25000 && rebuildTimes.length < 5 && roomCode){
       lastRebuildAt = now; rebuildTimes.push(now);
       broken.forEach(id=>missingSince.delete(id));
       const names = broken.map(id=>displayNameFor(id, '')).filter(Boolean).join(', ');
       addSystemChatMessage(`🔄 Megszakadt a kapcsolat${names ? ' ' + names + ' felé' : ''}, de még itt van — újraépítem… (K08)`);
-      requestDiag(roomPresenceKey, 'megszakadt kapcsolat');
-      setTimeout(async ()=>{
-        const pd = broken.map(id=>peerDiags.get(id) ? { id, ...peerDiags.get(id) } : null).find(Boolean);
-        if(!pd) return;
-        const lines = diagnose(await buildDiagSummary(), pd.d, cleanText(pd.d.name, 16));
-        addSystemChatMessage('🔎 Diagnózis: ' + lines.join(' '));
-        clog('D02', 'diagnózis: ' + lines.join(' | '));
-      }, 12000);
+      broken.forEach(id=>diagnoseInChat(id));
       clog('K08', `szobakapcsolat újraépítése — elérhetetlen: ${names || broken.join(',')} (MQTT szerint a szobában vannak)`);
       try{ await connect(roomCode); }catch(e){}
     }
@@ -9904,6 +9930,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.12', changes:[
+      'Javítva: ha játék közben egyetlen játékossal szakadt meg a kapcsolat (pl. egy közös wifin lévő iPhone-nal), a játék az egész szobát újraépítette, és ezzel a jó kapcsolatokat is elvágta — újra és újra. Most csak akkor épít újra, ha mindenkivel megszakadt a kapcsolat.',
+      'A chatben játékosonként egyszer jelenik meg a diagnózis, és mindig az adott játékosra vonatkozó (pl. közös wifi esetén a konkrét teendővel).'
+    ]},
     { version:'3.11', changes:[
       'A hibadiagnózis felismeri, ha a két eszköz ugyanazon a hálózaton (wifin) van. Ha ilyenkor az egyik iPhone-on nincs bekapcsolva az „iPhone-kapcsolat javítása”, ezt konkrétan kiírja, és az érintett iPhone-on ott a gomb is a bekapcsoláshoz. (A hálózat azonosításához csak a nyilvános cím egy rövid ujjlenyomata utazik, maga a cím nem.)',
       'Javítva: a szobanyitónál ugyanaz a diagnózis másodpercenként újra bekerült a kapcsolati naplóba.'
