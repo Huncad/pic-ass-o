@@ -5677,14 +5677,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         }
         setConnStatus('connecting', 'Kapcsolódás a hálózathoz…');
         clog('J01', `szoba ${code}: ${expectPeer ? 'belépés vendégként' : (meta ? 'újrakapcsolódás játék közben' : 'szobanyitóként')} · hálózat: ${ROOM_NET} · TURN: ${turnIceServers.length ? 'van' : 'nincs'}`);
-        room = roomJoin(ROOM_NET === 'mqtt' ? MQTT_CFG : TRYSTERO_CFG, code, {
+        room = makeHybridRoom(roomJoin(ROOM_NET === 'mqtt' ? MQTT_CFG : TRYSTERO_CFG, code, {
           handshakeTimeoutMs: HANDSHAKE_TIMEOUT_MS,
           onJoinError: (d)=>{
             roomConnErrors++;
             noteConnError('szoba', d);
             try{ console.warn('[PIC-ASS-O] room connection problem:', d && d.error); }catch(e){}
           }
-        });
+        }), code);
         setupActions();
         // v2.77: a guest is only "connected" once somebody actually answered
         if(expectPeer) setConnStatus('connecting', 'Keresem a szobát…');
@@ -6218,6 +6218,214 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // it actually joins a room — fresh ones, with the relay already loaded.
   // PCs keep the old list too, so not-yet-updated devices still see them.
   // =====================================================================
+  // =====================================================================
+  // v3.17: MQTT FALLBACK TRANSPORT ("tartalék út").
+  // When WebRTC can't be built between two devices (router hairpinning,
+  // iPhone mDNS, VPN, strict firewall, carrier NAT…), the game data goes
+  // over the same MQTT brokers (secure WebSocket, port 443-like wss) that
+  // already carry the room list. Everything is end-to-end encrypted with a
+  // key derived from the room code, so the public brokers see only noise.
+  // The game code doesn't know about it: it gets a "hybrid room" with the
+  // same API (makeAction / getPeers / onPeerJoin / onPeerLeave / leave).
+  // A peer is used over MQTT only while no direct WebRTC link exists to it;
+  // as soon as WebRTC comes up it takes over, silently.
+  // =====================================================================
+  const FB_GRACE_MS = 6000;      // how long WebRTC gets before we fall back
+  const FB_BEACON_MS = 2000, FB_TTL_MS = 16000, FB_CHUNK = 40000;
+  let fbCur = null;              // the active fallback channel (one room at a time)
+  function fbB64(u8){ let s=''; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s); }
+  function fbUnB64(s){ const b=atob(s); const u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; }
+  function fbSubscribeOn(client){
+    if(!fbCur || !client || !client.connected) return;
+    try{ client.subscribe(fbCur.topic, { qos:0 }); }catch(e){}
+  }
+  function fbOnBrokerConnect(client){ fbSubscribeOn(client); }
+  function fbRaw(obj){
+    if(!fbCur) return;
+    let payload; try{ payload = JSON.stringify(obj); }catch(e){ return; }
+    const topic = fbCur.topic;
+    dirqClients.forEach(c=>{ try{ if(c.client && c.client.connected) c.client.publish(topic, payload, { qos:0, retain:false }); }catch(e){} });
+  }
+  function fbOnMessage(topic, buf){
+    const ch = fbCur;
+    if(!ch || topic !== ch.topic) return;
+    let m; try{ m = JSON.parse(String(buf)); }catch(e){ return; }
+    if(!isPlainObject(m)) return;
+    const from = cleanPeerId(m.f);
+    if(!from || from === selfId) return;
+    ch.onRaw(from, m);
+  }
+  function makeHybridRoom(rtc, code){
+    const ch = { topic:null, key:null, ready:null, seq:0, seen:new Map(), parts:new Map(),
+                 heard:new Map(), firstHeard:new Map(), viaFb:new Set(), joined:new Set(),
+                 actions:new Map(), sendChain:Promise.resolve(), recvChain:Promise.resolve(), closed:false };
+    let appJoin = null, appLeave = null;
+    const pendingJoins = [];
+    const rtcPeers = ()=>{ try{ return rtc.getPeers() || {}; }catch(e){ return {}; } };
+    const fbAlive = id => { const t = ch.heard.get(id); return !!t && Date.now() - t < FB_TTL_MS; };
+    const fireJoin = id => { if(appJoin){ try{ appJoin(id); }catch(e){ console.error(e); } } else pendingJoins.push(id); };
+    const fireLeave = id => { if(appLeave){ try{ appLeave(id); }catch(e){ console.error(e); } } };
+    ch.ready = (async ()=>{
+      const enc = new TextEncoder();
+      const t = await crypto.subtle.digest('SHA-256', enc.encode('picasso-fb-topic|' + APP_ID + '|' + code));
+      ch.topic = 'picasso/' + APP_ID + '/fb/' + Array.from(new Uint8Array(t)).slice(0,12).map(b=>b.toString(16).padStart(2,'0')).join('');
+      const k = await crypto.subtle.digest('SHA-256', enc.encode('picasso-fb-key|' + APP_ID + '|' + code));
+      ch.key = await crypto.subtle.importKey('raw', k, 'AES-GCM', false, ['encrypt','decrypt']);
+      if(ch.closed) return;
+      fbCur = ch;
+      dirqClients.forEach(c=>fbSubscribeOn(c.client));
+      fbRaw({ f:selfId, t:'hi' });
+    })().catch(e=>{ try{ console.warn('[PIC-ASS-O] fallback unavailable:', e && e.message); }catch(err){} });
+
+    // ---- direct (WebRTC) side
+    rtc.onPeerJoin = id=>{
+      if(ch.viaFb.delete(id)) clog('F02', `közvetlen kapcsolat létrejött, a tartalék út helyett ezt használjuk: ${String(id).slice(0,5)}`);
+      if(!ch.joined.has(id)){ ch.joined.add(id); fireJoin(id); }
+    };
+    rtc.onPeerLeave = id=>{
+      if(!ch.closed && fbAlive(id)){
+        ch.viaFb.add(id);
+        clog('F03', `közvetlen kapcsolat megszakadt, átváltás a tartalék útra (MQTT): ${String(id).slice(0,5)}`);
+        return;
+      }
+      if(ch.joined.delete(id)){ ch.viaFb.delete(id); fireLeave(id); }
+    };
+
+    // ---- fallback side
+    ch.onRaw = (from, m)=>{
+      if(ch.closed) return;
+      if(m.t === 'hi'){
+        const isNew = !fbAlive(from);
+        ch.heard.set(from, Date.now());
+        if(isNew){ ch.firstHeard.set(from, Date.now()); fbRaw({ f:selfId, t:'hi' }); }
+        return;
+      }
+      if(m.t === 'bye'){
+        ch.heard.delete(from);
+        if(ch.viaFb.has(from) && !(from in rtcPeers())){ ch.viaFb.delete(from); if(ch.joined.delete(from)) fireLeave(from); }
+        return;
+      }
+      if(m.t !== 'd' || typeof m.c !== 'string') return;
+      ch.heard.set(from, Date.now());
+      const mid = from + ':' + m.i;
+      if(Array.isArray(m.to) && !m.to.includes(selfId)) return;
+      let full = m.c;
+      if(typeof m.n === 'number' && m.n > 1){
+        const pk = mid;
+        if(ch.seen.has(pk)) return;
+        let rec = ch.parts.get(pk);
+        if(!rec){ rec = { n:m.n, got:{}, cnt:0, t:Date.now() }; ch.parts.set(pk, rec); }
+        if(rec.got[m.p] !== undefined) return;
+        rec.got[m.p] = m.c; rec.cnt++;
+        if(rec.cnt < rec.n) return;
+        ch.parts.delete(pk);
+        full = ''; for(let p=0;p<rec.n;p++) full += rec.got[p];
+      }
+      if(ch.seen.has(mid)) return;           // same message via another broker
+      ch.seen.set(mid, Date.now());
+      ch.recvChain = ch.recvChain.then(async ()=>{
+        if(!ch.key) await ch.ready;
+        const raw = fbUnB64(full);
+        const pt = await crypto.subtle.decrypt({ name:'AES-GCM', iv: raw.subarray(0,12) }, ch.key, raw.subarray(12));
+        const msg = JSON.parse(new TextDecoder().decode(pt));
+        if(!isPlainObject(msg) || typeof msg.a !== 'string') return;
+        // a message proves the sender is in the room (knows the code)
+        if(!ch.joined.has(from)){ ch.viaFb.add(from); ch.joined.add(from); clog('F01', `kapcsolat a tartalék úton (MQTT): ${String(from).slice(0,5)}`); fireJoin(from); }
+        const a = ch.actions.get(msg.a);
+        if(a) a.deliver(msg.d, from);
+      }).catch(()=>{});
+    };
+    function fbSend(actionName, data, targets){
+      if(!targets.length || ch.closed) return Promise.resolve();
+      const seq = ++ch.seq;
+      ch.sendChain = ch.sendChain.then(async ()=>{
+        if(!ch.key) await ch.ready;
+        if(!ch.key) return;
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const pt = new TextEncoder().encode(JSON.stringify({ a:actionName, d:data }));
+        const ct = new Uint8Array(await crypto.subtle.encrypt({ name:'AES-GCM', iv }, ch.key, pt));
+        const all = new Uint8Array(12 + ct.length); all.set(iv,0); all.set(ct,12);
+        const c = fbB64(all);
+        const n = Math.max(1, Math.ceil(c.length / FB_CHUNK));
+        for(let p=0;p<n;p++) fbRaw({ f:selfId, t:'d', i:seq, to:targets, n, p, c:c.slice(p*FB_CHUNK,(p+1)*FB_CHUNK) });
+      }).catch(()=>{});
+      return ch.sendChain;
+    }
+
+    // housekeeping: beacon, fall back after the grace time, time out the silent
+    const tick = setInterval(()=>{
+      if(ch.closed) return;
+      fbRaw({ f:selfId, t:'hi' });
+      const peers = rtcPeers(), now = Date.now();
+      ch.heard.forEach((t, id)=>{
+        if(now - t > FB_TTL_MS) return;
+        if(id in peers || ch.joined.has(id)) return;
+        if(now - (ch.firstHeard.get(id) || now) >= FB_GRACE_MS){
+          ch.viaFb.add(id); ch.joined.add(id);
+          clog('F01', `a közvetlen (WebRTC) kapcsolat nem jött létre ${Math.round(FB_GRACE_MS/1000)} mp alatt — tartalék út (MQTT): ${String(id).slice(0,5)}`);
+          fireJoin(id);
+        }
+      });
+      Array.from(ch.viaFb).forEach(id=>{
+        if(id in peers){ ch.viaFb.delete(id); return; }
+        if(!fbAlive(id)){ ch.viaFb.delete(id); if(ch.joined.delete(id)) fireLeave(id); }
+      });
+      ch.seen.forEach((t,k)=>{ if(now - t > 60000) ch.seen.delete(k); });
+      ch.parts.forEach((r,k)=>{ if(now - r.t > 60000) ch.parts.delete(k); });
+    }, FB_BEACON_MS);
+
+    const hybrid = {
+      makeAction(name){
+        const ra = rtc.makeAction(name);
+        let handler = null; const buffered = [];
+        const deliver = (d, peerId)=>{ if(handler){ try{ handler(d, { peerId }); }catch(e){ console.error(e); } } else buffered.push([d, peerId]); };
+        ra.onMessage = (d, meta)=>deliver(d, meta && meta.peerId);
+        ch.actions.set(name, { deliver });
+        return {
+          async send(data, opts = {}){
+            const peers = rtcPeers();
+            let want = opts.target;
+            if(want == null) want = Array.from(new Set(Object.keys(peers).concat(Array.from(ch.joined))));
+            else if(!Array.isArray(want)) want = [want];
+            const direct = want.filter(id=>id in peers);
+            const viaFb = want.filter(id=>!(id in peers) && ch.joined.has(id));
+            const jobs = [];
+            if(direct.length) jobs.push(ra.send(data, Object.assign({}, opts, { target: opts.target == null && direct.length === Object.keys(peers).length ? undefined : direct })));
+            if(viaFb.length) jobs.push(fbSend(name, data, viaFb));
+            await Promise.all(jobs);
+          },
+          get onMessage(){ return handler; },
+          set onMessage(h){ handler = h; buffered.splice(0).forEach(([d,p])=>deliver(d,p)); },
+          get onReceiveProgress(){ return ra.onReceiveProgress; },
+          set onReceiveProgress(h){ ra.onReceiveProgress = h; }
+        };
+      },
+      getPeers(){
+        const out = Object.assign({}, rtcPeers());
+        ch.viaFb.forEach(id=>{ if(!(id in out) && fbAlive(id)) out[id] = { fallback:true }; });
+        return out;
+      },
+      fallbackPeerCount(){ return Array.from(ch.viaFb).filter(fbAlive).length; },
+      get onPeerJoin(){ return appJoin; },
+      set onPeerJoin(h){ appJoin = h; if(h) pendingJoins.splice(0).forEach(fireJoin); },
+      get onPeerLeave(){ return appLeave; },
+      set onPeerLeave(h){ appLeave = h; },
+      leave(){
+        if(!ch.closed){
+          fbRaw({ f:selfId, t:'bye' });
+          ch.closed = true; clearInterval(tick);
+          if(fbCur === ch){
+            const topic = ch.topic;
+            fbCur = null;
+            dirqClients.forEach(c=>{ try{ if(c.client && c.client.connected && topic) c.client.unsubscribe(topic); }catch(e){} });
+          }
+        }
+        try{ return rtc.leave(); }catch(e){ return null; }
+      }
+    };
+    return hybrid;
+  }
+
   function dirqOpenCount(){ return dirqClients.filter(c=>c.client && c.client.connected).length; }
   function dirqPeerCount(){
     const now = Date.now(); let n = 0;
@@ -6603,6 +6811,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
           clientId: 'pic_' + String(selfId).slice(0,12) + '_' + Math.random().toString(36).slice(2,7)
         });
         client.on('connect', ()=>{
+          try{ fbOnBrokerConnect(client); }catch(e){}
           clog('M01', `MQTT kapcsolódva: ${String(url).replace(/^wss?:\/\//,'')}`);
           dirqConnectedOnce = true; dirqState = 'ok';
           try{
@@ -6612,6 +6821,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
           updateDirectoryStatusUI();
         });
         client.on('message', dirqOnMessage);
+        client.on('message', fbOnMessage);
         client.on('error', ()=>{});
         client.on('close', ()=>{ clog('M02', `MQTT kapcsolat bontva: ${String(url).replace(/^wss?:\/\//,'')}`); try{ updateDirectoryStatusUI(); }catch(e){} });
         dirqClients.push({ url, client });
@@ -6778,7 +6988,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(roomCode){
       let peers = 0;
       try{ peers = room && typeof room.getPeers === 'function' ? Object.keys(room.getPeers() || {}).length : 0; }catch(e){}
-      lines.push(`Szoba: ${roomCode} (hálózat: ${ROOM_NET}) · ${isHost ? 'szobanyitó' : 'vendég'} · kapcsolódott társak: ${peers} · sikertelen kapcsolatépítések a szobában: ${roomConnErrors}`);
+      lines.push(`Szoba: ${roomCode} (hálózat: ${ROOM_NET}) · ${isHost ? 'szobanyitó' : 'vendég'} · kapcsolódott társak: ${peers}${(room && room.fallbackPeerCount && room.fallbackPeerCount()) ? ` (ebből tartalék úton, MQTT-n: ${room.fallbackPeerCount()})` : ''} · sikertelen kapcsolatépítések a szobában: ${roomConnErrors}`);
     }
     recentConnErrors.forEach(e=>lines.push('Hiba: ' + e));
     if(IS_APPLE_WEBKIT) lines.push(`Apple böngészőmotor: igen${IS_IN_APP_BROWSER ? ' (beépített böngésző — pl. Messenger)' : ''} · helyi-cím javítás: ${appleNetUnlocked ? 'bekapcsolva' : 'nincs bekapcsolva'}`);
@@ -10059,6 +10269,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.17', changes:[
+      'Új: tartalék út. Ha két eszköz között nem jön létre közvetlen kapcsolat (router, iPhone, VPN, tűzfal, mobilnet szolgáltatói NAT), 6 mp után a játék automatikusan az MQTT-szervereken keresztül megy tovább — ugyanazon az úton, amin a szobalista is működik. Az adatok a szobakóddal titkosítva mennek, a szerverek nem látják a tartalmat. Ha később mégis létrejön a közvetlen kapcsolat, a játék észrevétlenül átvált rá. Új naplókódok: F01 tartalék út indult, F02 átváltás közvetlenre, F03 átváltás tartalékra.'
+    ]},
     { version:'3.16', changes:[
       'Új: valódi közvetítő-próba. Eddig csak azt ellenőriztük, hogy a közvetítő (TURN) szerver ad-e címet — ez nem bizonyítja, hogy adatot is továbbít (pl. elfogyott havi keretnél). Most az eszköz egy próbaüzenetet küld saját magának kizárólag a közvetítőn át; ha nem ér át, a diagnózis ezt mondja ki elsőként. Ez dönti el, miért nem tud valaki mobilnetről csatlakozni. Az ⓘ jelentésben is látszik.'
     ]},
