@@ -2231,6 +2231,7 @@ const MQTT_CFG     = { appId: APP_ID, rtcConfig: RTC_CONFIG, relayConfig: { redu
 //   P01/P02 pen/mouse input timing on the drawing paper (P02 = something was slow)
 //   D00 asked the other side for diagnostics · D01 diagnostics arrived · D02 verdict
 //   K14 one link is broken but the others work — the room is NOT rebuilt for it
+//   T01/T02 relay (TURN) data test passed / failed
 //   C01 the browser wiped a drawing canvas's memory (iOS black canvas) — repainted
 // =====================================================================
 const CONNLOG_KEY = 'picasso-connlog';
@@ -6379,6 +6380,49 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // =====================================================================
   function diagKeyMatches(k){ return !!k && (k === roomPresenceKey || k === myKnockKey || k === pendingKnockKey); }
   function currentDiagKey(){ return roomPresenceKey || pendingKnockKey || myKnockKey || ''; }
+  // =====================================================================
+  // v3.16: a REAL relay test. Getting a relay address from the TURN server
+  // doesn't prove it passes data (e.g. with the monthly quota used up it may
+  // still hand out addresses). So: two connections on THIS device, allowed
+  // to talk ONLY through the relay, and a message sent across. It arrives
+  // → the relay works; it doesn't → it doesn't, whatever else it claims.
+  // =====================================================================
+  let turnRelayTest = null;          // { ok, ms, at, why }
+  let turnRelayTestRunning = null;
+  function runTurnRelayTest(){
+    if(turnRelayTestRunning) return turnRelayTestRunning;
+    turnRelayTestRunning = (async ()=>{
+      const t0 = Date.now();
+      if(!turnIceServers.length || typeof RTCPeerConnection === 'undefined'){
+        turnRelayTest = { ok:false, ms:0, at:Date.now(), why: turnIceServers.length ? 'nincs WebRTC' : 'nincs közvetítő beállítva' };
+        return turnRelayTest;
+      }
+      let a, b;
+      try{
+        const cfg = { iceServers: turnIceServers, iceTransportPolicy:'relay' };
+        a = new RTCPeerConnection(cfg); b = new RTCPeerConnection(cfg);
+        a.onicecandidate = (e)=>{ if(e.candidate) b.addIceCandidate(e.candidate).catch(()=>{}); };
+        b.onicecandidate = (e)=>{ if(e.candidate) a.addIceCandidate(e.candidate).catch(()=>{}); };
+        const ch = a.createDataChannel('relaytest');
+        const arrived = new Promise(res=>{ b.ondatachannel = (ev)=>{ ev.channel.onmessage = (m)=>res(m.data === 'ping'); }; });
+        ch.onopen = ()=>{ try{ ch.send('ping'); }catch(e){} };
+        await a.setLocalDescription(await a.createOffer());
+        await b.setRemoteDescription(a.localDescription);
+        await b.setLocalDescription(await b.createAnswer());
+        await a.setRemoteDescription(b.localDescription);
+        const ok = await Promise.race([arrived, new Promise(r=>setTimeout(()=>r(false), 12000))]);
+        turnRelayTest = { ok: !!ok, ms: Date.now() - t0, at: Date.now(), why: ok ? '' : 'az üzenet 12 mp alatt sem ért át a közvetítőn' };
+      }catch(e){
+        turnRelayTest = { ok:false, ms: Date.now() - t0, at: Date.now(), why: String(e && e.message || e).slice(0, 80) };
+      } finally {
+        try{ a && a.close(); }catch(e){} try{ b && b.close(); }catch(e){}
+        turnRelayTestRunning = null;
+      }
+      clog(turnRelayTest.ok ? 'T01' : 'T02', `közvetítő (TURN) adattovábbítás-próba: ${turnRelayTest.ok ? 'MŰKÖDIK' : 'NEM MŰKÖDIK — ' + turnRelayTest.why} (${turnRelayTest.ms} ms)`);
+      return turnRelayTest;
+    })();
+    return turnRelayTestRunning;
+  }
   // v3.11: two devices on the same network share their public address. Only
   // a short hash of it is sent, never the address itself.
   let pubHashCache = { ip:'', h:'' };
@@ -6399,6 +6443,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       lastNatCheckAt = Date.now();
       try{ await checkNat(); }catch(e){}
     }
+    if(turnIceServers.length && (!turnRelayTest || Date.now() - turnRelayTest.at > 300000)){
+      try{ await runTurnRelayTest(); }catch(e){}
+    }
     let peers = 0;
     try{ peers = room && room.getPeers ? Object.keys(room.getPeers() || {}).length : 0; }catch(e){}
     const ua = navigator.userAgent;
@@ -6409,6 +6456,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       probe: turnProbeInfo ? !!turnProbeInfo.relay : null,
       nat: lastNatInfo ? { host: lastNatInfo.host, mdns: lastNatInfo.mdns, srflx: lastNatInfo.srflx, relay: lastNatInfo.relay, ms: lastNatInfo.ms } : null,
       net: await publicAddrHash(),
+      relayOk: turnRelayTest ? turnRelayTest.ok : null,
       unlocked: !!appleNetUnlocked, host: !!isHost, inRoom: !!room, peers,
       online: navigator.onLine, vis: document.visibilityState,
       errs: recentConnErrors.slice(-3), log: connLog.slice(-15)
@@ -6455,6 +6503,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       return out;
     }
     if(other.v && me.v && other.v !== me.v) out.push(`Eltérő verzió: nálad ${me.v}, ${who}-nál ${other.v} — frissítsétek az oldalt mindkét eszközön.`);
+    // v3.16: the relay test is the strongest evidence there is
+    const relayDead = [me.relayOk === false ? 'a te eszközödön' : '', other.relayOk === false ? `${who} eszközén` : ''].filter(Boolean);
+    if(relayDead.length){
+      out.push(`A közvetítő (TURN) ${relayDead.join(' és ')} ad ugyan címet, de ADATOT NEM TOVÁBBÍT (a próbaüzenet nem ért át). Ilyenkor csak azok tudnak összekapcsolódni, akiknek közvetlenül is megy — mobilnetről vagy szigorú hálózatról senki. Leggyakoribb ok: elfogyott a Metered havi ingyenes kerete (a metered.ca fiókban látszik), vagy a hálózat tiltja a közvetítő forgalmát.`);
+    } else if(me.relayOk === true && other.relayOk === true){
+      out.push(`A közvetítő mindkét eszközön bizonyítottan továbbítja az adatot.`);
+    }
     // v3.11: the same network (same public address) — the classic same-wifi case
     const sameNet = !!(me.net && other.net && me.net === other.net);
     if(sameNet){
@@ -6469,7 +6524,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     facts(me, 'A te eszközöd');
     facts(other, who);
     const mr = me.nat ? me.nat.relay : null, or = other.nat ? other.nat.relay : null;
-    if(mr > 0 && or > 0 && !out.length && !sameNet){
+    if(mr > 0 && or > 0 && out.length <= 1 && !sameNet && !relayDead.length){
       out.push(`Mindkét eszköz kap közvetítő címet, és mindkettő hallja a másikat, a közvetlen kapcsolat mégsem jön létre. Ilyenkor a közvetítő szerver utasíthatja el a forgalmat (Metered keret), vagy egy tűzfal/router-védelem szakítja meg a már induló kapcsolatot.`);
     }
     if(!out.length) out.push('Mindkét eszköz hálózata rendben lévőnek tűnik — valószínűleg átmeneti hiba volt. Próbáljátok újra.');
@@ -6478,7 +6533,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function fmtDiag(d){
     if(!d) return '—';
     const n = d.nat ? `helyi ${d.nat.host}, álnév ${d.nat.mdns}, STUN ${d.nat.srflx}, közvetítő ${d.nat.relay}` : 'nincs mérés';
-    return `v${d.v} · ${d.dev}${d.apple ? ` (Apple, helyi-cím javítás: ${d.unlocked ? 'BE' : 'ki'})` : ''}${d.net ? ' · hálózat #' + d.net : ''}${d.inapp ? ' · beépített böngésző' : ''} · MQTT ${d.mqtt ? d.mqtt.join('/') : '?'} · TURN: ${d.turn} (${d.turnN}) · címek: ${n} · ${d.host ? 'szobanyitó' : 'vendég'}, kapcsolódott társak: ${d.peers} · ${d.online === false ? 'OFFLINE' : 'online'} · ${d.vis === 'hidden' ? 'háttérben' : 'előtérben'}`;
+    const rt = d.relayOk === true ? 'közvetítő-próba: MŰKÖDIK · ' : d.relayOk === false ? 'közvetítő-próba: NEM MŰKÖDIK · ' : '';
+    return rt + `v${d.v} · ${d.dev}${d.apple ? ` (Apple, helyi-cím javítás: ${d.unlocked ? 'BE' : 'ki'})` : ''}${d.net ? ' · hálózat #' + d.net : ''}${d.inapp ? ' · beépített böngésző' : ''} · MQTT ${d.mqtt ? d.mqtt.join('/') : '?'} · TURN: ${d.turn} (${d.turnN}) · címek: ${n} · ${d.host ? 'szobanyitó' : 'vendég'}, kapcsolódott társak: ${d.peers} · ${d.online === false ? 'OFFLINE' : 'online'} · ${d.vis === 'hidden' ? 'háttérben' : 'előtérben'}`;
   }
   async function showJoinDiagnosis(){
     const box = document.getElementById('join-diag');
@@ -6740,6 +6796,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // that stops gathering addresses early
     if(lastNatInfo) lines.push(`Címjelöltek: helyi ${lastNatInfo.host}, álnév ${lastNatInfo.mdns}, STUN ${lastNatInfo.srflx}, közvetítő ${lastNatInfo.relay} · ${lastNatInfo.ms} ms`);
     if(turnProbeInfo) lines.push(`Induláskori TURN-próba: ${turnProbeInfo.relay ? 'kapott közvetítő címet' : 'NEM kapott közvetítő címet'} (${turnProbeInfo.ms} ms)`);
+    if(turnIceServers.length){
+      lines.push('Közvetítő adattovábbítás-próba…');
+      const rt = await runTurnRelayTest();
+      lines[lines.length-1] = `Közvetítő adattovábbítás-próba: ${rt.ok ? 'MŰKÖDIK (a próbaüzenet átért)' : 'NEM MŰKÖDIK — ' + rt.why} (${rt.ms} ms)`;
+    }
     if(appleFixFailure) lines.push(`Helyi-cím javítás eredménye: ${appleFixFailure.result}${appleFixFailure.errName ? ' / ' + appleFixFailure.errName : ''}`);
     if(IS_APPLE_WEBKIT && lastNatInfo && lastNatInfo.srflx === 0 && lastNatInfo.relay === 0){
       lines.push('');
@@ -9998,6 +10059,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.16', changes:[
+      'Új: valódi közvetítő-próba. Eddig csak azt ellenőriztük, hogy a közvetítő (TURN) szerver ad-e címet — ez nem bizonyítja, hogy adatot is továbbít (pl. elfogyott havi keretnél). Most az eszköz egy próbaüzenetet küld saját magának kizárólag a közvetítőn át; ha nem ér át, a diagnózis ezt mondja ki elsőként. Ez dönti el, miért nem tud valaki mobilnetről csatlakozni. Az ⓘ jelentésben is látszik.'
+    ]},
     { version:'3.15', changes:[
       'Sötét módban a rajz színei is alkalmazkodnak: minden szín kicsit sötétebb és tompább, így nem vakítanak a sötét lapon (a fekete továbbra is világosszürke lesz). Csak a te képernyődön változik a megjelenés — a többiek a saját beállításuk szerint látják a rajzot, a galériába mentett kép pedig mindig az eredeti színekkel készül.'
     ]},
