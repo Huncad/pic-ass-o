@@ -2,7 +2,9 @@
 <html lang="hu">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- v3.18: basic hardening that cannot break the P2P / CDN traffic: no plugins, no <base> hijack, forms only to this site -->
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>PIC-ASS-O — party rajzjáték (több eszközön, szerver nélkül)</title>
 <meta name="theme-color" content="#16302A">
 <!-- "Add to Home Screen" as a full-screen app, no browser address bar. -->
@@ -155,6 +157,16 @@
   .diag-box b{ color:var(--yellow); }
   .diag-box ul{ margin:4px 0 0 18px; padding:0; }
   .player-chip.pending{ opacity:.7; border-style:dashed; font-style:italic; }
+  /* v3.18: pinch-zoom is allowed again (WCAG 1.4.4); 16px inputs stop iOS from zooming in on focus */
+  @media (pointer:coarse){ input[type=text], input[type=password], input:not([type]), textarea, select{ font-size:max(16px, 1em) !important; } }
+  .sr-only{ position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  :focus-visible{ outline:3px solid var(--yellow); outline-offset:2px; }
+  #custom-words-input{ width:100%; padding:11px 13px; border-radius:10px; border:none; font-size:1rem; font-family:'Nunito',sans-serif; resize:vertical; min-height:70px; }
+  .custom-words-count{ font-size:.75rem; color:var(--chalk-dim); margin-top:4px; }
+  .home-stats{ text-align:center; font-size:.85rem; color:var(--chalk-dim); margin-top:10px; }
+  #privacy-overlay{ position:fixed; inset:0; z-index:1000; background:rgba(10,20,16,0.92); display:flex; align-items:flex-start; justify-content:center; padding:20px; overflow-y:auto; }
+  #privacy-overlay p, #privacy-overlay li{ font-size:.9rem; line-height:1.45; color:var(--chalk); }
+  #privacy-overlay ul{ padding-left:20px; }
   .setup-hint{ margin:8px 2px 0; font-size:.78rem; line-height:1.35; color:var(--chalk-dim); opacity:.85; }
   .setup-section{margin:20px 0;}
 
@@ -1338,7 +1350,9 @@
     <div class="feedback-cta">
       <button class="ghost" id="btn-open-tutorial">❓ Hogyan működik?</button>
       <button class="ghost" id="btn-open-feedback">💬 Visszajelzés · hibabejelentés</button>
+      <button class="ghost" id="btn-open-privacy">🔒 Adatvédelem</button>
     </div>
+    <p class="home-stats hidden" id="home-stats"></p>
     <p class="center-note" id="words-loading-note">Szavak betöltése…</p>
   </div>
 
@@ -1427,6 +1441,16 @@
         <button class="pill" data-guessmode="all">Ha már mindenki kitalálta 👥</button>
       </div>
       <p class="setup-hint">Tippelni mindig mindenki tud. Az első esetben az első jó tipp lezárja a kört, a másodikban a kör addig tart, amíg mindenki eltalálta (vagy lejár az idő). Minél gyorsabb valaki, annál több pontot kap. A rajzoló pontja attól függ, milyen gyorsan rajzolta le a szót: az utolsó módosításáig mérjük, és csak akkor jár, ha valaki kitalálta.</p>
+    </div>
+    <div class="setup-section">
+      <label class="field-label" for="custom-words-input">Saját szavak (nem kötelező)</label>
+      <textarea id="custom-words-input" rows="3" maxlength="6000" placeholder="Soronként vagy vesszővel elválasztva, pl. céges karácsony, Kari a macska, Szombathely"></textarea>
+      <div class="custom-words-count" id="custom-words-count">0 saját szó</div>
+      <div class="pill-row" id="customonly-row" style="margin-top:8px;">
+        <button class="pill active" data-customonly="mix">Keverve a beépítettekkel</button>
+        <button class="pill" data-customonly="only">Csak a saját szavak</button>
+      </div>
+      <p class="setup-hint">Legfeljebb 150 szó, egyenként max. 40 karakter. A lista minden játékos eszközére eljut, tehát ne írj bele titkot.</p>
     </div>
     <div class="start-btn-wrap" style="display:flex;justify-content:center;margin-top:24px;">
       <button class="big" id="btn-create-room" style="background:var(--green);">Szoba létrehozása 🎉</button>
@@ -1591,6 +1615,30 @@
   <input name="bot-field">
   <input name="type"><textarea name="message"></textarea><input name="name"><input name="contact"><input name="version"><textarea name="device"></textarea>
 </form>
+
+<div id="sr-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+<div id="privacy-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
+  <div class="admin-box" style="max-width:560px;">
+    <div class="admin-panel-header">
+      <h2 id="privacy-title">🔒 Adatvédelem</h2>
+      <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
+    </div>
+    <p>A játéknak nincs saját szervere és nincs felhasználói fiókja. Röviden, mi hova kerül:</p>
+    <ul>
+      <li><b>Rajz, tippek, chat, hangüzenet:</b> közvetlenül a játékosok eszközei között mennek, titkosított WebRTC-kapcsolaton. Ha ez nem jön létre, nyilvános MQTT-szervereken át mennek tovább, a szobakóddal titkosítva.</li>
+      <li><b>Kapcsolódáshoz:</b> nyilvános jelzőszerverek (Nostr / BitTorrent tracker / MQTT) és a Metered közvetítő (TURN) szolgáltatás látja az eszközöd IP-címét.</li>
+      <li><b>Nyilvános szobák:</b> a szoba neve, a szobanyitó becenevét és a létszám bárki számára látható a szobalistán. Privát szobánál ez nem jelenik meg a listán.</li>
+      <li><b>Visszajelzés-űrlap:</b> a Netlify Forms tárolja. A név és az elérhetőség önkéntes.</li>
+      <li><b>Az eszközödön marad:</b> beceneved, beállításaid, saját statisztikád és egy kapcsolódási hibanapló (24 óra után törlődik). Ezek nem kerülnek máshová, kivéve ha a naplót te magad kimásolod és elküldöd.</li>
+      <li><b>Mikrofon:</b> csak akkor kér hozzáférést, ha hangüzenetet veszel fel.</li>
+    </ul>
+    <p>Mindent törölhetsz a böngésző „webhelyadatok törlése” funkciójával, vagy az alábbi gombbal.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px;">
+      <button class="secondary small" id="privacy-clear-btn">🧹 Helyi adataim törlése</button>
+    </div>
+    <p id="privacy-status" class="center-note" style="min-height:18px;"></p>
+  </div>
+</div>
 
 <!-- Feedback dialog, opened from the home screen -->
 <div id="feedback-overlay" class="hidden">
@@ -2237,7 +2285,13 @@ const MQTT_CFG     = { appId: APP_ID, rtcConfig: RTC_CONFIG, relayConfig: { redu
 const CONNLOG_KEY = 'picasso-connlog';
 const CONNLOG_MAX = 400;
 let connLog = [];
-try{ const old = JSON.parse(localStorage.getItem(CONNLOG_KEY) || '[]'); if(Array.isArray(old)) connLog = old.slice(-CONNLOG_MAX); }catch(e){}
+// v3.18: the log is kept for 24 hours only (it names players), then dropped.
+const CONNLOG_AT_KEY = 'picasso-connlog-at', CONNLOG_TTL_MS = 24*3600*1000;
+try{
+  const at = Number(localStorage.getItem(CONNLOG_AT_KEY)) || 0;
+  if(Date.now() - at > CONNLOG_TTL_MS){ localStorage.removeItem(CONNLOG_KEY); localStorage.setItem(CONNLOG_AT_KEY, String(Date.now())); }
+  else{ const old = JSON.parse(localStorage.getItem(CONNLOG_KEY) || '[]'); if(Array.isArray(old)) connLog = old.slice(-CONNLOG_MAX); }
+}catch(e){}
 let connLogSaveTimer = 0;
 function clog(code, text){
   const d = new Date();
@@ -2342,7 +2396,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function genRoomCode(){
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let s = '';
-    for(let i=0;i<5;i++) s += chars[Math.floor(Math.random()*chars.length)];
+    // v3.18: crypto-strength randomness (the code is also the key of the encrypted MQTT fallback)
+    const a = new Uint32Array(5);
+    try{ crypto.getRandomValues(a); }catch(e){ for(let i=0;i<5;i++) a[i] = Math.floor(Math.random()*4294967296); }
+    for(let i=0;i<5;i++) s += chars[a[i] % chars.length];
     return s;
   }
 
@@ -2363,6 +2420,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   const MAX_POINTS_PER_STROKE = 1500;  // points per stroke
   const MAX_TOTAL_POINTS = 40000;      // points in one drawing
   const MAX_CHAT_CHARS = 400;
+  const MAX_CUSTOM_WORDS = 150, MAX_CUSTOM_WORD_LEN = 40;   // v3.18: own words per room
   const MAX_VOICE_CHARS = 800000;      // ~600 kB of audio, far above a 15 s clip
   const MAX_KNOWN_ROOMS = 120;
 
@@ -3230,12 +3288,22 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
 
   const TIER_INFO = {
     konnyu:  {label:"Könnyű",  color:"var(--green)"},
-    kozepes: {label:"Nehéz", color:"var(--blue)"}
+    kozepes: {label:"Nehéz", color:"var(--blue)"},
+    sajat:   {label:"Saját", color:"var(--purple)"}
   };
+  // v3.18: built-in words plus the room's own ones
+  function customWordItems(){
+    return (settings && Array.isArray(settings.customWords) ? settings.customWords : []).map(w=>({ w, tier:'sajat' }));
+  }
   function pickWordAvoidingRepeats(difficulties, usedWords){
     const tiers = Array.isArray(difficulties) && difficulties.length ? difficulties : ['konnyu','kozepes'];
-    const filtered = WORDS.filter(w=>tiers.includes(w.tier));
-    let pool = filtered.length ? filtered : WORDS;
+    const custom = customWordItems();
+    let pool;
+    if(custom.length && (settings.customOnly || (tiers.length === 1 && tiers[0] === 'sajat'))) pool = custom;
+    else{
+      const filtered = WORDS.filter(w=>tiers.includes(w.tier));
+      pool = (filtered.length ? filtered : WORDS).concat(custom);
+    }
     if(!pool.length) pool = FALLBACK_WORDS;   // never return undefined
     let available = pool.filter(w=>!usedWords.includes(w.w));
     if(available.length === 0) available = pool;
@@ -3248,7 +3316,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const tiers = Array.isArray(difficulties) && difficulties.length ? difficulties : ['konnyu','kozepes'];
     const out = [];
     const taken = ()=> usedWords.concat(out.map(c=>c.w));
-    tiers.forEach(t=>{ if(out.length < n) out.push(pickWordAvoidingRepeats([t], taken())); });
+    // v3.18: with own words in the room, at least one choice is always one of them
+    const firstPicks = customWordItems().length ? (settings.customOnly ? ['sajat'] : tiers.concat('sajat')) : tiers;
+    firstPicks.forEach(t=>{ if(out.length < n) out.push(t === 'sajat' ? pickWordAvoidingRepeats(['sajat'], taken()) : pickWordAvoidingRepeats([t], taken())); });
     let guard = 0;
     while(out.length < n && guard++ < 40 + n*10){
       const c = pickWordAvoidingRepeats(tiers, taken());
@@ -3900,6 +3970,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     clearTimeout(showFxBanner.t);
     showFxBanner.t = setTimeout(()=>el.classList.remove('show'), 1900);
   }
+  // v3.18: screen-reader announcements (visually hidden live region)
+  function srAnnounce(text){
+    const el = document.getElementById('sr-announcer');
+    if(!el || !text) return;
+    el.textContent = '';
+    setTimeout(()=>{ el.textContent = String(text).slice(0, 300); }, 60);
+  }
   function shakeEl(el){
     if(!el || REDUCED_MOTION) return;
     el.classList.remove('fx-shake'); void el.offsetWidth; el.classList.add('fx-shake');
@@ -3928,7 +4005,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let roomCode = '';
   let currentRoomName = '';
   let isHost = false;
-  let settings = { difficulties:['konnyu','kozepes'], totalRounds:4, roundTime:60, maxPlayers:0, hintsEnabled:true, wordChoices:3, guessMode:'first' };
+  let settings = { difficulties:['konnyu','kozepes'], totalRounds:4, roundTime:60, maxPlayers:0, hintsEnabled:true, wordChoices:3, guessMode:'first', customWords:[], customOnly:false };
   const WORD_CHOICE_OPTIONS = [1,2,3,5,7,10];
   let roomIsPublic = false;
 
@@ -4334,6 +4411,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         totalRounds: settings.totalRounds, roundTime: settings.roundTime,
         hintsEnabled: settings.hintsEnabled, maxPlayers: settings.maxPlayers, wordChoices: settings.wordChoices,
         guessMode: settings.guessMode,
+        customWords: settings.customWords, customOnly: settings.customOnly,
         visibility: vis ? vis.dataset.visibility : 'private',
         roomName: document.getElementById('room-name-input').value.slice(0,30)
       }));
@@ -4349,7 +4427,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       btns.forEach(b=>b.classList.toggle('active', b === hit));
       return hit ? hit.dataset[attr] : String(fallback);
     };
-    const tiers = (Array.isArray(p.difficulties) ? p.difficulties : []).filter(t=>TIER_INFO[t]);
+    const tiers = (Array.isArray(p.difficulties) ? p.difficulties : []).filter(t=>t === 'konnyu' || t === 'kozepes');
     const useTiers = tiers.length ? tiers : ['konnyu','kozepes'];
     document.querySelectorAll('#difficulty-row .pill').forEach(b=>b.classList.toggle('active', useTiers.includes(b.dataset.tier)));
     settings.difficulties = useTiers.slice();
@@ -4361,7 +4439,26 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     settings.guessMode = pick('guessmode-row', 'guessmode', p.guessMode === 'all' ? 'all' : 'first', 'first') === 'all' ? 'all' : 'first';
     roomIsPublic = pick('visibility-row', 'visibility', p.visibility, 'private') === 'public';
     if(typeof p.roomName === 'string') document.getElementById('room-name-input').value = p.roomName.slice(0,30);
+    settings.customWords = cleanCustomWords(p.customWords);
+    settings.customOnly = pick('customonly-row', 'customonly', p.customOnly ? 'only' : 'mix', 'mix') === 'only';
+    const cwi = document.getElementById('custom-words-input');
+    if(cwi){ cwi.value = settings.customWords.join('\n'); updateCustomWordsCount(); }
   }
+  function updateCustomWordsCount(){
+    const el = document.getElementById('custom-words-count');
+    if(el) el.textContent = `${settings.customWords.length} saját szó` + (settings.customWords.length >= MAX_CUSTOM_WORDS ? ' (elérted a maximumot)' : '');
+  }
+  document.getElementById('custom-words-input').addEventListener('input', (e)=>{
+    settings.customWords = cleanCustomWords(e.target.value);
+    updateCustomWordsCount();
+  });
+  document.querySelectorAll('#customonly-row .pill').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      sndClick();
+      settings.customOnly = btn.dataset.customonly === 'only';
+      document.querySelectorAll('#customonly-row .pill').forEach(b=>b.classList.toggle('active', b === btn));
+    });
+  });
   document.querySelectorAll('#difficulty-row .pill').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const tier = btn.dataset.tier;
@@ -5039,7 +5136,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       // (only once this round is resolved here too, so a report racing ahead
       // of the result message can't get counted twice)
       if(currentRound && !processedResultRounds.has(rk)) return;
-      if(total > local + 200 || scoreFixRound[pid] === rk) return;
+      // v3.18: nobody can guess AND draw in the same round, so one round is worth 100 at most
+      if(total < local || total > local + 100 || scoreFixRound[pid] === rk) return;
       scoreFixRound[pid] = rk;
       scores[pid] = total;
       if(showingRoundEnd) renderScoreTable('roundend-scores', scoreRows());
@@ -5281,6 +5379,19 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function cleanPeerId(v){ return String(v || '').slice(0,64); }
 
   // ---- validators for whole game objects coming off the network ----------
+  // v3.18: the room owner's own words — trimmed, deduplicated, capped
+  function cleanCustomWords(raw){
+    const list = Array.isArray(raw) ? raw : (typeof raw === 'string' ? raw.split(/[\n,;]+/) : []);
+    const seen = new Set(), out = [];
+    for(const w of list.slice(0, 600)){
+      const t = cleanText(w, MAX_CUSTOM_WORD_LEN).replace(/\s+/g, ' ').trim();
+      const k = t.toLocaleLowerCase('hu');
+      if(t.length < 2 || seen.has(k)) continue;
+      seen.add(k); out.push(t);
+      if(out.length >= MAX_CUSTOM_WORDS) break;
+    }
+    return out;
+  }
   function sanitizeSettings(st){
     const s = isPlainObject(st) ? st : {};
     const out = {
@@ -5290,7 +5401,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       maxPlayers: clampNum(s.maxPlayers, 0, 20, 0),
       hintsEnabled: s.hintsEnabled !== false,
       wordChoices: WORD_CHOICE_OPTIONS.includes(Number(s.wordChoices)) ? Number(s.wordChoices) : 3,
-      guessMode: s.guessMode === 'all' ? 'all' : 'first'
+      guessMode: s.guessMode === 'all' ? 'all' : 'first',
+      customWords: cleanCustomWords(s.customWords),
+      customOnly: s.customOnly === true
     };
     if(out.difficulties.length === 0) out.difficulties = ['konnyu','kozepes'];
     return out;
@@ -7242,6 +7355,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     list.scrollTop = list.scrollHeight;
     if(!mine){
       if(chatSoundEnabled) sndChatPing();
+      if(data && data.type !== 'voice' && typeof data.text === 'string') srAnnounce(`${cleanName(data.name)}: ${data.text}`);
       if(document.getElementById('chat-panel').classList.contains('hidden')){
         // On a phone, popping the panel open used to cover the drawing the
         // moment a message came in. Instead: bump the icon and bump the
@@ -7754,7 +7868,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     hostPeerId = null;
     meta = null;
     currentRound = null;
-    gameEnded = false;
+    gameEnded = false; statsRecordedThisGame = false;
     scores = {};
     activePlayerIds = new Set();
     processedResultRounds = new Set();
@@ -7983,7 +8097,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     scores = {};
     Object.keys(clean.playerNames).forEach(id=>{ scores[id]=0; });
     activePlayerIds = new Set(Object.keys(clean.playerNames));
-    gameEnded = false;
+    gameEnded = false; statsRecordedThisGame = false;
     rematchYesVotes = new Set(); rematchDeadline = 0;
     processedResultRounds = new Set();
     revealedWords = [];
@@ -8928,7 +9042,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const elapsed = (Date.now()-fdRoundStartAt)/1000;
       const remaining = Math.max(0, Math.ceil(fdRoundTimeTotal-elapsed));
       updateTimerEl(el, remaining);
-      if(remaining<=10 && remaining>0 && remaining!==lastTickPlayed){ sndTick(remaining<=5); lastTickPlayed=remaining; }
+      if(remaining<=10 && remaining>0 && remaining!==lastTickPlayed){ sndTick(remaining<=5); lastTickPlayed=remaining; if(remaining === 10 || remaining === 5) srAnnounce(`Még ${remaining} másodperc`); }
       if(isDrawerSide && settings.hintsEnabled && hintAction && currentRound && currentRound.word){
         const frac = elapsed / fdRoundTimeTotal;
         const wordLen = hintLetterIndexes(currentRound.word).length;
@@ -9818,6 +9932,49 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     }
   }
 
+  // v3.18: personal, device-local statistics (never sent anywhere)
+  const STATS_KEY = 'picasso-stats';
+  let statsRecordedThisGame = false;
+  function loadPersonalStats(){
+    try{ const v = JSON.parse(localStorage.getItem(STATS_KEY) || 'null'); if(isPlainObject(v)) return v; }catch(e){}
+    return { games:0, wins:0, points:0, best:0 };
+  }
+  function recordPersonalStats(rows){
+    if(statsRecordedThisGame || !rows.some(r=>r.id === selfId)) return;
+    statsRecordedThisGame = true;
+    const st = loadPersonalStats();
+    const me = rows.find(r=>r.id === selfId);
+    st.games = (Number(st.games)||0) + 1;
+    if(rows.length > 1 && me.score === rows[0].score && me.score > 0) st.wins = (Number(st.wins)||0) + 1;
+    st.points = (Number(st.points)||0) + me.score;
+    st.best = Math.max(Number(st.best)||0, me.score);
+    try{ localStorage.setItem(STATS_KEY, JSON.stringify(st)); }catch(e){}
+    renderHomeStats();
+  }
+  function renderHomeStats(){
+    const el = document.getElementById('home-stats');
+    if(!el) return;
+    const st = loadPersonalStats();
+    if(!st.games){ el.classList.add('hidden'); return; }
+    el.textContent = `📊 Ezen az eszközön eddig ${st.games} játék, ${st.wins} győzelem, legjobb eredményed ${st.best} pont.`;
+    el.classList.remove('hidden');
+  }
+  renderHomeStats();
+  (function setupPrivacyDialog(){
+    const ov = document.getElementById('privacy-overlay');
+    const close = ()=>ov.classList.add('hidden');
+    document.getElementById('btn-open-privacy').addEventListener('click', ()=>{ sndClick(); document.getElementById('privacy-status').textContent = ''; ov.classList.remove('hidden'); document.getElementById('privacy-close-btn').focus(); });
+    document.getElementById('privacy-close-btn').addEventListener('click', close);
+    ov.addEventListener('click', e=>{ if(e.target === ov) close(); });
+    document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && !ov.classList.contains('hidden')) close(); });
+    document.getElementById('privacy-clear-btn').addEventListener('click', ()=>{
+      if(!confirm('Törlöd a becenevedet, a beállításaidat, a statisztikádat és a kapcsolódási naplót erről az eszközről?')) return;
+      try{ Object.keys(localStorage).filter(k=>k.startsWith('picasso-')).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+      connLog = [];
+      renderHomeStats();
+      document.getElementById('privacy-status').textContent = 'Kész. Újratöltés után tiszta lappal indul a játék.';
+    });
+  })();
   function renderGameEnd(rows, quiet){
     clog('J03', 'játék vége');
     gameEnded = true;
@@ -9832,6 +9989,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       ? 'Döntetlen: '+winners.map(w=>w.name).join(' és ')+' 🏆'
       : 'Győztes: '+(winners[0]?winners[0].name:'—')+' 🏆';
     renderScoreTable('gameend-scores', rows);
+    if(!quiet) recordPersonalStats(rows);
     renderGameStatsAwards();
     renderGallery();
     refreshRematchUI();
@@ -10005,7 +10163,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     setTimeout(()=>{ try{ if(leavingRoom && typeof leavingRoom.leave === 'function') leavingRoom.leave(); }catch(e){} }, 300);
     room = null;
     clearRoomActions();
-    gameEnded = false;
+    gameEnded = false; statsRecordedThisGame = false;
     hostPeerId = null;
     meta = null;
     currentRound = null;
@@ -10269,6 +10427,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.18', changes:[
+      'Új: saját szavak. Szobanyitáskor beírhatsz legfeljebb 150 saját szót, és eldöntheted, hogy a beépítettekkel keverve vagy csak ezekből játszatok. Ilyenkor a választható szavak között mindig ott van legalább egy saját.',
+      'Új: saját statisztika a kezdőképernyőn (játékok, győzelmek, legjobb eredmény). Csak ezen az eszközön tárolódik.',
+      'Új: Adatvédelem ablak a kezdőképernyőn, és egy gomb, amellyel minden helyben tárolt adatod törölhető.',
+      'Akadálymentesség: a képernyő újra nagyítható (két ujjal), a képernyőolvasók felolvassák a chatet és az idő fogyását, a billentyűzetes fókusz jól látható.',
+      'Biztonság: a szobakód kriptográfiailag erős véletlenből készül, a pontszám-javítás szigorúbb (csalni nem lehet vele), alapszintű tartalombiztonsági szabályok.',
+      'A kapcsolódási napló 24 óra után magától törlődik.'
+    ]},
     { version:'3.17', changes:[
       'Új: tartalék út. Ha két eszköz között nem jön létre közvetlen kapcsolat (router, iPhone, VPN, tűzfal, mobilnet szolgáltatói NAT), 6 mp után a játék automatikusan az MQTT-szervereken keresztül megy tovább — ugyanazon az úton, amin a szobalista is működik. Az adatok a szobakóddal titkosítva mennek, a szerverek nem látják a tartalmat. Ha később mégis létrejön a közvetlen kapcsolat, a játék észrevétlenül átvált rá. Új naplókódok: F01 tartalék út indult, F02 átváltás közvetlenre, F03 átváltás tartalékra.'
     ]},
