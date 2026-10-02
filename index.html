@@ -1615,7 +1615,7 @@
     <div class="setup-section">
       <label class="field-label">A neved</label>
       <span class="input-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4.2" fill="currentColor"/><path d="M3.5 21 C4.5 15.5 8 13.6 12 13.6 C16 13.6 19.5 15.5 20.5 21 Z" fill="currentColor"/></svg>
-      <input type="text" id="home-name" maxlength="16" placeholder="pl. Anna" aria-label="A neved"></span>
+      <input type="text" id="home-name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" maxlength="16" placeholder="pl. Anna" aria-label="A neved"></span>
       <div class="avatar-picker" id="avatar-picker"></div>
     </div>
     <div id="invite-join-wrap" class="hidden" style="text-align:center;margin:10px 0 20px;">
@@ -1655,7 +1655,7 @@
     </p>
     <div class="setup-section" id="room-name-section">
       <label class="field-label">Szoba neve</label>
-      <input type="text" id="room-name-input" maxlength="30" placeholder="pl. Anna bulija">
+      <input type="text" id="room-name-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" maxlength="30" placeholder="pl. Anna bulija">
       <p class="setup-hint hidden" id="room-name-warning" style="color:var(--red);opacity:1;"></p>
     </div>
     <div class="setup-section" id="room-visibility-section">
@@ -1759,7 +1759,7 @@
     <p class="center-note hidden" id="join-room-preview"></p>
     <div class="setup-section" id="join-code-section" style="display:none;">
       <label class="field-label">Szoba kódja</label>
-      <input type="text" id="join-code" maxlength="5" placeholder="pl. K7QFX" style="text-transform:uppercase;font-family:'Kalam',cursive;font-size:1.4rem;text-align:center;letter-spacing:4px;">
+      <input type="text" id="join-code" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" maxlength="5" placeholder="pl. K7QFX" style="text-transform:uppercase;font-family:'Kalam',cursive;font-size:1.4rem;text-align:center;letter-spacing:4px;">
     </div>
     <div id="join-warning" style="text-align:center;color:var(--red);font-weight:700;min-height:20px;"></div>
     <div id="join-diag" class="diag-box hidden"></div>
@@ -1818,7 +1818,7 @@
           <div class="guess-inputs">
             <h3>Tippeld meg, mit rajzol!</h3>
             <div class="guess-row">
-              <input type="text" id="watch-guess-input" placeholder="Ide írd a tipped…" aria-label="Tipp">
+              <input type="text" id="watch-guess-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" placeholder="Ide írd a tipped…" aria-label="Tipp">
               <button class="small" id="btn-watch-guess" aria-label="Tipp elküldése" title="Küld"><svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg></button>
             </div>
           </div>
@@ -2102,7 +2102,7 @@
   </div>
   <div id="emoji-picker" class="hidden"></div>
   <div class="chat-input-row">
-    <input type="text" id="chat-text-input" maxlength="200" placeholder="Írj valamit...">
+    <input type="text" id="chat-text-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" maxlength="200" placeholder="Írj valamit...">
     <button class="small" id="chat-emoji-btn" title="Emoji" aria-label="Emoji választó megnyitása">😊</button>
     <button class="small" id="chat-mic-btn" title="Hangüzenet" aria-label="Hangüzenet felvétele">🎙️</button>
     <button class="small" id="chat-send-btn">Küld</button>
@@ -10817,6 +10817,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.24', changes:[
+      'Javítva: gépen a tippmező (és a chat, a név, a szobanév és a szobakód mezője) alatt nem ajánl fel többé a böngésző vagy a jelszókezelő e-mail-címet, korábbi bevitelt vagy automatikus kitöltést.'
+    ]},
     { version:'3.23', changes:[
       'Nagy képernyőn a rajzoló két oldalán a krétafirkák most a teljes magasságot kitöltik, és nem lógnak a rajzlap alá.',
       'Telefonon is új külső: a tippelőnél logó a felső sáv alatt, krétafirkás háttér, kártyás tippmező és tipplista; a rajzolónál lekerekített rajzlap és eszköztár.'
