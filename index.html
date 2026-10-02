@@ -1832,7 +1832,7 @@
       <label class="field-label" for="lobby-words-input">Saját szavaid (nem kötelező)</label>
       <textarea id="lobby-words-input" rows="3" maxlength="1200" autocomplete="off" spellcheck="false" placeholder="Soronként vagy vesszővel elválasztva, pl. céges karácsony, Kari a macska, Szombathely"></textarea>
       <div class="custom-words-count" id="lobby-words-count">0 / 15 szó</div>
-      <p class="setup-hint">Mindenki beküldhet legfeljebb 15 szót, a többiekét nem látod. A beküldött szavaidat csak te kaphatod rajzolásra. Ha ilyet választasz, a kitalálók megkapják a pontjukat, de te nem kapsz pontot érte. A mező tartalmát a játék nem jegyzi meg.</p>
+      <p class="setup-hint">Mindenki beküldhet legfeljebb 15 szót, a többiekét nem látod. A beküldött szavaidat csak te kaphatod rajzolásra. Ha ilyet választasz, a kitalálók megkapják a pontjukat (akkor is, ha ők is beküldték ugyanezt a szót), de te nem kapsz pontot érte. A mező tartalmát a játék nem jegyzi meg.</p>
       <p class="center-note" id="lobby-words-summary" style="margin:6px 0 0;"></p>
     </div>
     <p class="center-note hidden" id="lobby-notify" style="font-size:.85rem;">
@@ -5596,7 +5596,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const rk = roundKey(currentRound);
       // v3.25: their own word — accepted, but only they hear about it, and it
       // neither scores nor ends the round
-      if(correct && wordAuthors(currentRound.word).has(peerId)){
+      if(false && correct && wordAuthors(currentRound.word).has(peerId)){   // v3.30: off — a guesser who sent the same word still scores
         if(ownWordDone.key !== rk) ownWordDone = { key: rk, ids: new Set() };
         ownWordDone.ids.add(peerId);
         try{ feedAction.send({ pid:peerId, name, text, correct:true, own:true, gid, r: rk, w: currentRound.word }, { target: peerId }); }catch(e){}
@@ -10296,7 +10296,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       ? result.hits
       : [{ pid: result.correctPlayerId, ms: Number(result.elapsedMs) || 0 }];
     const authors = wordAuthors(result.word);
-    const guessers = hits.filter(h=>h && h.pid && !authors.has(h.pid)).map(h=>({ pid:h.pid, ms:Number(h.ms)||0, pts: roundPoints((Number(h.ms)||0)/1000) }));
+    const guessers = hits.filter(h=>h && h.pid).map(h=>({ pid:h.pid, ms:Number(h.ms)||0, pts: roundPoints((Number(h.ms)||0)/1000) }));
     let drawerPts = 0, drawMs = null;
     if(guessers.length){
       const dm = Number(result.drawMs);
@@ -11223,6 +11223,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.30', changes:[
+      'Ha többen ugyanazt a saját szót küldték be, a kitalálók akkor is megkapják a pontjukat. A saját szaváért csak a rajzoló nem kap pontot.'
+    ]},
     { version:'3.29', changes:[
       'Saját szavak, új szabály: mindenki csak a saját maga által beküldött szavakat kaphatja rajzolásra, a többiekéit nem. Ha a rajzoló a saját szavát választja, ő nem kap pontot, a kitalálók viszont igen. A választásnál a szó mellett ott a jelzés: „Saját szavad · neked 0 pont”.',
       'A „Saját szavaid” mező tartalmát a játék nem jegyzi meg, és a szoba elhagyásakor kiürül.'
