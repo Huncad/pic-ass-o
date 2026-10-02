@@ -1360,6 +1360,76 @@
   #global-player-count{ font-size:.88rem !important; color:var(--chalk) !important; }
   @media (max-width:640px){ #screen-home{ padding:18px 16px 16px; } }
   @media (prefers-reduced-motion:reduce){ .wiggle-pencil{ animation:none !important; } }
+  /* ===== v3.20: chalkboard look for the other screens ===== */
+  .board-deco{ display:none; }
+  body.show-deco #main-board > .board-deco, #fd-prepare .prep-deco{ display:block; }
+  body.in-game.on-create .title-row{ display:flex; }
+  body.on-create .title-row h1.logo{ font-size:clamp(2.2rem, 6vw, 3.6rem); margin-top:14px; }
+  body.on-create .title-row .subtitle{ margin-top:14px; font-size:.95rem; }
+  /* shared card look */
+  #screen-create, #screen-join, #screen-lobby, #screen-roundend, #screen-gameend{
+    border-radius:22px; padding:22px 26px; background:rgba(0,0,0,.3); background:color-mix(in srgb, var(--bg) 82%, transparent);
+    border:1.5px solid rgba(244,241,230,.12); border-top-color:color-mix(in srgb, var(--green) 45%, transparent);
+    box-shadow:0 18px 40px -18px rgba(0,0,0,.6); }
+  #screen-create input[type=text], #screen-join input[type=text], #screen-lobby input[type=text], #custom-words-input{
+    background:rgba(0,0,0,.28); color:var(--chalk); border:1.5px solid rgba(244,241,230,.22); border-radius:12px; }
+  #screen-create input[type=text]:focus, #custom-words-input:focus{ outline:none; border-color:var(--yellow); }
+  #screen-create input::placeholder, #custom-words-input::placeholder{ color:var(--chalk-dim); opacity:.7; }
+  .pill{ border-width:1.5px; background:rgba(0,0,0,.18); color:var(--chalk); font-weight:700; }
+  .pill.active{ box-shadow:0 4px 14px -4px color-mix(in srgb, var(--pink) 70%, transparent); }
+  /* create screen: numbered steps, label left / options right */
+  #screen-create{ counter-reset:step; max-width:900px; margin:0 auto; }
+  #link-back-from-create{ display:inline-flex; align-items:center; gap:8px; padding:8px 16px; border-radius:12px; text-decoration:none;
+    border:1.5px solid rgba(244,241,230,.25); color:var(--chalk) !important; font-weight:700; background:rgba(0,0,0,.15); }
+  #link-back-from-create:hover{ border-color:var(--yellow); }
+  #screen-create .setup-section{ display:grid; grid-template-columns:230px minmax(0,1fr); column-gap:20px; align-items:start;
+    margin:0; padding:14px 0; border-bottom:1px solid rgba(244,241,230,.07); }
+  #screen-create .setup-section > *{ grid-column:2; }
+  #screen-create .setup-section > label.field-label{ grid-column:1; grid-row:1 / span 6; display:flex; align-items:flex-start; gap:12px;
+    margin:0; padding-top:5px; color:var(--chalk); font-size:1rem; line-height:1.3; }
+  #screen-create .setup-section > label.field-label::before{ counter-increment:step; content:counter(step); flex:0 0 32px; height:32px; border-radius:9px;
+    display:inline-flex; align-items:center; justify-content:center; font-family:'Kalam',cursive; font-size:1.15rem; font-weight:700;
+    color:#0f2a1d; background:var(--green); margin-top:-4px; }
+  #screen-create .setup-section:nth-of-type(4n+2) > label.field-label::before{ background:var(--yellow); }
+  #screen-create .setup-section:nth-of-type(4n+3) > label.field-label::before{ background:var(--blue); }
+  #screen-create .setup-section:nth-of-type(4n) > label.field-label::before{ background:var(--pink); }
+  #screen-create .setup-section .center-note, #screen-create .setup-hint{ text-align:left; font-size:.8rem; }
+  #screen-create .start-btn-wrap{ justify-content:flex-end !important; margin-top:20px !important; }
+  #btn-create-room, #btn-rematch-start, #btn-prep-start{ color:#0f2a1d !important; border-radius:16px;
+    background:linear-gradient(180deg, color-mix(in srgb, var(--green) 70%, white), var(--green)) !important;
+    box-shadow:0 6px 0 color-mix(in srgb, var(--green) 50%, black), 0 16px 30px -12px color-mix(in srgb, var(--green) 70%, transparent); }
+  @media (max-width:700px){
+    #screen-create{ padding:16px 14px; }
+    #screen-create .setup-section{ grid-template-columns:1fr; }
+    #screen-create .setup-section > label.field-label{ grid-row:auto; grid-column:1; margin-bottom:8px; }
+    #screen-create .setup-section > *{ grid-column:1; }
+    #screen-create .start-btn-wrap{ justify-content:center !important; }
+    #screen-create .start-btn-wrap button{ width:100%; }
+  }
+  /* round intro ("Te jössz!") */
+  #fd-prepare{ isolation:isolate; overflow:hidden; }
+  #fd-prepare .prep-deco{ border-radius:0; }
+  .prepare-card{ position:relative; max-width:560px; }
+  .prep-logo{ font-family:'Kalam',cursive; font-weight:700; font-size:clamp(2.4rem, 8vw, 3.6rem); line-height:1; transform:rotate(-3deg); margin-bottom:22px; }
+  .prep-logo .lw-a{ color:var(--chalk); text-shadow:0 4px 0 rgba(0,0,0,.35); } .prep-logo .lw-b{ color:var(--yellow); text-shadow:0 4px 0 rgba(0,0,0,.35); }
+  .prepare-card h2{ font-size:2rem; margin:6px 0 0; }
+  #btn-prep-reveal{ border-radius:16px; box-shadow:0 6px 0 color-mix(in srgb, var(--pink) 50%, black), 0 16px 30px -12px color-mix(in srgb, var(--pink) 70%, transparent); }
+  @media (max-height:560px){ .prep-logo{ display:none; } }
+  @media (max-width:520px){ #fd-prepare .deco-pencils-l, #fd-prepare .deco-pencils-r{ display:block; width:110px; } }
+  /* drawing screen: faint chalk doodles on the "table", line icons, yellow active tool */
+  #screen-fulldraw, body:has(.board.wide-mode){
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420' fill='none' stroke='%23ffffff' stroke-opacity='.035' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M60 70l8 20 22 2-17 14 6 22-19-12-19 12 6-22-17-14 22-2z'/%3E%3Ccircle cx='300' cy='110' r='34'/%3E%3Cpath d='M300 144v60m0-40l-26 22m26-22l26 22m-26 38l-20 34m20-34l20 34'/%3E%3Cpath d='M90 300c20-30 60-30 80 0s60 30 80 0'/%3E%3Cpath d='M330 330l30-30m-10 40l30-30'/%3E%3C/svg%3E") !important;
+    background-color:var(--bg) !important; }
+  .tico{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; display:block; }
+  .fd-tool{ display:inline-flex; align-items:center; justify-content:center; }
+  .fd-tool.active{ background:var(--yellow) !important; color:#16302A !important; border-color:var(--yellow) !important; }
+  .fd-act::before{ content:"" !important; width:20px; height:20px; background:currentColor; display:block;
+    -webkit-mask:var(--ico) center/contain no-repeat; mask:var(--ico) center/contain no-repeat; }
+  #fd-btn-eraser{ --ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M8 20h12M4.5 15.5l9-9 6 6-7.5 7.5H9z M10 10l6 6'/%3E%3C/svg%3E"); }
+  #fd-btn-undo{ --ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 14L4 9l5-5'/%3E%3Cpath d='M4 9h10a6 6 0 010 12h-3'/%3E%3C/svg%3E"); }
+  #fd-btn-redo{ --ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14l5-5-5-5'/%3E%3Cpath d='M20 9H10a6 6 0 000 12h3'/%3E%3C/svg%3E"); }
+  #fd-btn-clear{ --ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6'/%3E%3C/svg%3E"); }
+  .fd-act.active, #fd-btn-eraser.active{ background:var(--yellow) !important; color:#16302A !important; border-color:var(--yellow) !important; }
 </style>
 </head>
 <body>
@@ -1838,11 +1908,11 @@
       <input type="range" id="fd-brush-size" min="2" max="30" value="7" aria-label="Vastagság">
     </div>
     <div class="tool-group" id="fd-tools">
-      <button class="ghost small fd-tool active" data-tool="pen" title="Toll" aria-label="Toll">✏️</button>
-      <button class="ghost small fd-tool" data-tool="fill" title="Kitöltés" aria-label="Kitöltés">🪣</button>
-      <button class="ghost small fd-tool" data-tool="line" title="Egyenes vonal" aria-label="Egyenes vonal">📏</button>
-      <button class="ghost small fd-tool" data-tool="circle" title="Kör / ellipszis" aria-label="Kör vagy ellipszis">⭕</button>
-      <button class="ghost small fd-tool" data-tool="rect" title="Téglalap" aria-label="Téglalap">⬜</button>
+      <button class="ghost small fd-tool active" data-tool="pen" title="Toll" aria-label="Toll"><svg class="tico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.5-5L16 4.5l3.5 3.5L9 18.5z M14 6.5l3.5 3.5"/></svg></button>
+      <button class="ghost small fd-tool" data-tool="fill" title="Kitöltés" aria-label="Kitöltés"><svg class="tico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11l7-7 7 7-7 7z M12 4v7 M19 14c0 2 1.5 3 1.5 4.5a1.5 1.5 0 01-3 0C17.5 17 19 16 19 14z"/></svg></button>
+      <button class="ghost small fd-tool" data-tool="line" title="Egyenes vonal" aria-label="Egyenes vonal"><svg class="tico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19L19 5"/></svg></button>
+      <button class="ghost small fd-tool" data-tool="circle" title="Kör / ellipszis" aria-label="Kör vagy ellipszis"><svg class="tico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5"/></svg></button>
+      <button class="ghost small fd-tool" data-tool="rect" title="Téglalap" aria-label="Téglalap"><svg class="tico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="6.5" width="15" height="11" rx="1.5"/></svg></button>
     </div>
     <button class="ghost small fd-act" id="fd-btn-eraser" aria-label="Radír" title="Radír">Radír</button>
     <button class="ghost small fd-act" id="fd-btn-undo" aria-label="Vissza" title="Vissza (Ctrl+Z)">Vissza</button>
@@ -1852,7 +1922,21 @@
 </div>
 
 <div id="fd-prepare" class="hidden">
+  <div class="board-deco prep-deco" aria-hidden="true">
+    <span class="smudge" style="left:-60px;top:80px;width:260px;height:120px;background:var(--green);"></span>
+    <span class="smudge" style="right:-40px;top:260px;width:240px;height:110px;background:var(--blue);"></span>
+    <span class="smudge" style="left:30%;bottom:-60px;width:360px;height:120px;background:var(--green);"></span>
+    <svg class="deco-bulb deco-hide-m" viewBox="0 0 100 120"><g class="deco-line" stroke="currentColor"><path d="M50 22 C30 22 20 38 22 52 C24 64 34 70 36 82 L64 82 C66 70 76 64 78 52 C80 38 70 22 50 22 Z"/><path d="M38 90 L62 90 M40 98 L60 98 M44 106 L56 106"/><path d="M44 80 L44 60 C44 54 56 54 56 60 L56 80 M44 62 C46 66 54 66 56 62"/><path d="M50 4 L50 12 M18 14 L24 20 M82 14 L76 20 M4 46 L12 46 M88 46 L96 46"/></g></svg>
+    <svg class="deco-q deco-hide-m" viewBox="0 0 40 70"><g class="deco-line" stroke="currentColor"><path d="M8 18 C8 4 34 2 34 18 C34 30 20 30 20 44"/><circle cx="20" cy="60" r="2.5" fill="currentColor"/></g></svg>
+    <svg class="deco-star deco-hide-m" viewBox="0 0 60 60"><path class="deco-line" stroke="currentColor" fill="currentColor" fill-opacity=".25" d="M30 4 L37 22 L56 22 L41 34 L47 54 L30 42 L13 54 L19 34 L4 22 L23 22 Z"/></svg>
+    <svg class="deco-frame deco-hide-m" viewBox="0 0 150 190"><g class="deco-line" stroke="currentColor"><rect x="6" y="6" width="138" height="178" rx="4"/><circle cx="75" cy="70" r="22"/><path d="M66 66 L66 68 M84 66 L84 68 M64 78 C70 86 80 86 86 78 M75 92 L75 140 M75 105 L52 125 M75 105 L98 125 M75 140 L58 168 M75 140 L92 168 M60 44 L56 34 M75 42 L75 30 M90 44 L94 34"/></g></svg>
+    <svg class="deco-dashes-r deco-hide-m" viewBox="0 0 60 60"><g class="deco-line" stroke="currentColor"><path d="M10 50 L26 30 M30 52 L50 34"/></g></svg>
+    <svg class="deco-dashes-r2 deco-hide-m" viewBox="0 0 60 50"><g class="deco-line" stroke="currentColor"><path d="M8 14 L50 6 M10 32 L48 26"/></g></svg>
+    <svg class="deco-pencils-l" viewBox="0 0 220 260"><g transform="translate(120 90) rotate(38)"><rect x="0" y="0" width="30" height="170" rx="3" style="fill:var(--yellow)"/><rect x="18.6" y="0" width="11.4" height="170" fill="rgba(0,0,0,.18)"/><path d="M0 0 L30 0 L15.0 -37.5 Z" fill="#f1d3a8"/><path d="M9.9 -24.9 L20.1 -24.9 L15.0 -37.5 Z" fill="#3a3a3a"/></g><g transform="translate(70 150) rotate(30)"><rect x="0" y="0" width="30" height="170" rx="3" style="fill:var(--blue)"/><rect x="18.6" y="0" width="11.4" height="170" fill="rgba(0,0,0,.18)"/><path d="M0 0 L30 0 L15.0 -37.5 Z" fill="#f1d3a8"/><path d="M9.9 -24.9 L20.1 -24.9 L15.0 -37.5 Z" fill="#3a3a3a"/></g><g transform="translate(40 215) rotate(50)"><rect x="0" y="0" width="30" height="170" rx="3" style="fill:var(--green)"/><rect x="18.6" y="0" width="11.4" height="170" fill="rgba(0,0,0,.18)"/><path d="M0 0 L30 0 L15.0 -37.5 Z" fill="#f1d3a8"/><path d="M9.9 -24.9 L20.1 -24.9 L15.0 -37.5 Z" fill="#3a3a3a"/></g></svg>
+    <svg class="deco-pencils-r" viewBox="0 0 180 260"><g transform="translate(60 110) rotate(-34)"><rect x="0" y="0" width="30" height="170" rx="3" style="fill:var(--pink)"/><rect x="18.6" y="0" width="11.4" height="170" fill="rgba(0,0,0,.18)"/><path d="M0 0 L30 0 L15.0 -37.5 Z" fill="#f1d3a8"/><path d="M9.9 -24.9 L20.1 -24.9 L15.0 -37.5 Z" fill="#3a3a3a"/></g><g transform="translate(80 190) rotate(-48)"><rect x="0" y="0" width="30" height="170" rx="3" style="fill:var(--red)"/><rect x="18.6" y="0" width="11.4" height="170" fill="rgba(0,0,0,.18)"/><path d="M0 0 L30 0 L15.0 -37.5 Z" fill="#f1d3a8"/><path d="M9.9 -24.9 L20.1 -24.9 L15.0 -37.5 Z" fill="#3a3a3a"/></g></svg>
+  </div>
   <div class="prepare-card">
+    <div class="prep-logo" aria-hidden="true"><span class="lw-a">PIC-</span><span class="lw-b">ASS-O</span></div>
     <div class="drawer-tag">Te jössz!</div>
     <h2>Kör <span id="prep-round-num">1</span> / <span id="prep-round-total">1</span></h2>
     <div id="prep-word-hidden" style="color:var(--chalk-dim);margin:20px 0;">Három szó közül választhatsz 🙈 — csak te látod őket a saját eszközödön.</div>
@@ -4481,6 +4565,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       .forEach(id=>document.getElementById(id).classList.toggle('hidden', !ids.includes(id)));
     // Branding/version/theme footer: home screen only (see the CSS rule).
     document.body.classList.toggle('in-game', !ids.includes('screen-home'));
+    // v3.20: per-screen hooks for the chalkboard look
+    document.body.classList.toggle('on-create', ids.includes('screen-create'));
+    document.body.classList.toggle('show-deco', ['screen-home','screen-create','screen-join','screen-lobby','screen-roundend','screen-gameend','screen-error'].some(id=>ids.includes(id)));
     document.getElementById('main-board').classList.toggle('hidden', ids.includes('screen-fulldraw') || ids.includes('fd-prepare'));
     document.getElementById('main-board').classList.toggle('wide-mode', ids.includes('screen-watch'));
     document.getElementById('screen-fulldraw').classList.toggle('hidden', !ids.includes('screen-fulldraw'));
@@ -10623,6 +10710,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   const CHANGELOG = [
     { version:'3.20', changes:[
       'Megújult kezdőképernyő: krétatábla-hangulat, új logó, nagyobb színválasztó, kiemelt „Szoba létrehozása” gomb, rendezettebb gombsor és lábléc. Minden színtémában és sötét módban is a téma színeit használja.',
+      'A többi képernyő is megkapta az új külsőt: számozott lépések a szobanyitásnál (gépen kétoszlopos elrendezéssel), krétatáblás „Te jössz!” képernyő, a rajzoló eszköztárán vonalas ikonok és sárgán kiemelt aktív eszköz, halvány krétafirkák a rajzlap körül.',
       'Admin: a jelszó mostantól az admin felületen módosítható. Sózott, lassított ujjlenyomatként kerül az élő tárhelyre, így nem kell hozzá a kódot szerkeszteni.'
     ]},
     { version:'3.19', changes:[
