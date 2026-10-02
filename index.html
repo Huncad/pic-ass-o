@@ -1587,6 +1587,10 @@
     body:not(.fabs-top) #screen-watch .watch-top .watch-logo-slot .mini-logo{ display:inline-flex; }
     body:not(.fabs-top) #screen-watch .watch-top .timer{ order:3; justify-self:end; font-size:1.6rem; padding:6px 18px 6px 8px; }
     .board.wide-mode{ max-width:1640px; }
+    /* v3.33: the guessing view uses the full window height on big screens */
+    body:has(.board.wide-mode){ padding:16px 24px; }
+    body:has(.board.wide-mode) #screen-watch .canvas-area{ height:calc(100vh - 210px); height:calc(100dvh - 210px); min-height:360px; max-height:none; }
+    body:has(.board.wide-mode) #screen-watch .guess-sidebar{ width:min(380px, 26vw); flex:0 0 auto; }
     #screen-fulldraw .mini-logo, #screen-watch .mini-logo{ font-size:2.7rem; }
     #watch-roster{ background:transparent !important; box-shadow:none !important; }
   }
@@ -11362,6 +11366,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.33', changes:[
+      'Nagy képernyőn a tippelő nézetben a rajz most kitölti az ablak teljes magasságát (eddig legfeljebb 760 pixel magas lehetett), és a tipp-oszlop is szélesebb.'
+    ]},
     { version:'3.32', changes:[
       'Széles képernyőn a kezdőképernyő két oszlopos: balra a logó, jobbra a kártya. Nagy képernyőn (pl. teljes képernyős gépen) a kezdőképernyő, a szobanyitás, a váróterem és az eredményképernyők arányosan felnagyítva kitöltik az ablakot. Telefonon és a rajzoló/tippelő nézetben semmi nem változik.'
     ]},
