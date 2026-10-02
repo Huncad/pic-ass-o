@@ -194,7 +194,8 @@
   #lastround-overlay{ position:fixed; inset:0; z-index:1000; background:rgba(10,20,16,0.88); display:flex; align-items:flex-start; justify-content:center; padding:20px; overflow-y:auto; }
   #lastround-overlay.hidden{ display:none; }
   #lastround-body .result-banner{ margin-top:6px; }
-  #btn-last-round{ padding:4px 10px; font-size:.82rem; }
+  #btn-last-round{ padding:4px 10px; font-size:.82rem; white-space:nowrap; }
+  @media (max-width:640px){ #btn-last-round .lr-label{ display:none; } #btn-last-round{ padding:4px 8px; min-width:34px; } }
   .lobby-words{ max-width:560px; margin:16px auto 0; text-align:left; }
   #lobby-words-input{ width:100%; background:rgba(0,0,0,.28); color:var(--chalk); border:1.5px solid rgba(244,241,230,.22); border-radius:12px; padding:11px 13px; font-size:1rem; font-family:'Nunito',sans-serif; resize:vertical; min-height:70px; }
   #lobby-words-input:focus{ outline:none; border-color:var(--yellow); }
@@ -1851,7 +1852,7 @@
     <div class="watch-top">
       <div class="watch-top-left">
         <button class="ghost small menu-open-btn leave-btn" title="Menü" aria-label="Menü megnyitása"><span class="leave-ico">☰</span> <span class="leave-txt">Menü</span></button>
-        <button class="ghost small hidden" id="btn-last-round" type="button" title="Az előző kör eredménye" aria-label="Az előző kör eredménye">📋 Előző kör</button>
+        <button class="ghost small hidden" id="btn-last-round" type="button" title="Az előző kör eredménye" aria-label="Az előző kör eredménye">📋<span class="lr-label"> Előző kör</span></button>
         <div id="watch-round-indicator" class="challenge-chip" style="background:rgba(0,0,0,0.2);border-style:solid;border-color:rgba(244,241,230,0.2);color:var(--chalk-dim);"></div>
       </div>
       <div class="timer" id="watch-timer">--</div>
@@ -3771,19 +3772,30 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     settings.customWords.forEach(e=>{ if(isPlainObject(e) && squash(e.w) === k && Array.isArray(e.by)) e.by.forEach(id=>out.add(id)); });
     return out;
   }
+  // v3.28: a word comes up at most once per game — compared in normalised
+  // form (case, accents, spaces), so "Szög" and "szog " or the same word in
+  // both levels count as one. When the room's own words run out, built-in
+  // ones take over instead of repeating; only if EVERYTHING is used up may
+  // a word come again.
   function pickWordAvoidingRepeats(difficulties, usedWords){
     const tiers = Array.isArray(difficulties) && difficulties.length ? difficulties : ['konnyu','kozepes'];
+    const used = new Set((usedWords || []).map(squash));
+    const fresh = list => list.filter(w=>w && w.w && !used.has(squash(w.w)));
     const custom = customWordItems();
-    let pool;
-    if(custom.length && (settings.customOnly || (tiers.length === 1 && tiers[0] === 'sajat'))) pool = custom;
-    else{
-      const filtered = WORDS.filter(w=>tiers.includes(w.tier));
-      pool = (filtered.length ? filtered : WORDS).concat(custom);
-    }
-    if(!pool.length) pool = FALLBACK_WORDS;   // never return undefined
-    let available = pool.filter(w=>!usedWords.includes(w.w));
-    if(available.length === 0) available = pool;
-    return available[Math.floor(Math.random()*available.length)] || FALLBACK_WORDS[0];
+    const levelTiers = tiers.filter(t=>t === 'konnyu' || t === 'kozepes');
+    const lv = levelTiers.length ? levelTiers : ((settings && settings.difficulties) || ['konnyu','kozepes']);
+    const builtinFiltered = WORDS.filter(w=>lv.includes(w.tier));
+    const builtin = builtinFiltered.length ? builtinFiltered : WORDS;
+    const onlyCustom = custom.length && (settings.customOnly || (tiers.length === 1 && tiers[0] === 'sajat'));
+    let candidates = onlyCustom ? fresh(custom) : fresh(builtin.concat(custom));
+    if(!candidates.length) candidates = fresh(builtin);          // own words used up
+    if(!candidates.length) candidates = fresh(WORDS);            // this level used up
+    if(!candidates.length) candidates = fresh(FALLBACK_WORDS);
+    if(!candidates.length) candidates = onlyCustom ? custom : builtin;   // everything used: unavoidable
+    // the same word may sit in the list twice — pick among distinct words
+    const seen = new Set();
+    candidates = candidates.filter(w=>{ const k = squash(w.w); if(seen.has(k)) return false; seen.add(k); return true; });
+    return candidates[Math.floor(Math.random()*candidates.length)] || FALLBACK_WORDS[0];
   }
 
   // v2.55: the drawer picks one of three words. With both levels switched on
@@ -3798,9 +3810,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     let guard = 0;
     while(out.length < n && guard++ < 40 + n*10){
       const c = pickWordAvoidingRepeats(tiers, taken());
-      if(!out.some(o=>o.w === c.w)) out.push(c);
+      if(!out.some(o=>squash(o.w) === squash(c.w))) out.push(c);
     }
-    const uniq = out.filter((c,i)=>out.findIndex(o=>o.w === c.w) === i);
+    const uniq = out.filter((c,i)=>out.findIndex(o=>squash(o.w) === squash(c.w)) === i);
     for(let i=uniq.length-1; i>0; i--){ const j = Math.floor(Math.random()*(i+1)); [uniq[i],uniq[j]] = [uniq[j],uniq[i]]; }
     return uniq.length ? uniq : [FALLBACK_WORDS[0]];
   }
@@ -5646,6 +5658,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(!currentRound || !isPlainObject(data) || peerId !== currentRound.drawerId) return;
       const type = data.type === 'correct' ? 'correct' : (data.type === 'pass' ? 'pass' : 'timeout');
       const clean = { type, word: cleanText(data.word, 60) };
+      clean.offered = (Array.isArray(data.offered) ? data.offered : []).slice(0, 12).map(w=>cleanText(w, 60)).filter(Boolean);
       const maxMsAll = Math.max(1, Number(settings && settings.roundTime) || 1) * 1000;
       if(type === 'correct' && settings.guessMode === 'all'){
         // v2.89: every hit is checked and re-scored here, like the single one
@@ -6134,7 +6147,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       resolved,
       elapsedMs: (drawing && fdRoundStartAt) ? Math.max(0, Date.now() - fdRoundStartAt) : 0,
       hintMask: currentHintMask(),
-      revealedWords: revealedWords.slice(-80),
+      revealedWords: revealedWords.slice(-700),
       gameStats,
       gameEnded
     };
@@ -6291,7 +6304,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     activePlayerIds = new Set((Array.isArray(snap.active) ? snap.active : []).map(cleanPeerId).filter(id=>names[id]));
     activePlayerIds.add(selfId);
     gameEnded = !!snap.gameEnded;
-    revealedWords = (Array.isArray(snap.revealedWords) ? snap.revealedWords : []).slice(-80).map(w=>String(w).slice(0,60));
+    revealedWords = (Array.isArray(snap.revealedWords) ? snap.revealedWords : []).slice(-700).map(w=>String(w).slice(0,60));
     const gs = snap.gameStats || {};
     gameStats = { fastestGuess:null, drawerPoints:{} };
     if(gs.fastestGuess && typeof gs.fastestGuess === 'object' && names[cleanPeerId(gs.fastestGuess.playerId)]){
@@ -8835,6 +8848,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!meta || !roundAction) return;                // left the room in the meantime
     if(idx < 0 || idx >= meta.turnOrder.length) return;
     const choices = pickWordChoices(settings.difficulties, revealedWords, settings.wordChoices || 3);
+    choices.forEach(c=>{ if(c && c.w && !revealedWords.includes(c.w)) revealedWords.push(c.w); });   // v3.28: never offered again
     const rd = {
       idx, drawerId:selfId, drawerName:myName, word:null, tier:choices[0].tier, choices,
       phase:'prepare', roundStartAt:null
@@ -10260,6 +10274,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!currentRound || currentRound.drawerId !== selfId) return;
     if(processedResultRounds.has(roundKey(currentRound))) return;
     result.word = currentRound.word;
+    // v3.28: the other offered words, so no device offers them again (the round is over, nothing to give away)
+    result.offered = (Array.isArray(currentRound.choices) ? currentRound.choices : []).map(c=>c && c.w).filter(Boolean).slice(0, 12);
     if(result.type === 'correct' && currentRound.roundStartAt){
       // nothing drawn at all: the drawing "took" as long as the first guess
       result.drawMs = fdLastModAt ? Math.max(0, fdLastModAt - currentRound.roundStartAt) : (Number(result.elapsedMs) || 0);
@@ -10359,6 +10375,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(result.word){
       result.word = String(result.word).slice(0,60);
       revealedWords.push(result.word);
+    }
+    if(Array.isArray(result.offered)){
+      result.offered.forEach(w=>{ if(w && !revealedWords.includes(w)) revealedWords.push(w); });
     }
     let myDelta = 0;
     if(result.type === 'correct'){
@@ -11201,6 +11220,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.28', changes:[
+      'Egy játékban egy szó csak egyszer kerül elő, sem feladványként, sem választható szóként. Eddig a fel nem választott szavak később újra előjöhettek, és a csak kis- és nagybetűben, ékezetben eltérő, illetve mindkét nehézségben szereplő szavakat a játék különbözőnek vette. Ha a saját szavak elfogynak, beépített szavak jönnek helyettük ismétlés helyett.',
+      'Telefonon az „Előző kör” gomb csak ikonként (📋) jelenik meg, hogy elférjen.'
+    ]},
     { version:'3.27', changes:[
       'Közeli tippért nem jár pont. Eddig az apró elírás vagy egy plusz rag (pl. „labdarúgó” a „labdarúgás” helyett) teljes értékű találatnak számított, most „közel!” jelzést kap, és pont nélkül fut tovább a kör. Az ékezet, a kis- és nagybetű és a szóköz továbbra sem számít.',
       'Szóbejelentés: a kör végén egy koppintással megjelölhető a hibás vagy értelmetlen szó. Ha a játékosok legalább fele megjelöli, a szó az adminhoz kerül. A saját beküldött szavak nem jelölhetők.',
