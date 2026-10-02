@@ -18,35 +18,35 @@
 <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#16302A; --bg2:#1E3E2E; --panel:#20452F; --paper:#FBF7EC;
-    --chalk:#F4F1E6; --chalk-dim:#BFD3C4;
-    --pink:#FF6FA0; --yellow:#FFD166; --blue:#5FB6DE; --red:#FF6B5B;
-    --green:#7BD389; --purple:#C79CF0;
+    --bg-base:#16302A; --bg2-base:#1E3E2E; --panel-base:#20452F; --paper-base:#FBF7EC;
+    --chalk-base:#F4F1E6; --chalk-dim-base:#BFD3C4;
+    --pink-base:#FF6FA0; --yellow-base:#FFD166; --blue-base:#5FB6DE; --red-base:#FF6B5B;
+    --green-base:#7BD389; --purple-base:#C79CF0;
   }
   /* Alternate skins — switched via a data-theme attribute on <html>. */
   html[data-theme="ocean"]{
-    --bg:#0B2D3A; --bg2:#12414F; --panel:#123F4F; --paper:#F2FBFD;
-    --chalk:#EAF7FB; --chalk-dim:#9FC3CF;
-    --pink:#FF8F6B; --yellow:#FFD166; --blue:#4FD6E8; --red:#FF6B6B;
-    --green:#5FD0A8; --purple:#7EA7FF;
+    --bg-base:#0B2D3A; --bg2-base:#12414F; --panel-base:#123F4F; --paper-base:#F2FBFD;
+    --chalk-base:#EAF7FB; --chalk-dim-base:#9FC3CF;
+    --pink-base:#FF8F6B; --yellow-base:#FFD166; --blue-base:#4FD6E8; --red-base:#FF6B6B;
+    --green-base:#5FD0A8; --purple-base:#7EA7FF;
   }
   html[data-theme="neon"]{
-    --bg:#150E2B; --bg2:#1E1640; --panel:#221A4D; --paper:#F3EEFF;
-    --chalk:#F1EAFF; --chalk-dim:#A99CD9;
-    --pink:#FF3FD1; --yellow:#F7EA3A; --blue:#3AD6FF; --red:#FF4D6D;
-    --green:#39FF9D; --purple:#B46BFF;
+    --bg-base:#150E2B; --bg2-base:#1E1640; --panel-base:#221A4D; --paper-base:#F3EEFF;
+    --chalk-base:#F1EAFF; --chalk-dim-base:#A99CD9;
+    --pink-base:#FF3FD1; --yellow-base:#F7EA3A; --blue-base:#3AD6FF; --red-base:#FF4D6D;
+    --green-base:#39FF9D; --purple-base:#B46BFF;
   }
   html[data-theme="sunset"]{
-    --bg:#2B1220; --bg2:#3D1A2C; --panel:#3D1A2C; --paper:#FFF4EC;
-    --chalk:#FDEEE7; --chalk-dim:#D9A9A0;
-    --pink:#FF6F9C; --yellow:#FFB454; --blue:#8B7EE8; --red:#FF5C5C;
-    --green:#A8D96B; --purple:#C96BDA;
+    --bg-base:#2B1220; --bg2-base:#3D1A2C; --panel-base:#3D1A2C; --paper-base:#FFF4EC;
+    --chalk-base:#FDEEE7; --chalk-dim-base:#D9A9A0;
+    --pink-base:#FF6F9C; --yellow-base:#FFB454; --blue-base:#8B7EE8; --red-base:#FF5C5C;
+    --green-base:#A8D96B; --purple-base:#C96BDA;
   }
   html[data-theme="graphite"]{
-    --bg:#1A1A1E; --bg2:#242429; --panel:#242429; --paper:#F5F5F2;
-    --chalk:#EDEDED; --chalk-dim:#9A9AA0;
-    --pink:#FF6FA0; --yellow:#FFD166; --blue:#5FB6DE; --red:#FF6B5B;
-    --green:#7BD389; --purple:#C79CF0;
+    --bg-base:#1A1A1E; --bg2-base:#242429; --panel-base:#242429; --paper-base:#F5F5F2;
+    --chalk-base:#EDEDED; --chalk-dim-base:#9A9AA0;
+    --pink-base:#FF6FA0; --yellow-base:#FFD166; --blue-base:#5FB6DE; --red-base:#FF6B5B;
+    --green-base:#7BD389; --purple-base:#C79CF0;
   }
   :root{ --canvas-paper: var(--paper); }
   /* v2.47: dark mode is now a full app-wide palette (not just the canvas),
@@ -54,16 +54,30 @@
      it's on, the theme picker is hidden (see JS), since the two would
      otherwise fight over the same surfaces. Placed after every theme block
      so it wins regardless of which theme was last chosen. */
-  html.dark-mode{
-    --bg:#0C0C0E; --bg2:#131315; --panel:#1B1B1F; --paper:#1A1A1A; --canvas-paper:#141414;
-    --chalk:#ECECEC; --chalk-dim:#9A9AA0;
+  /* v3.27: every colour is derived from the theme's base colours, so dark
+     mode can darken ANY theme (buttons, palette, menus — everything) */
+  html{
+    --bg:var(--bg-base); --bg2:var(--bg2-base); --panel:var(--panel-base); --paper:var(--paper-base);
+    --chalk:var(--chalk-base); --chalk-dim:var(--chalk-dim-base);
+    --pink:var(--pink-base); --yellow:var(--yellow-base); --blue:var(--blue-base); --red:var(--red-base);
+    --green:var(--green-base); --purple:var(--purple-base);
   }
+  html.dark-mode{
+    --bg:color-mix(in srgb, var(--bg-base) 30%, #050506); --bg2:color-mix(in srgb, var(--bg2-base) 34%, #070708);
+    --panel:color-mix(in srgb, var(--panel-base) 38%, #0b0b0d); --paper:#1A1A1A; --canvas-paper:#141414;
+    --chalk:color-mix(in srgb, var(--chalk-base) 86%, #000); --chalk-dim:color-mix(in srgb, var(--chalk-dim-base) 72%, #000);
+    --pink:color-mix(in srgb, var(--pink-base) 74%, #000); --yellow:color-mix(in srgb, var(--yellow-base) 74%, #000);
+    --blue:color-mix(in srgb, var(--blue-base) 74%, #000); --red:color-mix(in srgb, var(--red-base) 74%, #000);
+    --green:color-mix(in srgb, var(--green-base) 74%, #000); --purple:color-mix(in srgb, var(--purple-base) 74%, #000);
+  }
+  /* light borders/glows and white highlights are toned down too */
+  html.dark-mode button, html.dark-mode .pill, html.dark-mode .avatar-swatch, html.dark-mode .swatch{ filter:brightness(.9); }
+  html.dark-mode .board-deco, html.dark-mode .fd-side-deco{ opacity:.6; }
   html.dark-mode input[type=text], html.dark-mode input[type=password], html.dark-mode input[type=email], html.dark-mode textarea{
     background:#242428; color:#ECECEC;
   }
   html.dark-mode input[type=text]::placeholder, html.dark-mode input[type=password]::placeholder, html.dark-mode input[type=email]::placeholder,
   html.dark-mode textarea::placeholder{ color:#8a8a90; }
-  html.dark-mode #theme-toggle-btn, html.dark-mode #theme-picker{ display:none !important; }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   /* A long, slow touch during drawing (or on any button/label) used to
      trigger the phone's text-selection ("kijelölő") mode or iOS's
@@ -163,6 +177,17 @@
   :focus-visible{ outline:3px solid var(--yellow); outline-offset:2px; }
   /* v3.26: wrapper forms only scope password managers — they take no space */
   form.pw-form{ display:contents; }
+  .menu-theme{ text-align:left; padding:6px 2px; }
+  .menu-theme-label{ font-weight:700; color:var(--chalk); margin-bottom:6px; }
+  .menu-theme-row{ display:flex; gap:10px; flex-wrap:wrap; }
+  .menu-theme-row .theme-swatch-btn{ width:40px; height:40px; border-radius:50%; border:2px solid rgba(244,241,230,.3); padding:0; }
+  .menu-theme-row .theme-swatch-btn.active{ box-shadow:0 0 0 3px var(--yellow); }
+  .roundend-report{ display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; margin:8px 0 4px; font-size:.85rem; color:var(--chalk-dim); }
+  .roundend-report.hidden{ display:none; }
+  #btn-report-word[aria-pressed="true"]{ background:color-mix(in srgb, var(--red) 25%, transparent); border-color:var(--red); color:var(--chalk); }
+  .wr-item{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 10px; margin-bottom:6px; border-radius:10px; background:rgba(0,0,0,.2); border:1px solid rgba(244,241,230,.1); }
+  .wr-item .wr-word{ font-weight:800; color:var(--chalk); font-size:1rem; }
+  .wr-item .wr-meta{ font-size:.78rem; color:var(--chalk-dim); flex:1 1 auto; }
   .roundend-hold{ display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; margin-top:10px;
     padding:10px 14px; border-radius:14px; background:rgba(0,0,0,.25); border:1.5px dashed rgba(244,241,230,.2); color:var(--chalk); font-size:.92rem; }
   .roundend-hold.hidden{ display:none; }
@@ -1860,6 +1885,10 @@
   <div id="screen-roundend" class="hidden">
     <div class="result-banner" id="roundend-banner"></div>
     <div id="roundend-word" style="text-align:center;"></div>
+    <div id="roundend-report" class="roundend-report hidden">
+      <button class="ghost small" id="btn-report-word" type="button" aria-pressed="false">🚩 Hibás vagy értelmetlen szó</button>
+      <span id="report-status" aria-live="polite"></span>
+    </div>
     <table class="scores" id="roundend-scores"></table>
     <div style="text-align:center;margin-top:10px;">
       <button class="big" id="btn-next-round-mine" style="background:var(--green);">Én jövök — kezdem! 🎨</button>
@@ -1939,6 +1968,10 @@
   <input name="type"><textarea name="message"></textarea><input name="name"><input name="contact"><input name="version"><textarea name="device"></textarea>
 </form>
 
+<form name="picasso-wordreport" method="POST" data-netlify="true" netlify-honeypot="bot-field" hidden aria-hidden="true">
+  <input type="hidden" name="form-name" value="picasso-wordreport">
+  <input name="bot-field"><input name="word"><input name="tier"><input name="votes"><input name="players"><input name="version">
+</form>
 <div id="sr-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 <div id="lastround-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="lastround-title">
   <div class="admin-box" style="max-width:520px;">
@@ -2189,6 +2222,16 @@
     <div class="menu-list">
       <button class="big secondary hidden" id="btn-fd-giveup" style="width:100%;">🙅 Passz</button>
       <button class="ghost" id="menu-btn-darkmode" style="width:100%;text-align:left;"></button>
+      <div class="menu-theme">
+        <div class="menu-theme-label">🎨 Színvilág</div>
+        <div class="menu-theme-row">
+          <button class="theme-swatch-btn" data-theme="forest" style="background:#16302A;" title="Zöld tábla" aria-label="Zöld tábla"></button>
+          <button class="theme-swatch-btn" data-theme="ocean" style="background:#0B2D3A;" title="Óceán" aria-label="Óceán"></button>
+          <button class="theme-swatch-btn" data-theme="neon" style="background:#150E2B;" title="Éjkék neon" aria-label="Éjkék neon"></button>
+          <button class="theme-swatch-btn" data-theme="sunset" style="background:#2B1220;" title="Naplemente" aria-label="Naplemente"></button>
+          <button class="theme-swatch-btn" data-theme="graphite" style="background:#1A1A1E;" title="Grafit" aria-label="Grafit"></button>
+        </div>
+      </div>
       <div class="vol-wrap">
         <div class="vol-block"><label>🔔 Játékhangok <span class="vol-sfx-val"></span></label>
           <div class="vol-row"><button type="button" class="ghost small vol-mute vol-sfx-mute" aria-label="Játékhangok némítása">🔊</button>
@@ -2380,6 +2423,16 @@
       </div>
     </div>
 
+    <div class="admin-note" id="admin-wordreport-box" style="margin-bottom:18px;">
+      <div class="admin-panel-header" style="margin-bottom:6px;">
+        <strong style="color:var(--chalk);">🚩 Bejelentett szavak <span id="admin-wr-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
+        <button class="secondary small" id="admin-wr-load" type="button">🚩 Betöltés</button>
+      </div>
+      Ezeket a szavakat egy játékban a játékosok legalább fele hibásnak vagy értelmetlennek jelölte. A betöltéshez a lenti Netlify tokent használjuk.
+      A javítás vagy törlés a szólistában történik: utána nyomd meg a <b>☁️ Mentés élesben</b> gombot. A bejelentés ilyenkor (és a „Marad” gombra is) törlődik a Netlify-ból.
+      <div id="admin-wr-status" class="admin-warning" style="text-align:left;"></div>
+      <div id="admin-wr-list"></div>
+    </div>
     <div class="admin-note" id="admin-feedback-box" style="margin-bottom:18px;">
       <div class="admin-panel-header" style="margin-bottom:6px;">
         <strong style="color:var(--chalk);">📬 Visszajelzések <span id="admin-fb-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
@@ -2751,9 +2804,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!w) return normalize(String(guess)) === normalize(String(word)) ? 'correct' : 'wrong';
     if(!g) return 'wrong';
     if(g === w) return 'correct';
-    if(w.length >= 4 && g.startsWith(w) && g.length - w.length <= 3) return 'correct';
+    // v3.27: near misses (a typo, an extra ending) are only "close" — no points
+    if(w.length >= 4 && g.startsWith(w) && g.length - w.length <= 3) return 'close';
     const d = editDistance(g, w, 3);
-    if(w.length >= 6 && d <= 1) return 'correct';
     if(w.length >= 4 && d <= (w.length >= 8 ? 3 : 2)) return 'close';
     if(g.length >= 4 && w.length >= 4 && (w.includes(g) || g.includes(w))) return 'close';
     return 'wrong';
@@ -5071,6 +5124,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     chatReactAction = room.makeAction('chatreact');   // emoji reaction to one chat message
     cwordsAction = room.makeAction('cwords');          // v3.25: guest -> host: own words; host -> all: summary
     cwordsAction.onMessage = (data, {peerId})=>handleCwordsMessage(data, peerId);
+    wflagAction = room.makeAction('wflag');            // v3.27: "this word is broken" marks
+    wflagAction.onMessage = (data, {peerId})=>handleWflagMessage(data, peerId);
     lateJoinAction = room.makeAction('latejoin');     // host -> everybody: someone joined the running game
     lateSyncAction = room.makeAction('latesync');     // host -> the newcomer: the full state of the game
     rematchVoteAction = room.makeAction('rmvote');     // "yes, I want another game" — a "no" just leaves the room
@@ -6304,7 +6359,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       resultAction = scoreAction = chatAction = typingAction = kickAction = hintAction =
       reactionAction = byeAction = chatReactAction = lateJoinAction = lateSyncAction =
       rematchVoteAction = turnSyncAction = closeMarkAction = voteKickAction = null;
-      cwordsAction = null; lobbyCustom = {};
+      cwordsAction = null; lobbyCustom = {}; wflagAction = null;
       const ws = document.getElementById('lobby-words-summary'); if(ws) ws.textContent = '';
   }
 
@@ -10604,6 +10659,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         : `A szót nem ismerjük (a rajzoló kapcsolata megszakadt) — senki sem kapott pontot.`;
     }
     renderScoreTable('roundend-scores', scoreRows());
+    try{ setupReportFor(roundKey(currentRound), shownWord, currentRound.tier); }catch(e){}
     rememberRoundRecap(idx);
 
     const nextIdx = idx+1;
@@ -11145,6 +11201,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.27', changes:[
+      'Közeli tippért nem jár pont. Eddig az apró elírás vagy egy plusz rag (pl. „labdarúgó” a „labdarúgás” helyett) teljes értékű találatnak számított, most „közel!” jelzést kap, és pont nélkül fut tovább a kör. Az ékezet, a kis- és nagybetű és a szóköz továbbra sem számít.',
+      'Szóbejelentés: a kör végén egy koppintással megjelölhető a hibás vagy értelmetlen szó. Ha a játékosok legalább fele megjelöli, a szó az adminhoz kerül. A saját beküldött szavak nem jelölhetők.',
+      'Admin: új „🚩 Bejelentett szavak” rész, ahol a bejelentett szavak javíthatók, törölhetők vagy megtarthatók.',
+      'Sötét módban minden szín sötétebb lett: gombok, kiemelések, rajzpaletta, menük. A sötét mód és a színvilág most már együtt is használható.',
+      'A színvilág játék közben is állítható a ☰ Menüben.'
+    ]},
     { version:'3.26', changes:[
       'Javítva: Firefoxban (és néhány jelszókezelőnél) a tippmező és a chat alatt felugró „Új e-mail álnév” ajánlat. Az okozta, hogy a 3.20-ban az admin felületre került két új jelszómező, és a böngésző ezek miatt regisztrációs űrlapnak hitte az oldalt.',
       'A chat és a gyors reakció gombja áthelyezhető: nyomd hosszan, húzd ahová szeretnéd, és engedd el. Ha a felül megjelenő „alaphelyzet” célra ejted, visszaugrik a helyére. Telefonon és gépen is működik, és az eszköz megjegyzi a helyét.',
@@ -11948,6 +12011,170 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     }
   }
   document.getElementById('admin-fb-load').addEventListener('click', loadAdminFeedback);
+  // =====================================================================
+  // v3.27: reporting a broken / meaningless word at the end of a round.
+  // One tap marks it; the report goes out once at least half of the players
+  // in the game marked the same word. Only one device sends it (the marker
+  // with the smallest id), so it arrives once. Own (custom) words are not
+  // reportable — they are not in the shared list.
+  // =====================================================================
+  const WORDREPORT_FORM = 'picasso-wordreport';
+  let wflagAction = null;
+  const wordFlags = {};          // roundKey -> { word, tier, ids:Set, sent:bool }
+  let reportableRound = null;    // { rk, word, tier } of the result on screen
+  function flagThreshold(){ return Math.max(1, Math.ceil(Math.max(1, activePlayerIds.size) / 2)); }
+  function renderReportUi(){
+    const box = document.getElementById('roundend-report');
+    if(!reportableRound){ box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    const f = wordFlags[reportableRound.rk] || { ids:new Set(), sent:false };
+    const mine = f.ids.has(selfId), need = flagThreshold();
+    const btn = document.getElementById('btn-report-word');
+    btn.setAttribute('aria-pressed', mine ? 'true' : 'false');
+    btn.textContent = mine ? '🚩 Megjelölted (visszavonás)' : '🚩 Hibás vagy értelmetlen szó';
+    btn.disabled = !!f.sent;
+    document.getElementById('report-status').textContent = f.sent
+      ? '📨 Elküldve az adminnak. Köszönjük!'
+      : `${f.ids.size} / ${need} jelölés`;
+  }
+  function setupReportFor(rk, word, tier){
+    reportableRound = (word && tier !== 'sajat') ? { rk, word: String(word).slice(0,60), tier } : null;
+    if(reportableRound && !wordFlags[rk]) wordFlags[rk] = { word: reportableRound.word, tier, ids:new Set(), sent:false };
+    renderReportUi();
+  }
+  async function submitWordReport(f){
+    const body = new URLSearchParams({ 'form-name': WORDREPORT_FORM, 'bot-field':'', word: f.word, tier: f.tier,
+      votes: String(f.ids.size), players: String(activePlayerIds.size), version: 'v' + CHANGELOG[0].version }).toString();
+    const post = url=>fetch(url, { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body });
+    try{
+      let res = await post('/');
+      if((res.status === 404 || res.status === 405) && location.pathname !== '/') res = await post(location.pathname);
+      clog('W01', `szóbejelentés elküldve: ${f.word} (HTTP ${res.status})`);
+    }catch(e){ clog('W02', 'szóbejelentés nem ment el: ' + (e && e.message)); }
+  }
+  function checkWordFlag(rk){
+    const f = wordFlags[rk];
+    if(!f || f.sent || f.ids.size < flagThreshold()) return;
+    f.sent = true;
+    const sender = [...f.ids].sort()[0];
+    if(sender === selfId) submitWordReport(f);
+    if(reportableRound && reportableRound.rk === rk) renderReportUi();
+  }
+  function applyWordFlag(rk, word, on, pid){
+    const f = wordFlags[rk];
+    if(!f || squash(f.word) !== squash(word)) return;   // only the word this device saw
+    if(f.sent) return;
+    if(on) f.ids.add(pid); else f.ids.delete(pid);
+    if(reportableRound && reportableRound.rk === rk) renderReportUi();
+    checkWordFlag(rk);
+  }
+  document.getElementById('btn-report-word').addEventListener('click', ()=>{
+    if(!reportableRound) return;
+    const { rk, word } = reportableRound;
+    const on = !(wordFlags[rk] && wordFlags[rk].ids.has(selfId));
+    sndClick();
+    if(wflagAction){ try{ wflagAction.send({ r: rk, w: word, on }); }catch(e){} }
+    applyWordFlag(rk, word, on, selfId);
+  });
+  function handleWflagMessage(data, peerId){
+    if(!isPlainObject(data) || !meta || !meta.playerNames[peerId]) return;
+    const rk = cleanText(data.r, 40), w = cleanText(data.w, 60);
+    if(!rk || !w) return;
+    applyWordFlag(rk, w, data.on === true, peerId);
+  }
+
+  // ---- admin: the reported words ----
+  function adminWrStatus(text, kind){
+    const el = document.getElementById('admin-wr-status');
+    el.textContent = text;
+    el.style.color = kind === 'ok' ? 'var(--green)' : (kind === 'info' ? 'var(--chalk-dim)' : 'var(--red)');
+  }
+  async function loadFormSubmissions(formName, token){
+    const forms = await netlifyApi('/forms', token);
+    const mine = (Array.isArray(forms) ? forms : []).filter(f=>f && f.name === formName);
+    if(!mine.length) return null;
+    mine.sort((a,b)=>{
+      const ha = String(a.url || '').includes(location.hostname) ? 1 : 0, hb = String(b.url || '').includes(location.hostname) ? 1 : 0;
+      return (hb - ha) || String(b.last_submission_at || '').localeCompare(String(a.last_submission_at || ''));
+    });
+    let all = [];
+    for(let page=1; page<=5; page++){
+      const batch = await netlifyApi(`/forms/${encodeURIComponent(mine[0].id)}/submissions?per_page=100&page=${page}`, token);
+      if(!Array.isArray(batch) || !batch.length) break;
+      all = all.concat(batch);
+      if(batch.length < 100) break;
+    }
+    return all;
+  }
+  let adminWrGroups = [];
+  function renderAdminWordReports(token){
+    const list = document.getElementById('admin-wr-list');
+    document.getElementById('admin-wr-count').textContent = adminWrGroups.length ? `(${adminWrGroups.length})` : '';
+    if(!adminWrGroups.length){ list.innerHTML = '<p class="center-note">Nincs bejelentett szó.</p>'; return; }
+    list.innerHTML = adminWrGroups.map((g, i)=>{
+      const inList = WORDS.some(it=>squash(it.w) === squash(g.word));
+      const tierLabel = (TIER_INFO[g.tier] || {}).label || g.tier || '?';
+      return `<div class="wr-item" data-i="${i}">
+        <span class="wr-word">${escapeHtml(g.word)}</span>
+        <span class="wr-meta">${escapeHtml(tierLabel)} · ${g.reports} bejelentés · legutóbb ${escapeHtml(formatFbDate(g.last))}${inList ? '' : ' · már nincs a listában'}</span>
+        <button class="ghost small" data-wr="edit" ${inList ? '' : 'disabled'}>✏️ Javítás</button>
+        <button class="ghost small" data-wr="del" ${inList ? '' : 'disabled'}>🗑️ Törlés</button>
+        <button class="ghost small" data-wr="keep">✓ Marad</button>
+      </div>`;
+    }).join('');
+    list.onclick = async (e)=>{
+      const b = e.target.closest('[data-wr]');
+      if(!b) return;
+      const g = adminWrGroups[Number(b.closest('.wr-item').dataset.i)];
+      if(!g) return;
+      const act = b.dataset.wr, k = squash(g.word);
+      if(act === 'edit'){
+        const nw = (prompt(`Mire javítsam ezt a szót: „${g.word}”?`, g.word) || '').trim().slice(0, 60);
+        if(!nw || nw === g.word) return;
+        WORDS = WORDS.map(it=> squash(it.w) === k ? { w: nw, tier: it.tier } : it);
+      } else if(act === 'del'){
+        if(!confirm(`Törlöd a(z) „${g.word}” szót a szólistából?`)) return;
+        WORDS = WORDS.filter(it=> squash(it.w) !== k);
+      }
+      try{ for(const id of g.ids) await netlifyApi('/submissions/' + encodeURIComponent(id), token, { method:'DELETE' }); }
+      catch(err){ adminWrStatus('A bejelentést nem sikerült törölni a Netlify-ból: ' + err.message, 'err'); }
+      if(act !== 'keep'){
+        ['konnyu','kozepes'].forEach(t=>{ try{ renderAdminList(t); }catch(err){} });
+        try{ renderAdminHealth(); }catch(err){}
+        try{ updateAdminDirty(); }catch(err){}
+        adminWrStatus('Módosítva a szólistában. Ne felejtsd el: ☁️ Mentés élesben.', 'ok');
+      } else adminWrStatus(`„${g.word}” marad, a bejelentés törölve.`, 'ok');
+      adminWrGroups = adminWrGroups.filter(x=>x !== g);
+      renderAdminWordReports(token);
+    };
+  }
+  document.getElementById('admin-wr-load').addEventListener('click', async ()=>{
+    const token = document.getElementById('admin-fb-token').value.trim();
+    if(!token){ adminWrStatus('Add meg lent a Netlify tokent (a Visszajelzéseknél).', 'err'); return; }
+    adminTokenSet('netlify', token);
+    const btn = document.getElementById('admin-wr-load'); btn.disabled = true;
+    adminWrStatus('Betöltés…', 'info');
+    try{
+      const all = await loadFormSubmissions(WORDREPORT_FORM, token);
+      if(all === null){ adminWrStatus('Még nem érkezett szóbejelentés (vagy a Netlify még nem ismeri az űrlapot — ez az első bejelentéssel létrejön).', 'info'); adminWrGroups = []; renderAdminWordReports(token); return; }
+      const by = new Map();
+      all.forEach(it=>{
+        const d = it.data || {}, w = String(d.word || '').trim().slice(0,60);
+        if(!w) return;
+        const k = squash(w);
+        const g = by.get(k) || { word:w, tier:String(d.tier || ''), reports:0, last:'', ids:[] };
+        g.reports++; g.ids.push(it.id);
+        if(String(it.created_at || '') > g.last) g.last = String(it.created_at || '');
+        by.set(k, g);
+      });
+      adminWrGroups = [...by.values()].sort((a,b)=> b.reports - a.reports || b.last.localeCompare(a.last));
+      renderAdminWordReports(token);
+      adminWrStatus(adminWrGroups.length ? `${adminWrGroups.length} bejelentett szó.` : '', 'ok');
+    }catch(e){
+      adminWrStatus((e instanceof TypeError) ? 'A böngésző nem érte el a Netlify-t. A bejelentéseket az app.netlify.com → Forms → ' + WORDREPORT_FORM + ' alatt is megtalálod.' : e.message, 'err');
+    }finally{ btn.disabled = false; }
+  });
+
 
 
   function renderChangelog(){
