@@ -681,6 +681,44 @@
   .gallery-card img{ width:100%; aspect-ratio:4/3; object-fit:contain; background:#FBF7EC; border-radius:8px; display:block; }
   .gallery-card .gc-word{ font-family:'Kalam',cursive; color:var(--yellow); font-size:1.05rem; margin-top:4px; overflow-wrap:break-word; }
   .gallery-card .gc-meta{ font-size:.72rem; color:var(--chalk-dim); }
+  #gameend-vote{ position:sticky; bottom:0; z-index:5; padding:10px 8px 12px; margin:10px -8px 0;
+    background:linear-gradient(180deg, transparent, var(--panel) 18px); }
+  .vote-status{ max-width:520px; margin:0 auto 10px; padding:12px 14px; border-radius:14px; background:rgba(0,0,0,.3);
+    border:1.5px solid rgba(244,241,230,.15); text-align:left; }
+  .vote-status.hidden{ display:none; }
+  .vote-head{ display:flex; justify-content:space-between; align-items:baseline; font-weight:800; font-size:1.15rem; color:var(--chalk); }
+  .vote-secs{ font-variant-numeric:tabular-nums; color:var(--yellow); font-size:1.35rem; }
+  .vote-status.urgent .vote-secs{ color:var(--red); animation:votePulse 1s ease-in-out infinite; }
+  @keyframes votePulse{ 50%{ transform:scale(1.12); } }
+  .vote-bar{ height:10px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; margin:8px 0 10px; }
+  .vote-bar i{ display:block; height:100%; width:100%; background:var(--yellow); border-radius:999px; transition:width 1s linear, background .3s; }
+  .vote-status.urgent .vote-bar i{ background:var(--red); }
+  .vote-status.done .vote-bar i{ background:var(--green); }
+  .vote-chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .vchip{ font-size:.85rem; padding:4px 10px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid rgba(244,241,230,.15); color:var(--chalk-dim); }
+  .vchip.yes{ color:var(--chalk); border-color:var(--green); background:color-mix(in srgb, var(--green) 18%, transparent); }
+  @media (prefers-reduced-motion:reduce){ .vote-status.urgent .vote-secs{ animation:none; } .vote-bar i{ transition:none; } }
+  @media (max-width:640px){
+    #gameend-vote{ padding:6px 4px 8px; }
+    .vote-status{ padding:8px 10px; margin-bottom:6px; }
+    .vote-head{ font-size:1rem; } .vote-secs{ font-size:1.15rem; }
+    .vote-bar{ margin:6px 0 6px; height:8px; }
+    .vchip{ font-size:.75rem; padding:2px 8px; }
+    #gameend-vote #rematch-question{ display:none; }
+    #rematch-vote-buttons{ flex-wrap:nowrap !important; gap:8px !important; }
+    #rematch-vote-buttons .big{ font-size:.92rem; padding:10px 12px; flex:1 1 0; }
+  }
+  .gc-guesses{ display:flex; flex-wrap:wrap; gap:4px; justify-content:center; margin-top:6px; }
+  .gc-guesses.gc-none{ font-size:.7rem; color:var(--chalk-dim); opacity:.7; }
+  .gchip{ font-size:.7rem; line-height:1.25; padding:2px 7px; border-radius:999px; background:rgba(255,255,255,.07); border:1px solid rgba(244,241,230,.12); color:var(--chalk); max-width:100%; overflow-wrap:anywhere; }
+  .gchip b{ color:var(--chalk-dim); font-weight:700; }
+  .gchip.ok{ border-color:var(--green); background:color-mix(in srgb, var(--green) 18%, transparent); }
+  .gchip.near{ border-color:var(--yellow); }
+  .gchip.more{ color:var(--chalk-dim); }
+  .glb-guesses{ max-width:min(640px, 92vw); max-height:28vh; overflow-y:auto; margin:6px auto 0; text-align:center; }
+  .glb-guesses .gchip{ font-size:.85rem; padding:4px 10px; }
+  .glb-guess-title{ font-size:.85rem; color:var(--chalk-dim); font-weight:700; }
+
   /* v2.57: iPhone saves pictures by long-press, which the game otherwise blocks */
   .gallery-card img, #gallery-lightbox img{ -webkit-touch-callout:default; -webkit-user-select:auto; user-select:auto; }
   #gallery-lightbox{
@@ -1918,7 +1956,12 @@
         <button class="pink small hidden" id="btn-gallery-share">📤 Megosztás</button>
       </div>
     </div>
-    <div style="text-align:center;margin-top:10px;">
+    <div id="gameend-vote" style="text-align:center;margin-top:10px;">
+      <div id="vote-status" class="vote-status hidden" aria-live="polite">
+        <div class="vote-head"><span id="vote-count">0/0 igen</span><span class="vote-secs" id="vote-secs">30</span></div>
+        <div class="vote-bar"><i id="vote-bar-fill"></i></div>
+        <div class="vote-chips" id="vote-chips"></div>
+      </div>
       <p class="center-note" id="rematch-question" style="margin-bottom:6px;">Akartok még egy partit?</p>
       <div id="rematch-vote-buttons" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
         <button class="big" id="btn-rematch-yes" style="background:var(--green);">🔁 Igen, játszom tovább</button>
@@ -2136,6 +2179,7 @@
 <div id="gallery-lightbox" class="hidden" role="dialog" aria-label="Rajz megtekintése">
   <img id="glb-img" alt="">
   <div class="glb-word" id="glb-word"></div>
+  <div class="glb-guesses" id="glb-guesses"></div>
   <div class="glb-hint" id="glb-hint"></div>
   <div class="glb-actions">
     <button class="pink" id="glb-share">📤 Mentés / megosztás</button>
@@ -8815,6 +8859,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     meta = clean;
     settings = clean.settings;
     lastRoundRecap = null; roundEndReleased = false;           // v3.26: a new game, no previous round
+    try{ for(const k in roundGuessLog) delete roundGuessLog[k]; }catch(e){}   // v3.31: fresh guess log
     { const lb = document.getElementById('btn-last-round'); if(lb) lb.classList.add('hidden'); }
     scores = {};
     Object.keys(clean.playerNames).forEach(id=>{ scores[id]=0; });
@@ -10191,6 +10236,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const key = (currentRound ? roundKey(currentRound) : '') + '#' + gid;
     if(closeMarked.has(key)) return;
     closeMarked.add(key);
+    try{ const lg = currentRound && roundGuessLog[roundKey(currentRound)]; if(lg){ const g = lg.find(x=>x.gid === gid); if(g) g.close = true; } }catch(e){}
     let guesserId = null;
     document.querySelectorAll(`[data-gid="${gid}"]`).forEach(el=>{
       el.classList.add('close');
@@ -10221,8 +10267,20 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ if(closeMarkAction) closeMarkAction.send({ gid, r: roundKey(currentRound) }); }catch(err){}
   });
 
+  // v3.31: every guess of a round is kept for the gallery
+  const roundGuessLog = {};   // roundKey -> [{ name, text, correct, close, gid }]
+  function logRoundGuess(name, text, correct, gid){
+    if(!currentRound) return;
+    const rk = roundKey(currentRound);
+    const list = roundGuessLog[rk] || (roundGuessLog[rk] = []);
+    if(gid && list.some(g=>g.gid === gid)){          // the same entry again (e.g. text arrives later)
+      const g = list.find(x=>x.gid === gid); if(text && !g.text) g.text = text; if(correct) g.correct = true; return;
+    }
+    if(list.length < 80) list.push({ name, text: String(text || '').slice(0, 60), correct: !!correct, close:false, gid: gid || 0 });
+  }
   function routeGuessEntry(peerId, name, text, correct, gid){
     name = cleanName(name);
+    try{ logRoundGuess(name, text, correct, gid); }catch(e){}
     const iAmDrawingNow = currentRound && currentRound.drawerId === selfId &&
       !document.getElementById('screen-fulldraw').classList.contains('hidden');
     try{
@@ -10454,7 +10512,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       w: W, h: H,
       word: String(result.word || (mine ? currentRound.word : '') || '?'),
       drawer: currentRound.drawerName || 'Valaki',
-      guessedBy: result.type === 'correct' ? String(result.correctPlayerName || '') : ''
+      guessedBy: result.type === 'correct' ? String(result.correctPlayerName || '') : '',
+      guesses: (roundGuessLog[roundKey(currentRound)] || []).map(g=>({ name:g.name, text:g.text, correct:g.correct, close:g.close }))
     });
     if(galleryItems.length > 60) galleryItems.shift();
   }
@@ -10467,6 +10526,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     a.href = href; a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
   }
+  function guessChipsHtml(list, max){
+    list = Array.isArray(list) ? list : [];
+    if(!list.length) return '<div class="gc-guesses gc-none">Nem volt tipp</div>';
+    const shown = max ? list.slice(-max) : list;
+    const more = list.length - shown.length;
+    return `<div class="gc-guesses">${more > 0 ? `<span class="gchip more">+${more}</span>` : ''}${shown.map(g=>
+      `<span class="gchip${g.correct ? ' ok' : (g.close ? ' near' : '')}" title="${escapeHtml(g.name)}"><b>${escapeHtml(g.name)}:</b> ${g.text ? escapeHtml(g.text) : (g.correct ? 'kitalálta' : '…')}${g.correct ? ' ✅' : (g.close ? ' 🔥' : '')}</span>`).join('')}</div>`;
+  }
   function renderGallery(){
     const wrap = document.getElementById('gameend-gallery-wrap');
     const grid = document.getElementById('gameend-gallery');
@@ -10475,6 +10542,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       <img src="${it.url}" alt="${escapeHtml(it.word)}">
       <div class="gc-word">${escapeHtml(it.word)}</div>
       <div class="gc-meta">✏️ ${escapeHtml(it.drawer)}${it.guessedBy ? ' · ✅ ' + escapeHtml(it.guessedBy) : ' · ⌛'}</div>
+      ${guessChipsHtml(it.guesses, 6)}
     </div>`).join('');
     grid.querySelectorAll('.gallery-card').forEach(card=>{
       card.addEventListener('click', ()=>{
@@ -10522,6 +10590,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     document.getElementById('glb-img').src = it.url;
     document.getElementById('glb-img').alt = it.word;
     document.getElementById('glb-word').textContent = it.word;
+    document.getElementById('glb-guesses').innerHTML = `<div class="glb-guess-title">Tippek (${(it.guesses || []).length})</div>` + guessChipsHtml(it.guesses, 0);
     const share = canShareImageFiles();
     document.getElementById('glb-share').classList.toggle('hidden', !share);
     // a download link is pointless on iPhone: hide it there when sharing works
@@ -10853,6 +10922,22 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // ("yes" / "no") for every player, host included. "No" leaves right away.
   // Once everyone still in the room has said "yes", the host gets the
   // button to actually pick settings and start; everyone else just waits.
+  // v3.31: a clearly visible vote panel — who said yes, how long is left
+  function renderVoteStatus(allYes, expired, yesCount, total, secsLeft){
+    const box = document.getElementById('vote-status');
+    box.classList.remove('hidden');
+    box.classList.toggle('done', allYes);
+    box.classList.toggle('urgent', !allYes && secsLeft <= 10);
+    document.getElementById('vote-count').textContent = allYes ? `✅ ${yesCount}/${total} igen — mehet!` : `🗳️ ${yesCount}/${total} igen`;
+    document.getElementById('vote-secs').textContent = allYes ? '' : `⏱ ${secsLeft} mp`;
+    const pct = allYes ? 100 : Math.max(0, Math.min(100, secsLeft / (REMATCH_VOTE_MS/1000) * 100));
+    document.getElementById('vote-bar-fill').style.width = pct + '%';
+    const ids = Object.keys(meta.playerNames).filter(id=>activePlayerIds.has(id) && (!expired || rematchYesVotes.has(id)));
+    document.getElementById('vote-chips').innerHTML = ids.map(id=>{
+      const yes = rematchYesVotes.has(id);
+      return `<span class="vchip${yes ? ' yes' : ''}">${yes ? '✅' : '⏳'} ${escapeHtml(meta.playerNames[id] || 'Valaki')}${id === selfId ? ' (te)' : ''}</span>`;
+    }).join('');
+  }
   function refreshRematchUI(){
     if(!meta) return;
     const expired = rematchExpired();
@@ -10894,6 +10979,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         warn.classList.add('hidden');
       }
       startBtn.disabled = true;
+      document.getElementById('vote-status').classList.add('hidden');
       return;
     }
     aloneNote.classList.add('hidden');
@@ -10910,6 +10996,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // "leave" link only when the "Nem, kilépek" button isn't already there
     question.classList.toggle('hidden', iVoted || allYes);
     leaveWrap.classList.toggle('hidden', !(iVoted || allYes));
+    renderVoteStatus(allYes, expired, yesCount, stillHere, secsLeft);
     waitNote.classList.remove('hidden');
     waitNote.textContent = allYes
       ? (isHost ? '✅ Mindenki igent mondott — indítsd az új partit!' : '✅ Mindenki igent mondott — várd meg, míg a szobanyitó elindítja az új partit!')
@@ -11223,6 +11310,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.31', changes:[
+      'Galéria: a rajzok alatt a kör tippjei is látszanak (ki mit tippelt, ✅ helyes, 🔥 közeli). A kártyán az utolsó 6, a rajzra koppintva az összes.',
+      'Játék végén jól látható szavazópanel van a képernyő alján: hány igen van, ki mondott már igent, és egy visszaszámláló sáv. Az utolsó 10 másodpercben piros lesz és lüktet.'
+    ]},
     { version:'3.30', changes:[
       'Ha többen ugyanazt a saját szót küldték be, a kitalálók akkor is megkapják a pontjukat. A saját szaváért csak a rajzoló nem kap pontot.'
     ]},
