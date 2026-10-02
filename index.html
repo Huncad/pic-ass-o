@@ -1787,7 +1787,7 @@
         <button class="pill active" data-customonly="mix">Keverve a beépítettekkel</button>
         <button class="pill" data-customonly="only">Csak a saját szavak</button>
       </div>
-      <p class="setup-hint">A váróteremben minden játékos (te is) beírhat legfeljebb 15 saját szót. Ha valaki a saját beküldött szavát találja ki, elfogadjuk, de nem jár érte pont. Ha senki nem ír be semmit, a beépített szavakkal játszotok.</p>
+      <p class="setup-hint">A váróteremben minden játékos (te is) beírhat legfeljebb 15 saját szót. Mindenki csak a saját beküldött szavait kaphatja rajzolásra, és ha ilyet választ, a rajzoló nem kap érte pontot (a kitalálók igen). Ha senki nem ír be semmit, a beépített szavakkal játszotok.</p>
     </div>
     <div class="start-btn-wrap" style="display:flex;justify-content:center;margin-top:24px;">
       <button class="big" id="btn-create-room" style="background:var(--green);">Szoba létrehozása 🎉</button>
@@ -1832,7 +1832,7 @@
       <label class="field-label" for="lobby-words-input">Saját szavaid (nem kötelező)</label>
       <textarea id="lobby-words-input" rows="3" maxlength="1200" autocomplete="off" spellcheck="false" placeholder="Soronként vagy vesszővel elválasztva, pl. céges karácsony, Kari a macska, Szombathely"></textarea>
       <div class="custom-words-count" id="lobby-words-count">0 / 15 szó</div>
-      <p class="setup-hint">Mindenki beküldhet legfeljebb 15 szót, a többiekét nem látod. A saját szavadat is rajzolhatod, és ha a te szavadat kell kitalálni, a tipped elfogadjuk, de nem jár érte pont.</p>
+      <p class="setup-hint">Mindenki beküldhet legfeljebb 15 szót, a többiekét nem látod. A beküldött szavaidat csak te kaphatod rajzolásra. Ha ilyet választasz, a kitalálók megkapják a pontjukat, de te nem kapsz pontot érte. A mező tartalmát a játék nem jegyzi meg.</p>
       <p class="center-note" id="lobby-words-summary" style="margin:6px 0 0;"></p>
     </div>
     <p class="center-note hidden" id="lobby-notify" style="font-size:.85rem;">
@@ -3758,12 +3758,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   const TIER_INFO = {
     konnyu:  {label:"Könnyű",  color:"var(--green)"},
     kozepes: {label:"Nehéz", color:"var(--blue)"},
-    sajat:   {label:"Saját", color:"var(--purple)"}
+    sajat:   {label:"Saját szavad · neked 0 pont", color:"var(--purple)"}
   };
   // v3.18: built-in words plus the room's own ones
   function customWordItems(){
+    // v3.29: everyone may only draw the words THEY sent in
     return (settings && Array.isArray(settings.customWords) ? settings.customWords : [])
-      .map(e=>isPlainObject(e) ? { w:String(e.w || ''), tier:'sajat' } : { w:String(e || ''), tier:'sajat' }).filter(e=>e.w);
+      .filter(e=>isPlainObject(e) && Array.isArray(e.by) && e.by.includes(selfId))
+      .map(e=>({ w:String(e.w || ''), tier:'sajat' })).filter(e=>e.w);
   }
   // v3.25: who sent this word in (they get no points for guessing it)
   function wordAuthors(word){
@@ -4963,7 +4965,6 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   function sendMyWords(){
     const words = myWords();
-    try{ localStorage.setItem(MY_WORDS_KEY, JSON.stringify(words)); }catch(e){}
     if(isHost){ lobbyCustom[selfId] = words; broadcastWordsSummary(); return; }
     if(cwordsAction && hostPeerId && !meta){ try{ cwordsAction.send({ words }, { target: hostPeerId }); }catch(e){} }
   }
@@ -4998,7 +4999,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   (function setupMyWords(){
     const el = document.getElementById('lobby-words-input');
-    try{ const saved = JSON.parse(localStorage.getItem(MY_WORDS_KEY) || '[]'); if(Array.isArray(saved)) el.value = cleanCustomWords(saved).slice(0, MAX_WORDS_PER_PLAYER).join('\n'); }catch(e){}
+    try{ localStorage.removeItem(MY_WORDS_KEY); }catch(e){}   // v3.29: never kept on the device
     updateMyWordsCount();
     el.addEventListener('input', ()=>{
       updateMyWordsCount();
@@ -6373,6 +6374,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       reactionAction = byeAction = chatReactAction = lateJoinAction = lateSyncAction =
       rematchVoteAction = turnSyncAction = closeMarkAction = voteKickAction = null;
       cwordsAction = null; lobbyCustom = {}; wflagAction = null;
+      { const lw = document.getElementById('lobby-words-input'); if(lw){ lw.value = ''; try{ updateMyWordsCount(); }catch(e){} } }
       const ws = document.getElementById('lobby-words-summary'); if(ws) ws.textContent = '';
   }
 
@@ -10299,7 +10301,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(guessers.length){
       const dm = Number(result.drawMs);
       drawMs = Number.isFinite(dm) && dm >= 0 ? dm : guessers[0].ms;
-      drawerPts = roundPoints(drawMs / 1000);
+      // v3.29: a word the drawer sent in themselves earns the drawer nothing
+      drawerPts = (currentRound && authors.has(currentRound.drawerId)) ? 0 : roundPoints(drawMs / 1000);
     }
     return { guessers, drawerPts, drawMs };
   }
@@ -11220,6 +11223,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.29', changes:[
+      'Saját szavak, új szabály: mindenki csak a saját maga által beküldött szavakat kaphatja rajzolásra, a többiekéit nem. Ha a rajzoló a saját szavát választja, ő nem kap pontot, a kitalálók viszont igen. A választásnál a szó mellett ott a jelzés: „Saját szavad · neked 0 pont”.',
+      'A „Saját szavaid” mező tartalmát a játék nem jegyzi meg, és a szoba elhagyásakor kiürül.'
+    ]},
     { version:'3.28', changes:[
       'Egy játékban egy szó csak egyszer kerül elő, sem feladványként, sem választható szóként. Eddig a fel nem választott szavak később újra előjöhettek, és a csak kis- és nagybetűben, ékezetben eltérő, illetve mindkét nehézségben szereplő szavakat a játék különbözőnek vette. Ha a saját szavak elfogynak, beépített szavak jönnek helyettük ismétlés helyett.',
       'Telefonon az „Előző kör” gomb csak ikonként (📋) jelenik meg, hogy elférjen.'
