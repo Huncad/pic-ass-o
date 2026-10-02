@@ -1503,8 +1503,8 @@
     body:not(.fabs-top) #screen-fulldraw .fd-logo{ display:block; grid-area:logo; justify-self:center; }
     #screen-fulldraw .fd-word-text{ font-size:2.4rem; }
     .fd-side-deco{ display:block; position:absolute; inset:0; pointer-events:none; z-index:-1; color:var(--chalk); opacity:.16; }
-    .fd-side-deco svg{ position:absolute; top:180px; width:110px; }
-    .fd-side-deco .sd-l{ left:max(40px, calc(50% - 800px)); } .fd-side-deco .sd-r{ right:max(40px, calc(50% - 800px)); }
+    .fd-side-deco svg{ position:absolute; top:150px; bottom:110px; height:calc(100% - 260px); width:56px; }
+    .fd-side-deco .sd-l{ left:calc(50% - min(820px, 50vw - 12px) + 18px); } .fd-side-deco .sd-r{ right:calc(50% - min(820px, 50vw - 12px) + 18px); }
     #screen-fulldraw .fd-toolbar{ margin-bottom:14px !important; }
     /* guesser: logo in the middle of the top bar, timer to the right */
     body:not(.fabs-top) #screen-watch .watch-top .watch-logo-slot{ order:2; justify-self:center; }
@@ -1514,6 +1514,26 @@
     #screen-fulldraw .mini-logo, #screen-watch .mini-logo{ font-size:2.7rem; }
     #watch-roster{ background:transparent !important; box-shadow:none !important; }
   }
+  /* ===== v3.23: phones get the chalkboard look too ===== */
+  @media (max-width:859px){
+    /* guesser: doodle background shows through, logo row under the top bar */
+    body:has(.board.wide-mode) #main-board{ background:transparent !important; border-color:transparent !important; box-shadow:none !important; }
+    body:has(.board.wide-mode) #main-board::before{ display:none; }
+    body:has(.board.wide-mode) #main-board > .board-deco{ display:none !important; }
+    #screen-watch .watch-top .watch-logo-slot{ grid-column:1 / -1; grid-row:2; justify-self:center; display:block; margin:4px 0 2px; }
+    #screen-watch .watch-top .watch-logo-slot .mini-logo{ display:inline-flex; font-size:1.7rem; }
+    #watch-roster{ background:var(--bg) !important; justify-content:center; }
+    #screen-watch .guess-inputs, #screen-watch .guess-feed{ padding:10px 12px; border-radius:14px; }
+    #screen-watch .guess-inputs h3{ display:block !important; font-size:.95rem !important; margin-bottom:6px !important; }
+    #screen-watch .guess-feed h3{ display:block !important; font-size:.85rem !important; }
+    #btn-watch-guess{ min-width:46px; padding:0 12px; }
+    /* drawer: logo-free (space is for drawing) but on the same chalkboard */
+    #screen-fulldraw .fd-word-text{ font-size:1.6rem; }
+    #screen-fulldraw #fd-roster{ justify-content:center; }
+    #screen-fulldraw .fd-toolbar{ border-radius:16px 16px 0 0; }
+    #screen-fulldraw #fd-canvas{ border-radius:12px !important; }
+  }
+  @media (max-height:600px) and (max-width:859px){ #screen-watch .watch-top .watch-logo-slot{ display:none; } }
 </style>
 </head>
 <body>
@@ -1966,18 +1986,8 @@
 
 <div id="screen-fulldraw" class="hidden">
   <div class="fd-side-deco" aria-hidden="true">
-    <svg class="sd-l" viewBox="0 0 120 520"><g class="deco-line" stroke="currentColor">
-      <path d="M30 120 L80 30 L98 40 L48 130 L26 140 Z M72 44 L90 54"/>
-      <path d="M40 210 l8 18 20 2 -15 13 5 20 -18 -11 -18 11 5 -20 -15 -13 20 -2z"/>
-      <path d="M20 330 c15 -25 40 -25 50 0 s35 25 50 0"/>
-      <circle cx="55" cy="400" r="18"/><path d="M55 418 v50 m0 -30 l-24 18 m24 -18 l26 -10 m-26 40 l-18 32 m18 -32 l20 30"/>
-    </g></svg>
-    <svg class="sd-r" viewBox="0 0 120 520"><g class="deco-line" stroke="currentColor">
-      <path d="M30 60 l10 -22 10 22 -22 -14 h24 z"/>
-      <path d="M20 170 c15 -25 40 -25 50 0 s35 25 50 0"/>
-      <path d="M60 250 c-14 -18 -40 -6 -30 14 c6 12 30 28 30 28 s24 -16 30 -28 c10 -20 -16 -32 -30 -14z"/>
-      <path d="M30 380 L90 320 M40 400 L100 340"/>
-    </g></svg>
+    <svg class="sd-l" viewBox="0 0 60 1000" preserveAspectRatio="xMidYMin meet"><g class="deco-line" stroke="currentColor"><path d="M12 150 L44 30 L58 34 L26 154 L10 166 Z M40 44 L54 48"/><path d="M30 230 l8 18 20 2 -15 13 5 20 -18 -11 -18 11 5 -20 -15 -13 20 -2z"/><path d="M4 360 c10 -18 26 -18 34 0 s24 18 34 0"/><circle cx="30" cy="450" r="16"/><path d="M30 466 v48 m0 -30 l-20 14 m20 -14 l22 -10 m-22 40 l-16 30 m16 -30 l18 28"/><path d="M8 640 L52 596 M14 660 L56 618"/><path d="M30 720 l8 18 20 2 -15 13 5 20 -18 -11 -18 11 5 -20 -15 -13 20 -2z"/><path d="M4 850 c10 -18 26 -18 34 0 s24 18 34 0"/><path d="M14 950 h32 M30 934 v32"/></g></svg>
+    <svg class="sd-r" viewBox="0 0 60 1000" preserveAspectRatio="xMidYMin meet"><g class="deco-line" stroke="currentColor"><path d="M10 40 c10 -18 30 -18 40 0 s30 18 40 0"/><path d="M30 120 l8 18 20 2 -15 13 5 20 -18 -11 -18 11 5 -20 -15 -13 20 -2z"/><path d="M30 260 c-12 -15 -34 -5 -26 12 c5 10 26 24 26 24 s21 -14 26 -24 c8 -17 -14 -27 -26 -12z"/><path d="M8 380 L52 336 M14 400 L56 358"/><circle cx="30" cy="470" r="16"/><path d="M30 486 v48 m0 -30 l-20 14 m20 -14 l20 14 m-20 30 l-16 30 m16 -30 l16 30"/><path d="M10 660 c10 -18 30 -18 40 0"/><path d="M30 740 l8 18 20 2 -15 13 5 20 -18 -11 -18 11 5 -20 -15 -13 20 -2z"/><path d="M14 880 l32 -32 M14 848 l32 32"/><circle cx="30" cy="960" r="10"/></g></svg>
   </div>
   <div class="fd-status">
     <div style="justify-self:start;"><button class="ghost small menu-open-btn leave-btn" title="Menü" aria-label="Menü megnyitása"><span class="leave-ico">☰</span> <span class="leave-txt">Menü</span></button></div>
@@ -10807,6 +10817,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.23', changes:[
+      'Nagy képernyőn a rajzoló két oldalán a krétafirkák most a teljes magasságot kitöltik, és nem lógnak a rajzlap alá.',
+      'Telefonon is új külső: a tippelőnél logó a felső sáv alatt, krétafirkás háttér, kártyás tippmező és tipplista; a rajzolónál lekerekített rajzlap és eszköztár.'
+    ]},
     { version:'3.22', changes:[
       'Nagy képernyőn a rajzoló és a tippelő nézet is keretes táblán jelenik meg, fent középen a logóval, jobbra az időzítővel, a két oldalon halvány krétafirkákkal, így nem marad üres a kép széle.',
       'A tippelőnél: „Tippeld meg, mit rajzol!” cím, sárga papírrepülő küldés gomb, „Korábbi tippek” lista.'
