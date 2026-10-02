@@ -1462,8 +1462,6 @@
   #screen-fulldraw .swatch.selected{ box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--yellow); }
 
   /* guesser */
-  body:has(.board.wide-mode) #main-board{ background:transparent; border-color:transparent; box-shadow:none; }
-  body:has(.board.wide-mode) #main-board::before{ display:none; }
   #watch-roster{ background:var(--bg) !important; box-shadow:0 10px 12px -10px rgba(0,0,0,.6) !important; border-radius:0 0 12px 12px; }
   #watch-round-indicator{ border-radius:12px !important; font-weight:800; }
   #screen-watch .canvas-area{ border-radius:16px !important; padding:0 !important; position:relative;
@@ -1481,6 +1479,41 @@
   #screen-watch .guess-feed .gentry.correct{ border-color:color-mix(in srgb, var(--green) 45%, transparent); }
   #screen-watch .guess-feed .gentry.close{ border-color:color-mix(in srgb, var(--yellow) 45%, transparent); }
   #watch-waiting{ border-radius:16px; }
+  /* ===== v3.22: framed board + logo on big screens (drawer & guesser) ===== */
+  .mini-logo{ display:inline-flex; align-items:flex-end; gap:2px; font-family:'Kalam',cursive; font-weight:700; line-height:1; position:relative; font-size:2.2rem; transform:rotate(-3deg); white-space:nowrap; }
+  .mini-logo .lw-a{ color:var(--chalk); text-shadow:0 3px 0 rgba(0,0,0,.35); } .mini-logo .lw-b{ color:var(--yellow); text-shadow:0 3px 0 rgba(0,0,0,.35); }
+  .mini-logo .ml-crown{ position:absolute; left:-.1em; top:-.45em; width:.6em; color:var(--yellow); transform:rotate(-12deg); }
+  .mini-logo .ml-pencil{ width:.9em; height:1.2em; }
+  .fd-logo, .watch-logo-slot .mini-logo, .fd-side-deco{ display:none; }
+  #btn-watch-guess{ background:var(--yellow) !important; color:#16302A !important; display:inline-flex; align-items:center; justify-content:center; min-width:52px;
+    box-shadow:0 4px 0 color-mix(in srgb, var(--yellow) 50%, black) !important; }
+  #screen-watch .guess-inputs h3{ font-family:'Nunito',sans-serif !important; font-style:normal !important; color:var(--chalk) !important; font-weight:800 !important; }
+  #screen-watch .guess-feed h3{ font-family:'Nunito',sans-serif !important; font-style:normal !important; color:var(--chalk-dim) !important; font-weight:800 !important; }
+  @media (min-width:1100px) and (min-height:640px){
+    /* drawer: the whole screen sits on a framed board, like the other screens */
+    #screen-fulldraw{ isolation:isolate; padding:18px 22px; }
+    #screen-fulldraw::before{ content:""; position:absolute; top:12px; bottom:12px; left:12px; right:12px; max-width:1640px; margin:0 auto;
+      border-radius:28px; background:var(--panel); border:2px solid color-mix(in srgb, var(--green) 30%, transparent);
+      box-shadow:0 30px 60px -20px rgba(0,0,0,.55), 0 0 40px -12px color-mix(in srgb, var(--green) 35%, transparent); z-index:-1; pointer-events:none; }
+    #screen-fulldraw > .fd-status, #screen-fulldraw > #fd-roster, #screen-fulldraw > #fd-content-wrap, #screen-fulldraw > .fd-toolbar{
+      width:100%; max-width:1580px; margin-left:auto; margin-right:auto; }
+    #screen-fulldraw > #fd-content-wrap{ flex:1 1 auto; min-height:0; }
+    body:not(.fabs-top) #screen-fulldraw .fd-status{ grid-template-areas:"menu logo timer" "word word word" !important; padding-top:10px; }
+    body:not(.fabs-top) #screen-fulldraw .fd-status #fd-timer{ justify-self:end; font-size:1.6rem; padding:6px 18px 6px 8px; }
+    body:not(.fabs-top) #screen-fulldraw .fd-logo{ display:block; grid-area:logo; justify-self:center; }
+    #screen-fulldraw .fd-word-text{ font-size:2.4rem; }
+    .fd-side-deco{ display:block; position:absolute; inset:0; pointer-events:none; z-index:-1; color:var(--chalk); opacity:.16; }
+    .fd-side-deco svg{ position:absolute; top:180px; width:110px; }
+    .fd-side-deco .sd-l{ left:max(40px, calc(50% - 800px)); } .fd-side-deco .sd-r{ right:max(40px, calc(50% - 800px)); }
+    #screen-fulldraw .fd-toolbar{ margin-bottom:14px !important; }
+    /* guesser: logo in the middle of the top bar, timer to the right */
+    body:not(.fabs-top) #screen-watch .watch-top .watch-logo-slot{ order:2; justify-self:center; }
+    body:not(.fabs-top) #screen-watch .watch-top .watch-logo-slot .mini-logo{ display:inline-flex; }
+    body:not(.fabs-top) #screen-watch .watch-top .timer{ order:3; justify-self:end; font-size:1.6rem; padding:6px 18px 6px 8px; }
+    .board.wide-mode{ max-width:1640px; }
+    #screen-fulldraw .mini-logo, #screen-watch .mini-logo{ font-size:2.7rem; }
+    #watch-roster{ background:transparent !important; box-shadow:none !important; }
+  }
 </style>
 </head>
 <body>
@@ -1751,7 +1784,7 @@
         <div id="watch-round-indicator" class="challenge-chip" style="background:rgba(0,0,0,0.2);border-style:solid;border-color:rgba(244,241,230,0.2);color:var(--chalk-dim);"></div>
       </div>
       <div class="timer" id="watch-timer">--</div>
-      <div></div>
+      <div class="watch-logo-slot"><span class="mini-logo" aria-hidden="true"><svg class="ml-crown" viewBox="0 0 40 32"><path class="deco-line" stroke="currentColor" d="M5 26 L3 7 L13 15 L20 3 L27 15 L37 7 L35 26 Z"/></svg><span class="lw-a">PIC-</span><span class="lw-b">ASS-O</span><svg class="ml-pencil" viewBox="0 0 60 80"><g transform="rotate(32 30 40)"><rect x="20" y="4" width="20" height="10" rx="4" style="fill:var(--pink)"/><rect x="20" y="13" width="20" height="7" fill="#c9ced3"/><rect x="20" y="20" width="20" height="40" style="fill:var(--yellow)"/><path d="M20 60 L40 60 L30 78 Z" fill="#f1d3a8"/><path d="M26.6 71.5 L33.4 71.5 L30 78 Z" fill="#3a3a3a"/></g></svg></span></div>
     </div>
     <div class="roster" id="watch-roster" aria-label="Játékosok a szobában"></div>
     <div id="watch-waiting" class="waiting-banner hidden">
@@ -1763,14 +1796,14 @@
         <div class="canvas-area"><div class="timebar" id="watch-timebar" aria-hidden="true"><i></i></div><div id="watch-hint-chip" class="hidden" aria-live="polite"></div><canvas id="watch-canvas" width="900" height="500"></canvas></div>
         <div class="guess-sidebar">
           <div class="guess-inputs">
-            <h3>Tipped</h3>
+            <h3>Tippeld meg, mit rajzol!</h3>
             <div class="guess-row">
-              <input type="text" id="watch-guess-input" placeholder="Ide írd a tippet...">
-              <button class="small" id="btn-watch-guess">Küld</button>
+              <input type="text" id="watch-guess-input" placeholder="Ide írd a tipped…" aria-label="Tipp">
+              <button class="small" id="btn-watch-guess" aria-label="Tipp elküldése" title="Küld"><svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg></button>
             </div>
           </div>
           <div class="guess-feed">
-            <h3>Eddigi tippek</h3>
+            <h3>Korábbi tippek</h3>
             <div id="watch-guess-feed"></div>
           </div>
         </div>
@@ -1932,6 +1965,20 @@
 </div>
 
 <div id="screen-fulldraw" class="hidden">
+  <div class="fd-side-deco" aria-hidden="true">
+    <svg class="sd-l" viewBox="0 0 120 520"><g class="deco-line" stroke="currentColor">
+      <path d="M30 120 L80 30 L98 40 L48 130 L26 140 Z M72 44 L90 54"/>
+      <path d="M40 210 l8 18 20 2 -15 13 5 20 -18 -11 -18 11 5 -20 -15 -13 20 -2z"/>
+      <path d="M20 330 c15 -25 40 -25 50 0 s35 25 50 0"/>
+      <circle cx="55" cy="400" r="18"/><path d="M55 418 v50 m0 -30 l-24 18 m24 -18 l26 -10 m-26 40 l-18 32 m18 -32 l20 30"/>
+    </g></svg>
+    <svg class="sd-r" viewBox="0 0 120 520"><g class="deco-line" stroke="currentColor">
+      <path d="M30 60 l10 -22 10 22 -22 -14 h24 z"/>
+      <path d="M20 170 c15 -25 40 -25 50 0 s35 25 50 0"/>
+      <path d="M60 250 c-14 -18 -40 -6 -30 14 c6 12 30 28 30 28 s24 -16 30 -28 c10 -20 -16 -32 -30 -14z"/>
+      <path d="M30 380 L90 320 M40 400 L100 340"/>
+    </g></svg>
+  </div>
   <div class="fd-status">
     <div style="justify-self:start;"><button class="ghost small menu-open-btn leave-btn" title="Menü" aria-label="Menü megnyitása"><span class="leave-ico">☰</span> <span class="leave-txt">Menü</span></button></div>
     <div class="fd-word-bar" id="fd-word-bar">
@@ -1940,6 +1987,7 @@
       <span class="tier-badge" id="fd-tier-badge"></span>
     </div>
     <div class="timer" id="fd-timer">--</div>
+    <div class="fd-logo"><span class="mini-logo" aria-hidden="true"><svg class="ml-crown" viewBox="0 0 40 32"><path class="deco-line" stroke="currentColor" d="M5 26 L3 7 L13 15 L20 3 L27 15 L37 7 L35 26 Z"/></svg><span class="lw-a">PIC-</span><span class="lw-b">ASS-O</span><svg class="ml-pencil" viewBox="0 0 60 80"><g transform="rotate(32 30 40)"><rect x="20" y="4" width="20" height="10" rx="4" style="fill:var(--pink)"/><rect x="20" y="13" width="20" height="7" fill="#c9ced3"/><rect x="20" y="20" width="20" height="40" style="fill:var(--yellow)"/><path d="M20 60 L40 60 L30 78 Z" fill="#f1d3a8"/><path d="M26.6 71.5 L33.4 71.5 L30 78 Z" fill="#3a3a3a"/></g></svg></span></div>
   </div>
   <div class="roster" id="fd-roster" aria-label="Játékosok a szobában"></div>
   <div id="fd-content-wrap">
@@ -10759,6 +10807,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.22', changes:[
+      'Nagy képernyőn a rajzoló és a tippelő nézet is keretes táblán jelenik meg, fent középen a logóval, jobbra az időzítővel, a két oldalon halvány krétafirkákkal, így nem marad üres a kép széle.',
+      'A tippelőnél: „Tippeld meg, mit rajzol!” cím, sárga papírrepülő küldés gomb, „Korábbi tippek” lista.'
+    ]},
     { version:'3.21', changes:[
       'A rajzoló és a tippelő képernyő is megkapta a krétatáblás külsőt: lekerekített rajzlap árnyékkal, kártyás tipplista buborékokban, sötét eszköztár-sáv, egységes menü- és időzítőgombok, kiemelt saját szín és aktív eszköz.'
     ]},
