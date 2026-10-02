@@ -161,6 +161,9 @@
   @media (pointer:coarse){ input[type=text], input[type=password], input:not([type]), textarea, select{ font-size:max(16px, 1em) !important; } }
   .sr-only{ position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
   :focus-visible{ outline:3px solid var(--yellow); outline-offset:2px; }
+  .lobby-words{ max-width:560px; margin:16px auto 0; text-align:left; }
+  #lobby-words-input{ width:100%; background:rgba(0,0,0,.28); color:var(--chalk); border:1.5px solid rgba(244,241,230,.22); border-radius:12px; padding:11px 13px; font-size:1rem; font-family:'Nunito',sans-serif; resize:vertical; min-height:70px; }
+  #lobby-words-input:focus{ outline:none; border-color:var(--yellow); }
   #custom-words-input{ width:100%; padding:11px 13px; border-radius:10px; border:none; font-size:1rem; font-family:'Nunito',sans-serif; resize:vertical; min-height:70px; }
   .custom-words-count{ font-size:.75rem; color:var(--chalk-dim); margin-top:4px; }
   .home-stats{ text-align:center; font-size:.85rem; color:var(--chalk-dim); margin-top:10px; }
@@ -1736,14 +1739,12 @@
       <p class="setup-hint">Tippelni mindig mindenki tud. Az első esetben az első jó tipp lezárja a kört, a másodikban a kör addig tart, amíg mindenki eltalálta (vagy lejár az idő). Minél gyorsabb valaki, annál több pontot kap. A rajzoló pontja attól függ, milyen gyorsan rajzolta le a szót: az utolsó módosításáig mérjük, és csak akkor jár, ha valaki kitalálta.</p>
     </div>
     <div class="setup-section">
-      <label class="field-label" for="custom-words-input">Saját szavak (nem kötelező)</label>
-      <textarea id="custom-words-input" rows="3" maxlength="6000" placeholder="Soronként vagy vesszővel elválasztva, pl. céges karácsony, Kari a macska, Szombathely"></textarea>
-      <div class="custom-words-count" id="custom-words-count">0 saját szó</div>
-      <div class="pill-row" id="customonly-row" style="margin-top:8px;">
+      <label class="field-label">Saját szavak a játékosoktól</label>
+      <div class="pill-row" id="customonly-row">
         <button class="pill active" data-customonly="mix">Keverve a beépítettekkel</button>
         <button class="pill" data-customonly="only">Csak a saját szavak</button>
       </div>
-      <p class="setup-hint">Legfeljebb 150 szó, egyenként max. 40 karakter. A lista minden játékos eszközére eljut, tehát ne írj bele titkot.</p>
+      <p class="setup-hint">A váróteremben minden játékos (te is) beírhat legfeljebb 15 saját szót. Ha valaki a saját beküldött szavát találja ki, elfogadjuk, de nem jár érte pont. Ha senki nem ír be semmit, a beépített szavakkal játszotok.</p>
     </div>
     <div class="start-btn-wrap" style="display:flex;justify-content:center;margin-top:24px;">
       <button class="big" id="btn-create-room" style="background:var(--green);">Szoba létrehozása 🎉</button>
@@ -1784,6 +1785,13 @@
     <div class="player-list" id="lobby-players"></div>
     <div id="lobby-diag" class="diag-box hidden"></div>
     <p class="center-note" id="lobby-count-note"></p>
+    <div class="lobby-words" id="lobby-words-box">
+      <label class="field-label" for="lobby-words-input">Saját szavaid (nem kötelező)</label>
+      <textarea id="lobby-words-input" rows="3" maxlength="1200" autocomplete="off" spellcheck="false" placeholder="Soronként vagy vesszővel elválasztva, pl. céges karácsony, Kari a macska, Szombathely"></textarea>
+      <div class="custom-words-count" id="lobby-words-count">0 / 15 szó</div>
+      <p class="setup-hint">Mindenki beküldhet legfeljebb 15 szót, a többiekét nem látod. A saját szavadat is rajzolhatod, és ha a te szavadat kell kitalálni, a tipped elfogadjuk, de nem jár érte pont.</p>
+      <p class="center-note" id="lobby-words-summary" style="margin:6px 0 0;"></p>
+    </div>
     <p class="center-note hidden" id="lobby-notify" style="font-size:.85rem;">
       <span id="lobby-notify-text"></span>
       <button class="ghost small hidden" id="btn-enable-notify" style="margin-left:6px;">🔔 Bekapcsolás</button>
@@ -2746,6 +2754,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   const MAX_TOTAL_POINTS = 40000;      // points in one drawing
   const MAX_CHAT_CHARS = 400;
   const MAX_CUSTOM_WORDS = 150, MAX_CUSTOM_WORD_LEN = 40;   // v3.18: own words per room
+  const MAX_WORDS_PER_PLAYER = 15;                            // v3.25: every player may add this many
   const MAX_VOICE_CHARS = 800000;      // ~600 kB of audio, far above a 15 s clip
   const MAX_KNOWN_ROOMS = 120;
 
@@ -3667,7 +3676,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   };
   // v3.18: built-in words plus the room's own ones
   function customWordItems(){
-    return (settings && Array.isArray(settings.customWords) ? settings.customWords : []).map(w=>({ w, tier:'sajat' }));
+    return (settings && Array.isArray(settings.customWords) ? settings.customWords : [])
+      .map(e=>isPlainObject(e) ? { w:String(e.w || ''), tier:'sajat' } : { w:String(e || ''), tier:'sajat' }).filter(e=>e.w);
+  }
+  // v3.25: who sent this word in (they get no points for guessing it)
+  function wordAuthors(word){
+    const k = squash(word), out = new Set();
+    if(!k || !settings || !Array.isArray(settings.customWords)) return out;
+    settings.customWords.forEach(e=>{ if(isPlainObject(e) && squash(e.w) === k && Array.isArray(e.by)) e.by.forEach(id=>out.add(id)); });
+    return out;
   }
   function pickWordAvoidingRepeats(difficulties, usedWords){
     const tiers = Array.isArray(difficulties) && difficulties.length ? difficulties : ['konnyu','kozepes'];
@@ -4801,7 +4818,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         totalRounds: settings.totalRounds, roundTime: settings.roundTime,
         hintsEnabled: settings.hintsEnabled, maxPlayers: settings.maxPlayers, wordChoices: settings.wordChoices,
         guessMode: settings.guessMode,
-        customWords: settings.customWords, customOnly: settings.customOnly,
+        customOnly: settings.customOnly,
         visibility: vis ? vis.dataset.visibility : 'private',
         roomName: document.getElementById('room-name-input').value.slice(0,30)
       }));
@@ -4829,19 +4846,69 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     settings.guessMode = pick('guessmode-row', 'guessmode', p.guessMode === 'all' ? 'all' : 'first', 'first') === 'all' ? 'all' : 'first';
     roomIsPublic = pick('visibility-row', 'visibility', p.visibility, 'private') === 'public';
     if(typeof p.roomName === 'string') document.getElementById('room-name-input').value = p.roomName.slice(0,30);
-    settings.customWords = cleanCustomWords(p.customWords);
+    settings.customWords = [];
     settings.customOnly = pick('customonly-row', 'customonly', p.customOnly ? 'only' : 'mix', 'mix') === 'only';
-    const cwi = document.getElementById('custom-words-input');
-    if(cwi){ cwi.value = settings.customWords.join('\n'); updateCustomWordsCount(); }
+
   }
-  function updateCustomWordsCount(){
-    const el = document.getElementById('custom-words-count');
-    if(el) el.textContent = `${settings.customWords.length} saját szó` + (settings.customWords.length >= MAX_CUSTOM_WORDS ? ' (elérted a maximumot)' : '');
+  // ---- v3.25: own words, collected in the lobby from every player ----
+  const MY_WORDS_KEY = 'picasso-my-words';
+  let cwordsAction = null;
+  let lobbyCustom = {};          // host only: peerId -> [words]
+  const cwordsLastAt = {};
+  let myWordsSendTimer = 0;
+  function myWords(){
+    const el = document.getElementById('lobby-words-input');
+    return cleanCustomWords(el ? el.value : '').slice(0, MAX_WORDS_PER_PLAYER);
   }
-  document.getElementById('custom-words-input').addEventListener('input', (e)=>{
-    settings.customWords = cleanCustomWords(e.target.value);
-    updateCustomWordsCount();
-  });
+  function updateMyWordsCount(){
+    const n = myWords().length, el = document.getElementById('lobby-words-count');
+    if(el) el.textContent = `${n} / ${MAX_WORDS_PER_PLAYER} szó` + (cleanCustomWords(document.getElementById('lobby-words-input').value).length > MAX_WORDS_PER_PLAYER ? ' (a többit nem küldjük el)' : '');
+  }
+  function sendMyWords(){
+    const words = myWords();
+    try{ localStorage.setItem(MY_WORDS_KEY, JSON.stringify(words)); }catch(e){}
+    if(isHost){ lobbyCustom[selfId] = words; broadcastWordsSummary(); return; }
+    if(cwordsAction && hostPeerId && !meta){ try{ cwordsAction.send({ words }, { target: hostPeerId }); }catch(e){} }
+  }
+  function wordsSummaryText(players, words){
+    return words ? `📝 Eddig ${players} játékos összesen ${words} saját szót küldött be.` : '📝 Még senki nem küldött be saját szót.';
+  }
+  function broadcastWordsSummary(){
+    if(!isHost) return;
+    const ids = Object.keys(lobbyCustom).filter(id=>id === selfId || lobbyPlayers[id]);
+    const players = ids.filter(id=>lobbyCustom[id].length).length;
+    const words = ids.reduce((a,id)=>a + lobbyCustom[id].length, 0);
+    const el = document.getElementById('lobby-words-summary'); if(el) el.textContent = wordsSummaryText(players, words);
+    if(cwordsAction){ try{ cwordsAction.send({ summary:{ players, words } }); }catch(e){} }
+  }
+  // the host turns the submissions into the room's word list at game start
+  function buildCustomEntries(ids){
+    const list = [];
+    ids.forEach(id=>(lobbyCustom[id] || []).forEach(w=>list.push({ w, by:[id] })));
+    return cleanCustomEntries(list);
+  }
+  function handleCwordsMessage(data, peerId){
+    if(!isPlainObject(data)) return;
+    if(isHost){
+      if(meta || !lobbyPlayers[peerId] || !Array.isArray(data.words)) return;   // lobby only
+      const now = Date.now(); if(now - (cwordsLastAt[peerId] || 0) < 300) return; cwordsLastAt[peerId] = now;
+      lobbyCustom[peerId] = cleanCustomWords(data.words).slice(0, MAX_WORDS_PER_PLAYER);
+      broadcastWordsSummary();
+    } else if(peerId === hostPeerId && isPlainObject(data.summary)){
+      const el = document.getElementById('lobby-words-summary');
+      if(el) el.textContent = wordsSummaryText(clampNum(data.summary.players, 0, 40, 0), clampNum(data.summary.words, 0, 1000, 0));
+    }
+  }
+  (function setupMyWords(){
+    const el = document.getElementById('lobby-words-input');
+    try{ const saved = JSON.parse(localStorage.getItem(MY_WORDS_KEY) || '[]'); if(Array.isArray(saved)) el.value = cleanCustomWords(saved).slice(0, MAX_WORDS_PER_PLAYER).join('\n'); }catch(e){}
+    updateMyWordsCount();
+    el.addEventListener('input', ()=>{
+      updateMyWordsCount();
+      clearTimeout(myWordsSendTimer);
+      myWordsSendTimer = setTimeout(sendMyWords, 700);
+    });
+  })();
   document.querySelectorAll('#customonly-row .pill').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       sndClick();
@@ -4970,6 +5037,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     reactionAction = room.makeAction('reaction');
     byeAction = room.makeAction('bye');
     chatReactAction = room.makeAction('chatreact');   // emoji reaction to one chat message
+    cwordsAction = room.makeAction('cwords');          // v3.25: guest -> host: own words; host -> all: summary
+    cwordsAction.onMessage = (data, {peerId})=>handleCwordsMessage(data, peerId);
     lateJoinAction = room.makeAction('latejoin');     // host -> everybody: someone joined the running game
     lateSyncAction = room.makeAction('latesync');     // host -> the newcomer: the full state of the game
     rematchVoteAction = room.makeAction('rmvote');     // "yes, I want another game" — a "no" just leaves the room
@@ -5270,6 +5339,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         (hostPeerId === null || hostPeerId === peerId || (!lobbyPlayers[hostPeerId] && !activePlayerIds.has(hostPeerId)));
       if(hostClaimAccepted){
         hostPeerId = peerId;
+        setTimeout(sendMyWords, 400);   // v3.25: my own words to the (new) host
         if(data.roomName){
           currentRoomName = cleanText(data.roomName, 60);
           document.getElementById('lobby-room-name').textContent = currentRoomName;
@@ -5419,10 +5489,21 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       // (their further "guesses" could only give the answer away)
       if(multi && roundHits.some(h=>h.pid === peerId)) return;
       const name = displayNameFor(peerId, data && data.name);
+      if(ownWordDone.key === roundKey(currentRound) && ownWordDone.ids.has(peerId)) return;
       const verdict = guessVerdict(text, currentRound.word);
       const correct = verdict === 'correct';
       const gid = ++guessSeq;
       const rk = roundKey(currentRound);
+      // v3.25: their own word — accepted, but only they hear about it, and it
+      // neither scores nor ends the round
+      if(correct && wordAuthors(currentRound.word).has(peerId)){
+        if(ownWordDone.key !== rk) ownWordDone = { key: rk, ids: new Set() };
+        ownWordDone.ids.add(peerId);
+        try{ feedAction.send({ pid:peerId, name, text, correct:true, own:true, gid, r: rk, w: currentRound.word }, { target: peerId }); }catch(e){}
+        routeGuessEntry(peerId, name, '🔒 saját szavát találta ki (0 pont)', false, gid);
+        drawerCheckAllGuessed();
+        return;
+      }
       if(multi && correct){
         // In "everyone can guess" mode the round goes on, so the right answer
         // must not reach the others: only the guesser gets their own text back.
@@ -5462,6 +5543,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const pid = cleanPeerId(data.pid);
       const gid = data.r === roundKey(currentRound) ? clampNum(data.gid, 1, 1e6, 0) : 0;
       const text = cleanText(data.text, 80);
+      if(data.correct && pid === selfId && data.own === true){
+        markMyRoundHit(cleanText(data.w, 60) || text);
+        const input = document.getElementById('watch-guess-input');
+        if(input) input.placeholder = '🔒 Ez a te szavad volt — nem jár érte pont, várd meg a többieket…';
+        showFxBanner('Ez a te szavad! 🔒', 'Elfogadtuk, de a saját szavadért nem jár pont');
+        routeGuessEntry(pid, cleanText(data.name, 16), text + ' (saját szó, 0 pont)', false, gid);
+        return;
+      }
       if(data.correct && pid === selfId && settings.guessMode === 'all') markMyRoundHit(cleanText(data.w, 60) || text);
       routeGuessEntry(pid, cleanText(data.name, 16), text, !!data.correct, gid);
     };
@@ -5782,6 +5871,22 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     }
     return out;
   }
+  // v3.25: the room's own words, each with the players who sent it in
+  // ({ w, by:[peerId…] }). Plain strings from older versions have no author.
+  function cleanCustomEntries(raw){
+    const byKey = new Map();
+    (Array.isArray(raw) ? raw : []).slice(0, 600).forEach(item=>{
+      const w0 = isPlainObject(item) ? item.w : item;
+      const w = cleanText(w0, MAX_CUSTOM_WORD_LEN).replace(/\s+/g, ' ').trim();
+      if(w.length < 2) return;
+      const k = squash(w);
+      if(!k) return;
+      const by = isPlainObject(item) && Array.isArray(item.by) ? item.by.slice(0, 20).map(cleanPeerId).filter(Boolean) : [];
+      if(byKey.has(k)){ const e = byKey.get(k); by.forEach(id=>{ if(!e.by.includes(id)) e.by.push(id); }); }
+      else if(byKey.size < MAX_CUSTOM_WORDS) byKey.set(k, { w, by });
+    });
+    return [...byKey.values()];
+  }
   function sanitizeSettings(st){
     const s = isPlainObject(st) ? st : {};
     const out = {
@@ -5792,7 +5897,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       hintsEnabled: s.hintsEnabled !== false,
       wordChoices: WORD_CHOICE_OPTIONS.includes(Number(s.wordChoices)) ? Number(s.wordChoices) : 3,
       guessMode: s.guessMode === 'all' ? 'all' : 'first',
-      customWords: cleanCustomWords(s.customWords),
+      customWords: cleanCustomEntries(s.customWords),
       customOnly: s.customOnly === true
     };
     if(out.difficulties.length === 0) out.difficulties = ['konnyu','kozepes'];
@@ -5975,6 +6080,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!meta || !meta.playerNames[oldId] || oldId === newId) return;
     scores[newId] = (scores[newId]||0) + (scores[oldId]||0);
     delete scores[oldId];
+    if(settings && Array.isArray(settings.customWords)) settings.customWords.forEach(e=>{
+      if(isPlainObject(e) && Array.isArray(e.by)) e.by = e.by.map(id=> id === oldId ? newId : id);
+    });
     meta.turnOrder = meta.turnOrder.map(id=> id === oldId ? newId : id);
     if(gameStats.drawerPoints[oldId]){
       gameStats.drawerPoints[newId] = (gameStats.drawerPoints[newId]||0) + gameStats.drawerPoints[oldId];
@@ -6153,6 +6261,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       resultAction = scoreAction = chatAction = typingAction = kickAction = hintAction =
       reactionAction = byeAction = chatReactAction = lateJoinAction = lateSyncAction =
       rematchVoteAction = turnSyncAction = closeMarkAction = voteKickAction = null;
+      cwordsAction = null; lobbyCustom = {};
+      const ws = document.getElementById('lobby-words-summary'); if(ws) ws.textContent = '';
   }
 
   function connect(code, opts){
@@ -8471,6 +8581,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     sndWhoosh();
     const turnOrder = buildTurnOrder(ids);
     const playerNames = {}; ids.forEach(id=>playerNames[id]=lobbyPlayers[id]);
+    lobbyCustom[selfId] = myWords();
+    settings.customWords = buildCustomEntries(ids);
     const payload = { settings, started:true, turnOrder, playerNames };
     settingsAction.send(payload);
     applyMeta(payload);
@@ -9939,7 +10051,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const hits = Array.isArray(result.hits) && result.hits.length
       ? result.hits
       : [{ pid: result.correctPlayerId, ms: Number(result.elapsedMs) || 0 }];
-    const guessers = hits.filter(h=>h && h.pid).map(h=>({ pid:h.pid, ms:Number(h.ms)||0, pts: roundPoints((Number(h.ms)||0)/1000) }));
+    const authors = wordAuthors(result.word);
+    const guessers = hits.filter(h=>h && h.pid && !authors.has(h.pid)).map(h=>({ pid:h.pid, ms:Number(h.ms)||0, pts: roundPoints((Number(h.ms)||0)/1000) }));
     let drawerPts = 0, drawMs = null;
     if(guessers.length){
       const dm = Number(result.drawMs);
@@ -9951,11 +10064,24 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // "Everyone can guess" mode, on the drawer's device: the round is over as
   // soon as every guesser still in the game has found the word.
   let roundHits = [];
+  let ownWordDone = { key:'', ids:new Set() };   // v3.25: authors who found their own word this round
   function drawerCheckAllGuessed(){
-    if(settings.guessMode !== 'all' || !currentRound || currentRound.drawerId !== selfId || !meta) return;
-    if(processedResultRounds.has(roundKey(currentRound)) || !roundHits.length) return;
+    if(!currentRound || currentRound.drawerId !== selfId || !meta) return;
+    if(settings.guessMode !== 'all'){
+      // "first" mode: nothing to do unless everybody left is an author who already found it
+      if(processedResultRounds.has(roundKey(currentRound))) return;
+      const own = ownWordDone.key === roundKey(currentRound) ? ownWordDone.ids : new Set();
+      const eligible = [...activePlayerIds].filter(id=>id !== selfId && meta.playerNames[id]);
+      if(own.size && eligible.length && eligible.every(id=>own.has(id))) finishRoundAsDrawer({ type:'timeout' });
+      return;
+    }
+    if(processedResultRounds.has(roundKey(currentRound))) return;
+    const own = ownWordDone.key === roundKey(currentRound) ? ownWordDone.ids : new Set();
+    if(!roundHits.length && !own.size) return;
     const eligible = [...activePlayerIds].filter(id=>id !== selfId && meta.playerNames[id]);
-    if(eligible.length && eligible.every(id=>roundHits.some(h=>h.pid === id))) finishMultiRound('all');
+    const pending = eligible.filter(id=>!own.has(id));
+    if(!pending.length){ finishMultiRound('all'); return; }    // only authors were left
+    if(roundHits.length && pending.every(id=>roundHits.some(h=>h.pid === id))) finishMultiRound('all');
   }
   function finishMultiRound(kind){
     const eligible = meta ? [...activePlayerIds].filter(id=>id !== selfId && meta.playerNames[id]) : [];
@@ -10621,6 +10747,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // Only the players who are still here carry over — anyone who left in the
     // meantime must not come back as a "ghost" player.
     const playerNames = {}; ids.forEach(id=>{ playerNames[id] = meta.playerNames[id]; });
+    // v3.25: the words of those who stay (authors keep their own ids)
+    settings.customWords = (Array.isArray(settings.customWords) ? settings.customWords : [])
+      .map(e=>isPlainObject(e) ? { w:e.w, by:(e.by || []).filter(id=>ids.includes(id)) } : null)
+      .filter(e=>e && e.by.length);
     const payload = { settings, started:true, turnOrder, playerNames };
     settingsAction.send(payload);
     applyMeta(payload);
@@ -10817,6 +10947,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.25', changes:[
+      'Fair saját szavak: a váróteremben minden játékos beküldhet legfeljebb 15 saját szót, a többiekét nem látja. A szobanyitó csak azt dönti el, hogy ezek a beépítettekkel keverve vagy önmagukban legyenek.',
+      'Ha valaki a saját beküldött szavát találja ki, a tippjét elfogadjuk (csak ő látja), de nem jár érte pont, és a kört sem zárja le. A rajzoló pontjába sem számít bele. A saját szavadat te is rajzolhatod.',
+      'A beírt saját szavaidat az eszközöd megjegyzi a következő játékra.'
+    ]},
     { version:'3.24', changes:[
       'Javítva: gépen a tippmező (és a chat, a név, a szobanév és a szobakód mezője) alatt nem ajánl fel többé a böngésző vagy a jelszókezelő e-mail-címet, korábbi bevitelt vagy automatikus kitöltést.'
     ]},
