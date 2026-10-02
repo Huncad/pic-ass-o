@@ -2242,6 +2242,7 @@ const TURN_SERVERS = [];
 // The page then fetches fresh relay servers on start-up by itself. This key
 // is designed to be used in a public web page, but anyone who reads the page
 // source can use your monthly quota — if that ever happens, just rotate it.
+const TURN_PROXY_URL = '/.netlify/functions/turn';   // v3.19: key kept server-side
 const TURN_CREDENTIALS_URL = 'https://picasso-rajzjatek.metered.live/api/v1/turn/credentials?apiKey=cab1a96b2e22a2033a9994571959724d5143';
 // One shared ICE config object for the room list, the game room, and the
 // desktop-only secondary discovery network. All three read the SAME object,
@@ -4096,9 +4097,22 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       try{
         const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
         timer = setTimeout(()=>{ try{ ctrl && ctrl.abort(); }catch(e){} }, 7000);
-        const res = await fetch(TURN_CREDENTIALS_URL, ctrl ? { signal: ctrl.signal, cache:'no-store' } : { cache:'no-store' });
-        if(!res.ok) throw new Error('HTTP ' + res.status);
-        const list = await res.json();
+        // v3.19: first ask our own Netlify Function (the API key stays on the
+        // server); only if that fails, the old direct address is used.
+        let list = null;
+        try{
+          const ctrl2 = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+          const t2 = setTimeout(()=>{ try{ ctrl2 && ctrl2.abort(); }catch(e){} }, 3500);
+          const r2 = await fetch(TURN_PROXY_URL, ctrl2 ? { signal: ctrl2.signal, cache:'no-store' } : { cache:'no-store' });
+          clearTimeout(t2);
+          if(r2.ok){ const j = await r2.json(); if(Array.isArray(j) && j.length) list = j; }
+          clog('T10', list ? 'közvetítő-adatok a saját szerverfüggvényből' : `szerverfüggvény nem adott adatot (HTTP ${r2.status}), tartalék út`);
+        }catch(e){ clog('T11', 'szerverfüggvény nem érhető el, tartalék út'); }
+        if(!list){
+          const res = await fetch(TURN_CREDENTIALS_URL, ctrl ? { signal: ctrl.signal, cache:'no-store' } : { cache:'no-store' });
+          if(!res.ok) throw new Error('HTTP ' + res.status);
+          list = await res.json();
+        }
         // only well-formed turn:/turns: entries are kept (STUN is already set)
         const relays = (Array.isArray(list) ? list : []).filter(s=>{
           if(!s || typeof s !== 'object') return false;
@@ -10427,6 +10441,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.19', changes:[
+      'A közvetítő (TURN) szerver hozzáférési adatait a játék mostantól a saját Netlify szerverfüggvényétől kéri, így a szolgáltatás kulcsa nem látszik az oldal forrásában. Ha ez nem elérhető, a játék a korábbi módon működik tovább. Új naplókódok: T10, T11.'
+    ]},
     { version:'3.18', changes:[
       'Új: saját szavak. Szobanyitáskor beírhatsz legfeljebb 150 saját szót, és eldöntheted, hogy a beépítettekkel keverve vagy csak ezekből játszatok. Ilyenkor a választható szavak között mindig ott van legalább egy saját.',
       'Új: saját statisztika a kezdőképernyőn (játékok, győzelmek, legjobb eredmény). Csak ezen az eszközön tárolódik.',
