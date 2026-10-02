@@ -1617,6 +1617,18 @@
     padding:10px 18px; border-radius:999px; background:rgba(0,0,0,.7); color:var(--chalk); border:2px dashed rgba(244,241,230,.4); font-weight:800; font-size:.9rem; pointer-events:none; }
   #fab-reset-target.over{ background:var(--yellow); color:#16302A; border-color:var(--yellow); }
   #fab-reset-target.hidden{ display:none; }
+  /* v3.32: wide screens — the home screen goes side by side (logo | card), so
+     it is much less tall and the fit-to-window zoom can make it bigger */
+  @media (min-width:1200px) and (min-aspect-ratio:3/2){
+    body:not(.in-game) #main-board{ display:grid; grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);
+      grid-template-areas:"title home" "foot foot"; max-width:1440px; column-gap:44px; align-items:center; }
+    body:not(.in-game) #main-board > .title-row{ grid-area:title; }
+    body:not(.in-game) #main-board > #screen-home{ grid-area:home; margin:0; max-width:none; }
+    body:not(.in-game) #main-board > footer.hint{ grid-area:foot; }
+    body:not(.in-game) #main-board > #screen-error{ grid-column:1 / -1; }
+    body:not(.in-game) .title-row h1.logo{ font-size:clamp(3.4rem, 6vw, 5.6rem); }
+    body:not(.in-game) .title-row .subtitle{ font-size:1.2rem; max-width:420px; }
+  }
 </style>
 </head>
 <body>
@@ -4856,7 +4868,47 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const hasOwnControls = ['screen-home','screen-watch','screen-fulldraw'].some(id=>ids.includes(id));
     document.getElementById('settings-fab').classList.toggle('hidden', hasOwnControls);
     try{ musicScreensChanged(ids); }catch(e){}
+    setTimeout(fitMainBoard, 30);   // v3.32: grow the board on big screens
   }
+  // v3.32: on a big screen the board (home, room setup, lobby, results…) is
+  // enlarged so it fills the window as far as it can — like "zoom to fit".
+  // Small screens and the live drawing/guessing views are left untouched.
+  var fitBoardBusy = false, fitBoardNatural = '';
+  function fitMainBoard(){
+    const b = document.getElementById('main-board');
+    if(!b || fitBoardBusy) return;
+    const usable = !b.classList.contains('hidden') && !b.classList.contains('wide-mode');
+    const big = window.innerWidth >= 1200 && window.innerHeight >= 680;
+    if(!usable || !big){ if(b.style.zoom){ b.style.zoom = ''; } fitBoardNatural = ''; return; }
+    fitBoardBusy = true;
+    try{
+      b.style.zoom = '1';
+      const r = b.getBoundingClientRect();
+      if(!r.width || !r.height) return;
+      const availW = window.innerWidth - 64, availH = window.innerHeight - 56;
+      const fitH = availH / r.height, fitW = availW / r.width;
+      // fits in height: as big as both sides allow; a page that scrolls a lot
+      // anyway (room setup) gets a moderate enlargement; one that almost fits
+      // is left alone, so it doesn't start scrolling
+      let sc = fitH >= 1 ? Math.min(fitW, fitH) : (fitH < 0.75 ? Math.min(fitW, 1.2) : 1);
+      sc = Math.max(1, Math.min(1.8, sc));
+      b.style.zoom = sc > 1.02 ? sc.toFixed(3) : '';
+      fitBoardNatural = Math.round(r.width) + 'x' + Math.round(r.height);
+    } finally { fitBoardBusy = false; }
+  }
+  window.addEventListener('resize', ()=>{ clearTimeout(window.__fitT); window.__fitT = setTimeout(fitMainBoard, 120); });
+  // content that grows or shrinks (room list, players joining…) is re-fitted
+  try{
+    const ro = new ResizeObserver(()=>{
+      if(fitBoardBusy) return;
+      const b = document.getElementById('main-board');
+      const z = parseFloat(b.style.zoom) || 1, r = b.getBoundingClientRect();
+      const nat = Math.round(r.width / z) + 'x' + Math.round(r.height / z);
+      if(nat === fitBoardNatural) return;
+      clearTimeout(window.__fitR); window.__fitR = setTimeout(fitMainBoard, 150);
+    });
+    ro.observe(document.getElementById('main-board'));
+  }catch(e){}
 
   function fatalError(msg){
     document.getElementById('error-detail').textContent = msg;
@@ -11310,6 +11362,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.32', changes:[
+      'Széles képernyőn a kezdőképernyő két oszlopos: balra a logó, jobbra a kártya. Nagy képernyőn (pl. teljes képernyős gépen) a kezdőképernyő, a szobanyitás, a váróterem és az eredményképernyők arányosan felnagyítva kitöltik az ablakot. Telefonon és a rajzoló/tippelő nézetben semmi nem változik.'
+    ]},
     { version:'3.31', changes:[
       'Galéria: a rajzok alatt a kör tippjei is látszanak (ki mit tippelt, ✅ helyes, 🔥 közeli). A kártyán az utolsó 6, a rajzra koppintva az összes.',
       'Játék végén jól látható szavazópanel van a képernyő alján: hány igen van, ki mondott már igent, és egy visszaszámláló sáv. Az utolsó 10 másodpercben piros lesz és lüktet.'
