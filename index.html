@@ -161,6 +161,15 @@
   @media (pointer:coarse){ input[type=text], input[type=password], input:not([type]), textarea, select{ font-size:max(16px, 1em) !important; } }
   .sr-only{ position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
   :focus-visible{ outline:3px solid var(--yellow); outline-offset:2px; }
+  /* v3.26: wrapper forms only scope password managers — they take no space */
+  form.pw-form{ display:contents; }
+  .roundend-hold{ display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; margin-top:10px;
+    padding:10px 14px; border-radius:14px; background:rgba(0,0,0,.25); border:1.5px dashed rgba(244,241,230,.2); color:var(--chalk); font-size:.92rem; }
+  .roundend-hold.hidden{ display:none; }
+  #lastround-overlay{ position:fixed; inset:0; z-index:1000; background:rgba(10,20,16,0.88); display:flex; align-items:flex-start; justify-content:center; padding:20px; overflow-y:auto; }
+  #lastround-overlay.hidden{ display:none; }
+  #lastround-body .result-banner{ margin-top:6px; }
+  #btn-last-round{ padding:4px 10px; font-size:.82rem; }
   .lobby-words{ max-width:560px; margin:16px auto 0; text-align:left; }
   #lobby-words-input{ width:100%; background:rgba(0,0,0,.28); color:var(--chalk); border:1.5px solid rgba(244,241,230,.22); border-radius:12px; padding:11px 13px; font-size:1rem; font-family:'Nunito',sans-serif; resize:vertical; min-height:70px; }
   #lobby-words-input:focus{ outline:none; border-color:var(--yellow); }
@@ -1537,6 +1546,13 @@
     #screen-fulldraw #fd-canvas{ border-radius:12px !important; }
   }
   @media (max-height:600px) and (max-width:859px){ #screen-watch .watch-top .watch-logo-slot{ display:none; } }
+  /* v3.26: movable chat / reaction buttons */
+  #chat-toggle-btn, #reaction-toggle-btn{ touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  .fab-dragging{ transform:scale(1.15) !important; box-shadow:0 14px 30px rgba(0,0,0,.6), 0 0 0 3px var(--yellow) !important; cursor:grabbing !important; transition:none !important; animation:none !important; }
+  #fab-reset-target{ position:fixed; left:50%; top:calc(env(safe-area-inset-top, 0px) + 14px); transform:translateX(-50%); z-index:1200;
+    padding:10px 18px; border-radius:999px; background:rgba(0,0,0,.7); color:var(--chalk); border:2px dashed rgba(244,241,230,.4); font-weight:800; font-size:.9rem; pointer-events:none; }
+  #fab-reset-target.over{ background:var(--yellow); color:#16302A; border-color:var(--yellow); }
+  #fab-reset-target.hidden{ display:none; }
 </style>
 </head>
 <body>
@@ -1691,14 +1707,15 @@
     <div class="setup-section">
       <label class="field-label">Összesen hány kör legyen a játékban?</label>
       <div class="pill-row" id="rounds-row">
-        <button class="pill" data-rounds="2">2 kör</button>
+        <button class="pill" data-rounds="1">1 kör</button>
+        <button class="pill active" data-rounds="2">2 kör</button>
         <button class="pill" data-rounds="3">3 kör</button>
-        <button class="pill active" data-rounds="4">4 kör</button>
+        <button class="pill" data-rounds="4">4 kör</button>
+        <button class="pill" data-rounds="5">5 kör</button>
         <button class="pill" data-rounds="6">6 kör</button>
-        <button class="pill" data-rounds="10">10 kör</button>
-        <button class="pill" data-rounds="15">15 kör</button>
-        <button class="pill" data-rounds="20">20 kör</button>
+        <button class="pill" data-rounds="8">8 kör</button>
       </div>
+      <p class="setup-hint">Egy körben mindenki egyszer rajzol. 4 játékossal 2 kör például 8 rajzot jelent.</p>
     </div>
     <div class="setup-section">
       <label class="field-label">Mennyi idő jusson egy rajzra?</label>
@@ -1809,6 +1826,7 @@
     <div class="watch-top">
       <div class="watch-top-left">
         <button class="ghost small menu-open-btn leave-btn" title="Menü" aria-label="Menü megnyitása"><span class="leave-ico">☰</span> <span class="leave-txt">Menü</span></button>
+        <button class="ghost small hidden" id="btn-last-round" type="button" title="Az előző kör eredménye" aria-label="Az előző kör eredménye">📋 Előző kör</button>
         <div id="watch-round-indicator" class="challenge-chip" style="background:rgba(0,0,0,0.2);border-style:solid;border-color:rgba(244,241,230,0.2);color:var(--chalk-dim);"></div>
       </div>
       <div class="timer" id="watch-timer">--</div>
@@ -1826,7 +1844,7 @@
           <div class="guess-inputs">
             <h3>Tippeld meg, mit rajzol!</h3>
             <div class="guess-row">
-              <input type="text" id="watch-guess-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" placeholder="Ide írd a tipped…" aria-label="Tipp">
+              <form class="pw-form" autocomplete="off" onsubmit="return false" role="presentation"><input type="text" id="watch-guess-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" placeholder="Ide írd a tipped…" aria-label="Tipp"></form>
               <button class="small" id="btn-watch-guess" aria-label="Tipp elküldése" title="Küld"><svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg></button>
             </div>
           </div>
@@ -1846,6 +1864,10 @@
     <div style="text-align:center;margin-top:10px;">
       <button class="big" id="btn-next-round-mine" style="background:var(--green);">Én jövök — kezdem! 🎨</button>
       <div id="roundend-waiting-note" class="center-note hidden">Várakozás, amíg <span id="roundend-next-name">valaki</span> elindítja a következő kört…</div>
+      <div id="roundend-hold" class="roundend-hold hidden" role="status" aria-live="polite">
+        <span id="roundend-hold-text"></span>
+        <button class="secondary small" id="btn-roundend-continue" type="button">Tovább ▶</button>
+      </div>
       <p class="center-note" style="margin-top:14px;">
         <a href="#" class="leave-game-link" style="color:var(--chalk-dim);">← Kilépés a szobából</a>
       </p>
@@ -1918,6 +1940,15 @@
 </form>
 
 <div id="sr-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+<div id="lastround-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="lastround-title">
+  <div class="admin-box" style="max-width:520px;">
+    <div class="admin-panel-header">
+      <h2 id="lastround-title">📋 Az előző kör</h2>
+      <button class="ghost small" id="lastround-close-btn" aria-label="Bezárás">Bezárás ✕</button>
+    </div>
+    <div id="lastround-body"></div>
+  </div>
+</div>
 <div id="privacy-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
   <div class="admin-box" style="max-width:560px;">
     <div class="admin-panel-header">
@@ -2056,6 +2087,7 @@
     <div class="prep-logo" aria-hidden="true"><span class="lw-a">PIC-</span><span class="lw-b">ASS-O</span></div>
     <div class="drawer-tag">Te jössz!</div>
     <h2>Kör <span id="prep-round-num">1</span> / <span id="prep-round-total">1</span></h2>
+    <div class="center-note" id="prep-drawing-num" style="margin-top:2px;"></div>
     <div id="prep-word-hidden" style="color:var(--chalk-dim);margin:20px 0;">Három szó közül választhatsz 🙈 — csak te látod őket a saját eszközödön.</div>
     <div id="prep-word-shown" class="word-shown hidden"></div>
     <div id="prep-choices" class="prep-choices hidden"></div>
@@ -2110,7 +2142,7 @@
   </div>
   <div id="emoji-picker" class="hidden"></div>
   <div class="chat-input-row">
-    <input type="text" id="chat-text-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" maxlength="200" placeholder="Írj valamit...">
+    <form class="pw-form" autocomplete="off" onsubmit="return false" role="presentation"><input type="text" id="chat-text-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" maxlength="200" placeholder="Írj valamit..."></form>
     <button class="small" id="chat-emoji-btn" title="Emoji" aria-label="Emoji választó megnyitása">😊</button>
     <button class="small" id="chat-mic-btn" title="Hangüzenet" aria-label="Hangüzenet felvétele">🎙️</button>
     <button class="small" id="chat-send-btn">Küld</button>
@@ -2198,7 +2230,7 @@
 <div id="admin-overlay" class="hidden">
   <div id="admin-login-box" class="admin-box">
     <h2>🔒 Admin belépés</h2>
-    <input type="password" id="admin-password-input" placeholder="Jelszó">
+    <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-password-input" autocomplete="off" placeholder="Jelszó"></form>
     <div id="admin-login-warning" class="admin-warning"></div>
     <div class="admin-actions">
       <button class="secondary" id="admin-login-btn">Belépés</button>
@@ -2220,7 +2252,7 @@
       (a fül bezárásáig) — statikus oldalon ennél biztonságosabban nem tárolható, ezért ha végeztél, érdemes
       visszavonni a GitHubon.
       <div class="admin-add-row" style="margin-top:10px;">
-        <input type="password" id="admin-gh-token" placeholder="GitHub token (ghp_...)">
+        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-gh-token" autocomplete="off" placeholder="GitHub token (ghp_...)"></form>
       </div>
       <button class="secondary small" id="admin-create-gist-btn">☁️ Tárhely létrehozása</button>
       <div id="admin-cloud-status" class="admin-warning"></div>
@@ -2238,7 +2270,7 @@
       ☁️ Ez az oldal már élő tárhelyhez van kötve — a "Mentés élesben" gomb minden látogatónál azonnal frissíti a
       szavakat.
       <div class="admin-add-row" style="margin-top:10px;">
-        <input type="password" id="admin-gh-token-2" placeholder="GitHub token (ghp_...)">
+        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-gh-token-2" autocomplete="off" placeholder="GitHub token (ghp_...)"></form>
       </div>
       <button class="secondary small" id="admin-save-live-btn">☁️ Mentés élesben</button>
       <div id="admin-dirty-note" class="hidden" style="color:var(--yellow);font-weight:800;margin-top:6px;">⚠️ Mentetlen módosítások — a változások csak a „Mentés élesben” után jutnak el a játékosokhoz.</div>
@@ -2274,8 +2306,8 @@
       Az új jelszó (pontosabban egy sózott, lassított ujjlenyomata) az élő tárhelyre kerül, ugyanazzal a GitHub tokennel, mint a szavak.
       Mentés után minden eszközön az új jelszóval lehet belépni. Legalább 10 karakter legyen; egy hosszú, több szóból álló mondat a legjobb.
       <div class="admin-add-row" style="margin-top:8px;flex-direction:column;align-items:stretch;gap:6px;">
-        <input type="password" id="admin-newpw-1" placeholder="Új jelszó" autocomplete="new-password">
-        <input type="password" id="admin-newpw-2" placeholder="Új jelszó még egyszer" autocomplete="new-password">
+        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-newpw-1" placeholder="Új jelszó" autocomplete="new-password"></form>
+        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-newpw-2" placeholder="Új jelszó még egyszer" autocomplete="new-password"></form>
       </div>
       <button class="secondary small" id="admin-newpw-save" type="button" style="margin-top:6px;">🔑 Jelszó mentése élesben</button>
       <div id="admin-newpw-status" class="admin-warning" style="text-align:left;"></div>
@@ -2337,7 +2369,7 @@
           <input type="text" id="admin-music-repo" placeholder="GitHub tároló: felhasznalo/tarolo" autocomplete="off">
         </div>
         <div class="admin-add-row">
-          <input type="password" id="admin-music-token" placeholder="GitHub token (ghp_...)" autocomplete="off">
+          <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-music-token" placeholder="GitHub token (ghp_...)" autocomplete="off"></form>
         </div>
         <div class="admin-add-row">
           <input type="file" id="admin-music-file" accept=".mp3,audio/mpeg" multiple style="color:var(--chalk);">
@@ -2360,7 +2392,7 @@
       így nem lehet valóban biztonságosan tárolni, bármely, ezen az oldalon futó kód hozzáfér. Csak a legszűkebb
       jogosultságú tokent használd, és ha végeztél, vond vissza a fiókodban.
       <div class="admin-add-row" style="margin-top:10px;">
-        <input type="password" id="admin-fb-token" placeholder="Netlify token (nfp_...)" autocomplete="off">
+        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-fb-token" placeholder="Netlify token (nfp_...)" autocomplete="off"></form>
         <button class="secondary small" id="admin-fb-load">📬 Betöltés</button>
       </div>
       <div id="admin-fb-status" class="admin-warning" style="text-align:left;"></div>
@@ -4396,7 +4428,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let roomCode = '';
   let currentRoomName = '';
   let isHost = false;
-  let settings = { difficulties:['konnyu','kozepes'], totalRounds:4, roundTime:60, maxPlayers:0, hintsEnabled:true, wordChoices:3, guessMode:'first', customWords:[], customOnly:false };
+  let settings = { difficulties:['konnyu','kozepes'], totalRounds:2, roundTime:60, maxPlayers:0, hintsEnabled:true, wordChoices:3, guessMode:'first', customWords:[], customOnly:false };
   const WORD_CHOICE_OPTIONS = [1,2,3,5,7,10];
   let roomIsPublic = false;
 
@@ -4815,7 +4847,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const vis = document.querySelector('#visibility-row .pill.active');
       localStorage.setItem(CREATE_PREFS_KEY, JSON.stringify({
         difficulties: [...document.querySelectorAll('#difficulty-row .pill.active')].map(b=>b.dataset.tier),
-        totalRounds: settings.totalRounds, roundTime: settings.roundTime,
+        totalRounds: settings.totalRounds, roundsAreCycles: true, roundTime: settings.roundTime,
         hintsEnabled: settings.hintsEnabled, maxPlayers: settings.maxPlayers, wordChoices: settings.wordChoices,
         guessMode: settings.guessMode,
         customOnly: settings.customOnly,
@@ -4838,7 +4870,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const useTiers = tiers.length ? tiers : ['konnyu','kozepes'];
     document.querySelectorAll('#difficulty-row .pill').forEach(b=>b.classList.toggle('active', useTiers.includes(b.dataset.tier)));
     settings.difficulties = useTiers.slice();
-    settings.totalRounds = parseInt(pick('rounds-row', 'rounds', p.totalRounds, 4), 10);
+    settings.totalRounds = parseInt(pick('rounds-row', 'rounds', p.roundsAreCycles ? p.totalRounds : 2, 2), 10);
     settings.roundTime = parseInt(pick('time-row', 'time', p.roundTime, 60), 10);
     settings.hintsEnabled = pick('hints-row', 'hints', p.hintsEnabled === false ? 'off' : 'on', 'on') === 'on';
     settings.maxPlayers = parseInt(pick('maxplayers-row', 'maxplayers', p.maxPlayers, 0), 10);
@@ -5069,7 +5101,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     turnSyncAction.onMessage = (data, {peerId})=>{
       if(!meta || !isPlainObject(data) || peerId !== hostPeerId || isHost) return;
       if(!Array.isArray(data.turnOrder)) return;
-      const order = data.turnOrder.slice(0,100).map(cleanPeerId);
+      const order = data.turnOrder.slice(0,200).map(cleanPeerId);
       if(!order.length || !order.every(x=>meta.playerNames[x])) return;
       meta.turnOrder = order;
       if(showingRoundEnd && currentRound && processedResultRounds.has(roundKey(currentRound))){
@@ -5891,7 +5923,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const s = isPlainObject(st) ? st : {};
     const out = {
       difficulties: Array.isArray(s.difficulties) ? s.difficulties.filter(d=>d==='konnyu' || d==='kozepes') : [],
-      totalRounds: clampNum(s.totalRounds, 1, 60, 4),
+      totalRounds: clampNum(s.totalRounds, 1, 20, 2),
       roundTime: clampNum(s.roundTime, 10, 900, 60),
       maxPlayers: clampNum(s.maxPlayers, 0, 20, 0),
       hintsEnabled: s.hintsEnabled !== false,
@@ -5998,6 +6030,17 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(meta.turnOrder.slice(nextIdx + 1).some(id=>!activePlayerIds.has(id))) rebuildFutureTurns();
     try{ if(turnSyncAction) turnSyncAction.send({ turnOrder: meta.turnOrder }); }catch(e){}
     if(showingRoundEnd && roundDone) setupNextRoundControls(idx);
+  }
+  // v3.26: "Kör 2 / 3 · 4. rajz" — a round is one drawing per player
+  function drawingsPerRound(){
+    if(!meta) return 1;
+    return Math.max(1, Math.round(meta.turnOrder.length / Math.max(1, Number(settings && settings.totalRounds) || 1)));
+  }
+  function roundOfTurn(idx){ return Math.min(Math.max(1, Number(settings && settings.totalRounds) || 1), Math.floor(idx / drawingsPerRound()) + 1); }
+  function roundLabel(idx){
+    if(!meta) return '';
+    const per = drawingsPerRound(), total = Math.max(1, Number(settings && settings.totalRounds) || 1);
+    return `Kör ${roundOfTurn(idx)} / ${total}` + (per > 1 ? ` · ${(idx % per) + 1}/${per}. rajz` : '');
   }
   function rebuildFutureTurns(){
     const order = meta.turnOrder;
@@ -6137,7 +6180,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(scores[id] === undefined) scores[id] = 0;
     if(typeof info.avatar === 'string' && SAFE_COLOR_RE.test(info.avatar)) playerAvatars[id] = info.avatar;
     if(Array.isArray(info.turnOrder)){
-      const order = info.turnOrder.slice(0,100).map(cleanPeerId);
+      const order = info.turnOrder.slice(0,200).map(cleanPeerId);
       if(order.length && order.every(x=>meta.playerNames[x])) meta.turnOrder = order;
     }
     // the same announcement can legitimately arrive twice (host re-send):
@@ -6164,7 +6207,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function showLateWaiting(text){
     showOnly(['screen-watch']);
     document.getElementById('watch-round-indicator').textContent =
-      currentRound ? `Kör ${currentRound.idx+1} / ${meta.turnOrder.length}` : '';
+      currentRound ? roundLabel(currentRound.idx) : '';
     document.getElementById('watch-hint-chip').classList.add('hidden');
     document.getElementById('watch-waiting').classList.remove('hidden');
     document.getElementById('watch-live').classList.add('hidden');
@@ -7927,6 +7970,109 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   document.getElementById('chat-close-btn').addEventListener('click', ()=>{
     document.getElementById('chat-panel').classList.add('hidden');
   });
+  // =====================================================================
+  // v3.26: the chat and quick-reaction buttons can be moved anywhere —
+  // long-press (≈0.45 s), drag, release. Dropping one on the "alaphelyzet"
+  // target puts it back. Positions are kept per device, as fractions of
+  // the screen, so they survive rotation and resizing.
+  // =====================================================================
+  (function movableFabs(){
+    const KEY = 'picasso-fab-pos';
+    const FABS = { chat:'chat-toggle-btn', react:'reaction-toggle-btn' };
+    const POPUPS = { chat:'chat-panel', react:'reaction-picker' };
+    let saved = {}, anyDragging = false;
+    try{ const v = JSON.parse(localStorage.getItem(KEY) || '{}'); if(isPlainObject(v)) saved = v; }catch(e){}
+    const store = ()=>{ try{ localStorage.setItem(KEY, JSON.stringify(saved)); }catch(e){} };
+    const setPx = (el, x, y)=>{
+      el.style.setProperty('left', x + 'px', 'important'); el.style.setProperty('top', y + 'px', 'important');
+      el.style.setProperty('right', 'auto', 'important'); el.style.setProperty('bottom', 'auto', 'important');
+    };
+    const clearPx = el=>['left','top','right','bottom'].forEach(k=>el.style.removeProperty(k));
+    function clampPos(el, x, y){
+      const w = el.offsetWidth || 50, h = el.offsetHeight || 50, m = 6;
+      return [Math.min(Math.max(m, x), window.innerWidth - w - m), Math.min(Math.max(m, y), window.innerHeight - h - m)];
+    }
+    function apply(name){
+      const el = document.getElementById(FABS[name]);
+      if(!el) return;
+      const p = saved[name];
+      if(!p || !Number.isFinite(p.fx) || !Number.isFinite(p.fy)){ clearPx(el); if(el.classList.contains('fab-moved')) el.classList.remove('fab-moved'); return; }
+      const [x, y] = clampPos(el, p.fx * window.innerWidth, p.fy * window.innerHeight);
+      setPx(el, x, y); if(!el.classList.contains('fab-moved')) el.classList.add('fab-moved');
+    }
+    // the chat panel / reaction picker open next to a moved button
+    function placePopup(name){
+      const btn = document.getElementById(FABS[name]), pop = document.getElementById(POPUPS[name]);
+      if(!btn || !pop) return;
+      if(!saved[name] || pop.classList.contains('hidden')){ if(!saved[name]) clearPx(pop); return; }
+      const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight, m = 8;
+      let y = r.top - ph - 8;
+      if(y < m) y = r.bottom + 8;
+      if(y + ph > window.innerHeight - m) y = Math.max(m, window.innerHeight - ph - m);
+      let x = r.right - pw;
+      if(x < m) x = Math.min(r.left, window.innerWidth - pw - m);
+      x = Math.max(m, Math.min(x, window.innerWidth - pw - m));
+      setPx(pop, x, y);
+    }
+    const target = document.createElement('div');
+    target.id = 'fab-reset-target'; target.className = 'hidden'; target.setAttribute('aria-hidden', 'true');
+    target.textContent = '↺ Húzd ide az alaphelyzethez';
+    document.body.appendChild(target);
+    const overTarget = (cx, cy)=>{ const r = target.getBoundingClientRect(); return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom; };
+
+    Object.keys(FABS).forEach(name=>{
+      const el = document.getElementById(FABS[name]);
+      if(!el) return;
+      let timer = 0, dragging = false, startX = 0, startY = 0, offX = 0, offY = 0, suppressClick = false, pid = null;
+      const cancel = ()=>{ clearTimeout(timer); timer = 0; };
+      el.addEventListener('pointerdown', e=>{
+        if(e.button !== undefined && e.button !== 0) return;
+        startX = e.clientX; startY = e.clientY; pid = e.pointerId;
+        const r = el.getBoundingClientRect(); offX = e.clientX - r.left; offY = e.clientY - r.top;
+        cancel();
+        timer = setTimeout(()=>{
+          timer = 0; dragging = true; anyDragging = true; suppressClick = true;
+          try{ el.setPointerCapture(pid); }catch(err){}
+          el.classList.add('fab-dragging'); target.classList.remove('hidden');
+          document.getElementById(POPUPS[name]).classList.add('hidden');
+          try{ navigator.vibrate && navigator.vibrate(18); }catch(err){}
+        }, 450);
+      });
+      el.addEventListener('pointermove', e=>{
+        if(!dragging){ if(timer && Math.hypot(e.clientX - startX, e.clientY - startY) > 10) cancel(); return; }
+        e.preventDefault();
+        const [x, y] = clampPos(el, e.clientX - offX, e.clientY - offY);
+        setPx(el, x, y);
+        target.classList.toggle('over', overTarget(e.clientX, e.clientY));
+      });
+      const finish = e=>{
+        cancel();
+        if(!dragging) return;
+        const dropReset = !!(e && e.type === 'pointerup' && overTarget(e.clientX, e.clientY));
+        dragging = false; anyDragging = false;
+        el.classList.remove('fab-dragging'); target.classList.add('hidden'); target.classList.remove('over');
+        try{ el.releasePointerCapture(pid); }catch(err){}
+        if(dropReset){ delete saved[name]; }
+        else{
+          const r = el.getBoundingClientRect();
+          saved[name] = { fx: r.left / window.innerWidth, fy: r.top / window.innerHeight };
+        }
+        store(); apply(name); placePopup(name);
+      };
+      el.addEventListener('pointerup', finish);
+      el.addEventListener('pointercancel', finish);
+      el.addEventListener('contextmenu', e=>e.preventDefault());
+      // the click that ends a drag must not open the chat / picker
+      el.addEventListener('click', e=>{ if(suppressClick){ suppressClick = false; e.stopImmediatePropagation(); e.preventDefault(); return; } setTimeout(()=>placePopup(name), 0); }, true);
+      apply(name);
+    });
+    window.addEventListener('resize', ()=>{ Object.keys(FABS).forEach(n=>{ apply(n); placePopup(n); }); });
+    // a button that was hidden while the page loaded gets its place once it shows up
+    const mo = new MutationObserver(()=>{ if(!anyDragging) Object.keys(FABS).forEach(apply); });
+    Object.values(FABS).forEach(id=>{ const el = document.getElementById(id); if(el) mo.observe(el, { attributes:true, attributeFilter:['class'] }); });
+    window.picassoResetFabs = ()=>{ saved = {}; store(); Object.keys(FABS).forEach(n=>{ apply(n); clearPx(document.getElementById(POPUPS[n])); }); };
+  })();
+
 
   // =====================================================================
   // Quick reactions — a lightweight, low-friction way to react during
@@ -8569,7 +8715,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
 
   function buildTurnOrder(ids){
     const turnOrder = [];
-    for(let i=0;i<settings.totalRounds;i++) turnOrder.push(ids[i % ids.length]);
+    // v3.26: one round = every player draws once (capped at 200 drawings)
+    const total = Math.min(200, settings.totalRounds * ids.length);
+    for(let i=0;i<total;i++) turnOrder.push(ids[i % ids.length]);
     return turnOrder;
   }
 
@@ -8596,6 +8744,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     stopTicker();
     meta = clean;
     settings = clean.settings;
+    lastRoundRecap = null; roundEndReleased = false;           // v3.26: a new game, no previous round
+    { const lb = document.getElementById('btn-last-round'); if(lb) lb.classList.add('hidden'); }
     scores = {};
     Object.keys(clean.playerNames).forEach(id=>{ scores[id]=0; });
     activePlayerIds = new Set(Object.keys(clean.playerNames));
@@ -8709,12 +8859,26 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const b = document.getElementById(id);
     b.addEventListener('click', ()=>disarmAutoPress(b));
   });
+  document.getElementById('btn-roundend-continue').addEventListener('click', ()=>{
+    roundEndReleased = true;
+    if(currentRound && meta && currentRound.drawerId !== selfId) enterWatching(currentRound.idx, currentRound);
+  });
+  document.getElementById('btn-last-round').addEventListener('click', openLastRoundRecap);
+  (function(){
+    const ov = document.getElementById('lastround-overlay');
+    const close = ()=>ov.classList.add('hidden');
+    document.getElementById('lastround-close-btn').addEventListener('click', close);
+    ov.addEventListener('click', e=>{ if(e.target === ov) close(); });
+    document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && !ov.classList.contains('hidden')) close(); });
+  })();
 
   function enterPrepareMine(idx, rd){
     if(!meta) return;
     showOnly(['fd-prepare']);
-    document.getElementById('prep-round-num').textContent = idx+1;
-    document.getElementById('prep-round-total').textContent = meta.turnOrder.length;
+    document.getElementById('prep-round-num').textContent = roundOfTurn(idx);
+    document.getElementById('prep-round-total').textContent = Math.max(1, Number(settings.totalRounds) || 1);
+    const pd = document.getElementById('prep-drawing-num');
+    if(pd){ const per = drawingsPerRound(); pd.textContent = per > 1 ? `${(idx % per) + 1}. rajz a ${per}-ból` : ''; }
     document.getElementById('prep-word-hidden').classList.remove('hidden');
     document.getElementById('prep-word-shown').classList.add('hidden');
     document.getElementById('prep-tier-badge').classList.add('hidden');
@@ -9649,6 +9813,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let guessInputRoundKey = '';
   function enterWatching(idx, rd){
     if(!meta) return;
+    // v3.26: while the next drawer is only choosing a word, a guesser who is
+    // still reading the last result is not pulled away from it
+    if(rd.phase !== 'drawing' && showingRoundEnd && !roundEndReleased && lastRoundRecap){
+      holdOnRoundEnd(rd);
+      return;
+    }
+    document.getElementById('roundend-hold').classList.add('hidden');
     showOnly(['screen-watch']);
     if(!myRoundHit || myRoundHit.key !== roundKey(rd)) resetMyRoundHit();
     // v3.14: a new round starts with an empty guess box — half-typed text
@@ -9659,7 +9830,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const gi = document.getElementById('watch-guess-input');
       if(gi) gi.value = '';
     }
-    document.getElementById('watch-round-indicator').textContent = `Kör ${idx+1} / ${meta.turnOrder.length}`;
+    document.getElementById('watch-round-indicator').textContent = roundLabel(idx);
     document.getElementById('watch-hint-chip').classList.add('hidden');
     lastHintMask = null;
     document.getElementById('watch-guess-feed').innerHTML = '';
@@ -10378,10 +10549,35 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   function renderScoreboardWatch(){ renderRosters(); }
 
+  // v3.26: the last result can be reopened, and guessers stay on it until
+  // the next drawing really starts (or they tap "Tovább")
+  let lastRoundRecap = null, roundEndReleased = false;
+  function rememberRoundRecap(idx){
+    const b = document.getElementById('roundend-banner'), w = document.getElementById('roundend-word');
+    lastRoundRecap = { label: roundLabel(idx), cls: b.className, banner: b.innerHTML, word: w.innerHTML };
+    const btn = document.getElementById('btn-last-round');
+    if(btn) btn.classList.remove('hidden');
+  }
+  function openLastRoundRecap(){
+    if(!lastRoundRecap) return;
+    const body = document.getElementById('lastround-body');
+    body.innerHTML = `<p class="center-note">${escapeHtml(lastRoundRecap.label)}</p><div class="${escapeHtml(lastRoundRecap.cls)}">${lastRoundRecap.banner}</div><div style="text-align:center;margin-top:8px;">${lastRoundRecap.word}</div><table class="scores" id="lastround-scores"></table>`;
+    renderScoreTable('lastround-scores', scoreRows());
+    document.getElementById('lastround-overlay').classList.remove('hidden');
+    document.getElementById('lastround-close-btn').focus();
+  }
+  function holdOnRoundEnd(rd){
+    const hold = document.getElementById('roundend-hold');
+    document.getElementById('roundend-waiting-note').classList.add('hidden');
+    document.getElementById('roundend-hold-text').textContent = `${rd.drawerName} már választja a következő szót. Nyugodtan nézd meg az eredményt, a rajzolás indulásakor automatikusan továbblépünk.`;
+    hold.classList.remove('hidden');
+  }
   function renderRoundEnd(idx, result){
     if(!meta || !currentRound) return;
     showOnly(['screen-roundend']);
     showingRoundEnd = true;
+    roundEndReleased = false;
+    document.getElementById('roundend-hold').classList.add('hidden');
     const banner = document.getElementById('roundend-banner');
     const wordEl = document.getElementById('roundend-word');
     const shownWord = result.word || (currentRound.drawerId === selfId ? currentRound.word : '');
@@ -10408,6 +10604,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         : `A szót nem ismerjük (a rajzoló kapcsolata megszakadt) — senki sem kapott pontot.`;
     }
     renderScoreTable('roundend-scores', scoreRows());
+    rememberRoundRecap(idx);
 
     const nextIdx = idx+1;
     if(nextIdx >= meta.turnOrder.length){
@@ -10441,6 +10638,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       };
       armAutoPress(mineBtn);
     } else {
+      document.getElementById('roundend-hold').classList.add('hidden');
       disarmAutoPress(mineBtn);
       mineBtn.classList.add('hidden');
       waitNote.classList.remove('hidden');
@@ -10947,6 +11145,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.26', changes:[
+      'Javítva: Firefoxban (és néhány jelszókezelőnél) a tippmező és a chat alatt felugró „Új e-mail álnév” ajánlat. Az okozta, hogy a 3.20-ban az admin felületre került két új jelszómező, és a böngésző ezek miatt regisztrációs űrlapnak hitte az oldalt.',
+      'A chat és a gyors reakció gombja áthelyezhető: nyomd hosszan, húzd ahová szeretnéd, és engedd el. Ha a felül megjelenő „alaphelyzet” célra ejted, visszaugrik a helyére. Telefonon és gépen is működik, és az eszköz megjegyzi a helyét.',
+      'Új körszámítás: egy kör most az, amikor mindenki egyszer rajzolt. A kijelzés például: „Kör 2 / 3 · 1/4. rajz”.',
+      'A kör eredménye nem tűnik el, amikor a következő rajzoló megnyomja az „Én jövök” gombot. A tippelők addig az eredménynél maradnak, amíg a rajzoló szót választ, és csak a rajzolás indulásakor lépnek tovább (vagy ha a „Tovább” gombra koppintanak). Az előző kör eredménye a rajzolás alatt is visszanézhető az „📋 Előző kör” gombbal.'
+    ]},
     { version:'3.25', changes:[
       'Fair saját szavak: a váróteremben minden játékos beküldhet legfeljebb 15 saját szót, a többiekét nem látja. A szobanyitó csak azt dönti el, hogy ezek a beépítettekkel keverve vagy önmagukban legyenek.',
       'Ha valaki a saját beküldött szavát találja ki, a tippjét elfogadjuk (csak ő látja), de nem jár érte pont, és a kört sem zárja le. A rajzoló pontjába sem számít bele. A saját szavadat te is rajzolhatod.',
