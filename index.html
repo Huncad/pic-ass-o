@@ -1430,6 +1430,57 @@
   #fd-btn-redo{ --ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14l5-5-5-5'/%3E%3Cpath d='M20 9H10a6 6 0 000 12h3'/%3E%3C/svg%3E"); }
   #fd-btn-clear{ --ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6'/%3E%3C/svg%3E"); }
   .fd-act.active, #fd-btn-eraser.active{ background:var(--yellow) !important; color:#16302A !important; border-color:var(--yellow) !important; }
+  /* ===== v3.21: chalkboard look for the drawing and guessing screens ===== */
+  /* shared: buttons, chips, timer */
+  .leave-btn{ border:1.5px solid rgba(244,241,230,.25) !important; border-radius:12px !important; background:rgba(0,0,0,.18) !important; }
+  .rchip{ background:rgba(0,0,0,.28); border:1.5px solid rgba(244,241,230,.1); padding:3px 4px 3px 3px; gap:8px; }
+  .rchip .rscore{ background:rgba(0,0,0,.35); min-width:24px; text-align:center; }
+  .rchip.drawer{ border-color:var(--yellow); background:color-mix(in srgb, var(--yellow) 14%, rgba(0,0,0,.28)); }
+  .timer, .fd-status .timer, .watch-top .timer{ background:rgba(0,0,0,.38); border-color:rgba(244,241,230,.16); box-shadow:0 4px 14px -6px rgba(0,0,0,.6); }
+  .timebar i{ border-radius:0 4px 4px 0; box-shadow:0 0 10px var(--tcol); }
+
+  /* drawer */
+  #screen-fulldraw .fd-status, #screen-fulldraw #fd-roster{ background:transparent; }
+  #screen-fulldraw .fd-status{ padding-bottom:4px; }
+  #screen-fulldraw .fd-word-label{ color:var(--chalk); font-size:.9rem; }
+  #screen-fulldraw .fd-word-text{ font-size:2rem; transform:rotate(-1.5deg); display:inline-block; }
+  #fd-canvas-wrap{ background:transparent !important; }
+  #fd-canvas{ border-radius:14px !important; box-shadow:0 0 0 1.5px rgba(244,241,230,.12), 0 18px 40px -14px rgba(0,0,0,.7) !important; }
+  #fd-canvas-wrap .timebar{ border-radius:14px 14px 0 0; overflow:hidden; }
+  .fd-guess-feed::before{ color:var(--green) !important; font-style:italic; }
+  @media (min-width:860px), (orientation:landscape) and (max-height:500px){
+    .fd-guess-feed{ background:rgba(0,0,0,.28) !important; background:color-mix(in srgb, var(--bg) 70%, black) !important; border-radius:16px !important; }
+    .fd-guess-feed .fd-guess-line{ background:rgba(255,255,255,.05); border:1px solid rgba(244,241,230,.08) !important; border-radius:10px; padding:7px 12px !important; margin-bottom:6px; }
+    .fd-guess-feed .fd-guess-line.correct{ background:color-mix(in srgb, var(--green) 16%, transparent); border-color:color-mix(in srgb, var(--green) 45%, transparent) !important; }
+  }
+  #screen-fulldraw .fd-toolbar{ background:rgba(0,0,0,.3); background:color-mix(in srgb, var(--bg) 75%, black);
+    border-top:1px solid rgba(244,241,230,.08); }
+  @media (min-width:860px){ #screen-fulldraw .fd-toolbar{ margin:4px 12px 12px; border:1px solid rgba(244,241,230,.1); border-radius:16px; } }
+  #screen-fulldraw .tool-group{ background:rgba(255,255,255,.05); border-radius:12px; }
+  #screen-fulldraw .fd-tool, #screen-fulldraw .fd-act{ border:1.5px solid rgba(244,241,230,.2) !important; border-radius:10px !important; background:rgba(0,0,0,.18); }
+  #screen-fulldraw .swatch{ border:2px solid rgba(0,0,0,.25); box-shadow:inset 0 2px 4px rgba(255,255,255,.25); }
+  #screen-fulldraw .swatch.selected{ box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--yellow); }
+
+  /* guesser */
+  body:has(.board.wide-mode) #main-board{ background:transparent; border-color:transparent; box-shadow:none; }
+  body:has(.board.wide-mode) #main-board::before{ display:none; }
+  #watch-roster{ background:var(--bg) !important; box-shadow:0 10px 12px -10px rgba(0,0,0,.6) !important; border-radius:0 0 12px 12px; }
+  #watch-round-indicator{ border-radius:12px !important; font-weight:800; }
+  #screen-watch .canvas-area{ border-radius:16px !important; padding:0 !important; position:relative;
+    background:rgba(0,0,0,.22) !important; box-shadow:0 0 0 1.5px rgba(244,241,230,.1) !important; }
+  #watch-canvas{ border-radius:14px; box-shadow:0 18px 40px -14px rgba(0,0,0,.7) !important; }
+  #screen-watch .guess-inputs, #screen-watch .guess-feed{ background:rgba(0,0,0,.28); background:color-mix(in srgb, var(--bg) 70%, black);
+    border:1.5px solid rgba(244,241,230,.1); border-radius:16px; padding:14px; }
+  #screen-watch .guess-inputs h3, #screen-watch .guess-feed h3{ font-family:'Kalam',cursive; color:var(--green); font-style:italic; font-weight:700; }
+  #watch-guess-input{ background:rgba(0,0,0,.3); color:var(--chalk); border:1.5px solid rgba(244,241,230,.22); border-radius:12px; }
+  #watch-guess-input::placeholder{ color:var(--chalk-dim); opacity:.7; }
+  #watch-guess-input:focus{ outline:none; border-color:var(--yellow); }
+  #btn-watch-guess{ background:var(--pink); color:#3a0f22; border-radius:12px; padding-left:18px; padding-right:18px;
+    box-shadow:0 4px 0 color-mix(in srgb, var(--pink) 50%, black); }
+  #screen-watch .guess-feed .gentry{ background:rgba(255,255,255,.05); border:1px solid rgba(244,241,230,.08); border-radius:10px; padding:7px 10px; margin-bottom:6px; }
+  #screen-watch .guess-feed .gentry.correct{ border-color:color-mix(in srgb, var(--green) 45%, transparent); }
+  #screen-watch .guess-feed .gentry.close{ border-color:color-mix(in srgb, var(--yellow) 45%, transparent); }
+  #watch-waiting{ border-radius:16px; }
 </style>
 </head>
 <body>
@@ -10708,6 +10759,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.21', changes:[
+      'A rajzoló és a tippelő képernyő is megkapta a krétatáblás külsőt: lekerekített rajzlap árnyékkal, kártyás tipplista buborékokban, sötét eszköztár-sáv, egységes menü- és időzítőgombok, kiemelt saját szín és aktív eszköz.'
+    ]},
     { version:'3.20', changes:[
       'Megújult kezdőképernyő: krétatábla-hangulat, új logó, nagyobb színválasztó, kiemelt „Szoba létrehozása” gomb, rendezettebb gombsor és lábléc. Minden színtémában és sötét módban is a téma színeit használja.',
       'A többi képernyő is megkapta az új külsőt: számozott lépések a szobanyitásnál (gépen kétoszlopos elrendezéssel), krétatáblás „Te jössz!” képernyő, a rajzoló eszköztárán vonalas ikonok és sárgán kiemelt aktív eszköz, halvány krétafirkák a rajzlap körül.',
