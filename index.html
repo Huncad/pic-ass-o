@@ -1809,6 +1809,26 @@
   #chat-panel.resizing{ user-select:none; transition:none; }
   #chat-new-below{ position:absolute; left:50%; transform:translateX(-50%); bottom:64px; z-index:3; padding:5px 12px; border-radius:999px;
     font-size:.8rem; font-weight:800; background:var(--yellow); color:#16302A; border:none; box-shadow:0 4px 12px rgba(0,0,0,.35); cursor:pointer; min-height:0; }
+
+  /* ===== v3.46 ===== */
+  .custom-rounds{ display:inline-flex; align-items:center; gap:6px; }
+  #rounds-custom-input{ width:64px; padding:7px 8px; border-radius:999px; text-align:center; font-weight:800; font-family:'Nunito',sans-serif;
+    background:rgba(0,0,0,.28); color:var(--chalk); border:1.5px solid rgba(244,241,230,.18); font-size:.95rem; }
+  #rounds-custom-input:focus{ outline:none; border-color:var(--yellow); }
+  #chat-typing-indicator{ height:20px; min-height:20px; line-height:20px; padding:0 14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex-shrink:0; }
+  #chat-typing-indicator.idle{ opacity:0; }
+  #urgency-overlay{ position:fixed; inset:0; z-index:850; pointer-events:none;
+    box-shadow:inset 0 0 0 6px rgba(255,90,80,.85), inset 0 0 90px 10px rgba(255,60,50,.45); animation:urgPulse 1s ease-in-out infinite; }
+  body.time-critical #urgency-overlay{ box-shadow:inset 0 0 0 9px rgba(255,70,60,.95), inset 0 0 140px 24px rgba(255,40,30,.6); animation-duration:.5s; }
+  @keyframes urgPulse{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
+  .urgency-badge{ position:absolute; top:calc(14px + env(safe-area-inset-top, 0px)); left:50%; transform:translateX(-50%);
+    background:var(--red); color:#fff; font-weight:900; font-size:1.6rem; padding:6px 20px; border-radius:999px;
+    box-shadow:0 8px 24px rgba(255,60,50,.55); font-family:'Nunito',sans-serif; animation:urgPop 1s ease-in-out infinite; }
+  body.time-critical .urgency-badge{ font-size:2.2rem; animation-duration:.5s; }
+  @keyframes urgPop{ 0%,100%{ transform:translateX(-50%) scale(1); } 50%{ transform:translateX(-50%) scale(1.12); } }
+  body.time-urgent .watch-top .timer, body.time-urgent #watch-timer{ color:#fff !important; background:var(--red) !important; transform:scale(1.15); }
+  body.time-urgent #watch-guess-input{ border-color:var(--red) !important; box-shadow:0 0 0 3px rgba(255,90,80,.35); }
+  @media (prefers-reduced-motion: reduce){ #urgency-overlay, .urgency-badge{ animation:none; } }
 </style>
 </head>
 <body>
@@ -1974,6 +1994,7 @@
         <button class="pill" data-rounds="5">5 kör</button>
         <button class="pill" data-rounds="6">6 kör</button>
         <button class="pill" data-rounds="8">8 kör</button>
+        <span class="custom-rounds"><button class="pill" data-rounds="custom" id="rounds-custom-pill">Egyéni:</button><input type="number" id="rounds-custom-input" min="1" max="20" step="1" inputmode="numeric" placeholder="10" aria-label="Egyéni körszám (1–20)"></span>
       </div>
       <p class="setup-hint">Egy körben mindenki egyszer rajzol. 4 játékossal 2 kör például 8 rajzot jelent.</p>
     </div>
@@ -2410,7 +2431,7 @@
     </div>
   </div>
   <div id="chat-messages"></div>
-  <div id="chat-typing-indicator" class="hidden"></div>
+  <div id="chat-typing-indicator" class="idle" aria-live="polite"></div>
   <div id="chat-mic-hint" class="hidden">🎙️ Felvétel… (max 15 mp, kattints a leállításhoz)</div>
   <div id="chat-reply-bar" class="hidden">
     <span class="rtext"></span>
@@ -2467,6 +2488,8 @@
     </div>
   </div>
 </div>
+
+<div id="urgency-overlay" class="hidden" aria-hidden="true"><div class="urgency-badge">⏰ <span id="urgency-num"></span> mp</div></div>
 
 <div id="rename-overlay" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="rename-title" aria-describedby="rename-text">
   <div class="admin-box rename-box">
@@ -5343,6 +5366,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     document.querySelectorAll('#difficulty-row .pill').forEach(b=>b.classList.toggle('active', useTiers.includes(b.dataset.tier)));
     settings.difficulties = useTiers.slice();
     settings.totalRounds = parseInt(pick('rounds-row', 'rounds', p.roundsAreCycles ? p.totalRounds : 2, 2), 10);
+    // v3.46: a remembered custom number that is not one of the presets
+    { const want = p.roundsAreCycles ? parseInt(p.totalRounds, 10) : NaN;
+      if(Number.isFinite(want) && want >= 1 && want <= 20 && settings.totalRounds !== want){
+        document.getElementById('rounds-custom-input').value = String(want);
+        selectCustomRounds();
+      } }
     settings.roundTime = parseInt(pick('time-row', 'time', p.roundTime, 60), 10);
     settings.hintsEnabled = pick('hints-row', 'hints', p.hintsEnabled === false ? 'off' : 'on', 'on') === 'on';
     settings.maxPlayers = parseInt(pick('maxplayers-row', 'maxplayers', p.maxPlayers, 0), 10);
@@ -5432,14 +5461,33 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       settings.difficulties = [...set];
     });
   });
+  // v3.46: a custom number of rounds (1–20, what every version accepts) next to the presets
+  function customRoundsValue(){
+    const v = parseInt(document.getElementById('rounds-custom-input').value, 10);
+    return Number.isFinite(v) ? Math.min(20, Math.max(1, v)) : null;
+  }
+  function selectCustomRounds(){
+    const inp = document.getElementById('rounds-custom-input');
+    if(customRoundsValue() === null) inp.value = '10';
+    inp.value = String(customRoundsValue());
+    settings.totalRounds = customRoundsValue();
+    document.querySelectorAll('#rounds-row .pill').forEach(b=>b.classList.toggle('active', b.id === 'rounds-custom-pill'));
+  }
   document.querySelectorAll('#rounds-row .pill').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       sndClick();
+      if(btn.dataset.rounds === 'custom'){ selectCustomRounds(); document.getElementById('rounds-custom-input').focus(); return; }
       settings.totalRounds = parseInt(btn.dataset.rounds,10);
       document.querySelectorAll('#rounds-row .pill').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
     });
   });
+  (function(){
+    const inp = document.getElementById('rounds-custom-input');
+    inp.addEventListener('focus', ()=>{ if(customRoundsValue() !== null) selectCustomRounds(); });
+    inp.addEventListener('input', ()=>{ if(customRoundsValue() !== null) selectCustomRounds(); });
+    inp.addEventListener('change', ()=>{ if(customRoundsValue() !== null) selectCustomRounds(); else inp.value = ''; });
+  })();
   document.querySelectorAll('#time-row .pill').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       sndClick();
@@ -6181,10 +6229,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(!isPlainObject(data)) return;
       // the name shown is the one we already know for this peer, never the
       // one the message claims
-      const known = (meta && meta.playerNames[peerId]) || lobbyPlayers[peerId];
+      const known = (meta && meta.playerNames[peerId]) || lobbyPlayers[peerId] || spectators[peerId];
       if(!known) return;
-      if(data.typing && typingPeers.size < 40) typingPeers.set(peerId, cleanText(known, 16));
-      else typingPeers.delete(peerId);
+      if(data.typing && typingPeers.size < 40){ typingPeers.set(peerId, cleanText(known, 16)); typingSeenAt.set(peerId, Date.now()); }
+      else { typingPeers.delete(peerId); typingSeenAt.delete(peerId); }
       renderTypingIndicator();
     };
   }
@@ -8531,7 +8579,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       chatMsgIndex.set(mid, { name:cleanText(data.name, 16), snippet:chatSnippet(data), el, mine:!!mine });
     }
     const list = document.getElementById('chat-messages');
-    list.appendChild(el);
+    // v3.46: several people writing at once — messages always land in the
+    // order they were written, even if one arrives a moment later
+    const ts = Number(data.ts) || Date.now();
+    el.dataset.ts = String(ts);
+    let before = null;
+    for(let c = list.lastElementChild; c; c = c.previousElementSibling){
+      if(c.dataset && c.dataset.ts && Number(c.dataset.ts) > ts) before = c; else break;
+    }
+    list.insertBefore(el, before);
     // A long session used to grow the message list (and with it every voice
     // recording it holds) without any limit. Old messages are dropped from
     // the DOM *and* from the id/reaction indexes together, so the two can't
@@ -8590,18 +8646,24 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       updateChatBadge();
     }
   }
+  // v3.46: the "is typing" line never changes the size of the chat (it used
+  // to pop in and out and push the messages around when several people
+  // typed), it is always one short line, and a typer who went quiet without
+  // a "stopped" message disappears from it after a few seconds.
+  const typingSeenAt = new Map();
   function renderTypingIndicator(){
     const el = document.getElementById('chat-typing-indicator');
+    const now = Date.now();
+    typingPeers.forEach((_, id)=>{ if(now - (typingSeenAt.get(id) || now) > 7000){ typingPeers.delete(id); typingSeenAt.delete(id); } });
     const names = [...typingPeers.values()];
-    if(names.length === 0){ el.classList.add('hidden'); el.textContent = ''; return; }
-    const text = names.length === 1
-      ? `${names[0]} gépel…`
-      : names.length === 2
-        ? `${names[0]} és ${names[1]} gépelnek…`
-        : `${names.slice(0,-1).join(', ')} és ${names[names.length-1]} gépelnek…`;
-    el.textContent = text;
     el.classList.remove('hidden');
+    if(names.length === 0){ el.textContent = ''; el.classList.add('idle'); return; }
+    el.classList.remove('idle');
+    el.textContent = names.length === 1 ? `✏️ ${names[0]} gépel…`
+      : names.length === 2 ? `✏️ ${names[0]} és ${names[1]} gépelnek…`
+      : `✏️ ${names.length} ember gépel…`;
   }
+  setInterval(()=>{ if(typingPeers.size) renderTypingIndicator(); }, 2000);
 
   // v3.45: the message list follows new messages as long as you are at the
   // bottom (also while the panel was closed, or a picture/voice message grows
@@ -9446,6 +9508,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
 
   function buildTurnOrder(ids){
+    settings.totalRounds = Math.min(20, Math.max(1, parseInt(settings.totalRounds, 10) || 2));
     const turnOrder = [];
     // v3.26: one round = every player draws once (capped at 200 drawings)
     const total = Math.min(200, settings.totalRounds * ids.length);
@@ -10579,6 +10642,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const elapsed = (Date.now()-fdRoundStartAt)/1000;
       const remaining = Math.max(0, Math.ceil(fdRoundTimeTotal-elapsed));
       updateTimerEl(el, remaining);
+      setUrgency(!isDrawerSide && !amSpectator ? remaining : 999, el);
       if(remaining<=10 && remaining>0 && remaining!==lastTickPlayed){ sndTick(remaining<=5); lastTickPlayed=remaining; if(remaining === 10 || remaining === 5) srAnnounce(`Még ${remaining} másodperc`); }
       if(isDrawerSide && settings.hintsEnabled && hintAction && currentRound && currentRound.word){
         const frac = elapsed / fdRoundTimeTotal;
@@ -10617,7 +10681,22 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       }
     }, 250);
   }
+  // v3.46: the last seconds are hard to miss for the guessers — a red pulsing
+  // frame around the screen, a big countdown and a red clock
+  let urgencyLevel = 0;
+  function setUrgency(remaining, el){
+    const lvl = remaining <= 0 || remaining > 15 ? 0 : (remaining <= 5 ? 2 : 1);
+    const ov = document.getElementById('urgency-overlay');
+    if(lvl){ document.getElementById('urgency-num').textContent = remaining; }
+    if(lvl === urgencyLevel) return;
+    urgencyLevel = lvl;
+    document.body.classList.toggle('time-urgent', lvl >= 1);
+    document.body.classList.toggle('time-critical', lvl === 2);
+    if(ov) ov.classList.toggle('hidden', lvl === 0);
+    if(lvl === 2){ try{ navigator.vibrate && navigator.vibrate([60, 60, 60]); }catch(e){} }
+  }
   function stopTicker(){
+    setUrgency(999);
     if(localTickTimer){ clearInterval(localTickTimer); localTickTimer=null; }
     document.querySelectorAll('.timebar').forEach(b=>{ b.classList.remove('on'); b.firstElementChild.style.width = '100%'; });
     stopAfkWatch();
@@ -12094,6 +12173,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.46', changes:[
+      'Szobanyitáskor egyéni körszám is megadható (1–20) az „Egyéni:” mezőben.',
+      'A tippelőknél az utolsó 15 másodpercben piros, pulzáló keret és nagy visszaszámláló jelzi, hogy fogy az idő; az utolsó 5 másodpercben még erősebben (telefonon rezgéssel).',
+      'Chat: ha egyszerre többen írnak, az üzenetek mindig a megírás sorrendjében jelennek meg, a „gépel…” sor nem ugráltatja az ablakot, és nem ragad be, ha valaki abbahagyta a gépelést.'
+    ]},
     { version:'3.45', changes:[
       'A chatablak PC-n nagyobb lett (420×560), és a bal felső sarkánál fogva átméretezhető; a méretet megjegyzi (dupla kattintás a sarokra: alapméret).',
       'A chat mindig az új üzenetre görget, ha alul vagy — akkor is, ha az ablak zárva volt. Ha visszagörgettél olvasni, egy „⬇ Új üzenet” gomb jelzi, hogy jött új üzenet.',
