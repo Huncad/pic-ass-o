@@ -1695,6 +1695,27 @@
   body.fit-frame #fd-prepare .prep-choices{ max-width:420px; }
   body.fit-frame #fd-prepare .prep-choices.many{ max-width:540px; gap:10px; }
   body.fit-frame #fd-prepare .prep-choices button{ font-size:1.15rem; padding:12px 14px; }
+
+  /* ===== v3.38: spectator mode ===== */
+  .spectate-toggle{ display:flex; align-items:center; justify-content:center; gap:9px; margin:14px auto 0; width:max-content; max-width:100%;
+    padding:7px 14px; border-radius:999px; background:rgba(0,0,0,.2); border:1.5px solid rgba(244,241,230,.16); cursor:pointer;
+    font-size:.92rem; font-weight:700; color:var(--chalk); }
+  .spectate-toggle:has(input:checked){ border-color:var(--blue); background:color-mix(in srgb, var(--blue) 20%, transparent); }
+  .spectate-toggle input{ width:18px; height:18px; accent-color:var(--blue); margin:0; }
+  .spectator-row{ flex-basis:100%; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px; margin-top:6px; }
+  .spec-label{ font-size:.85rem; color:var(--chalk-dim); font-weight:800; }
+  .spec-chip{ display:inline-flex; align-items:center; gap:6px; padding:4px 11px; border-radius:999px; font-size:.85rem; font-weight:700;
+    background:rgba(0,0,0,.22); border:1.5px dashed rgba(244,241,230,.28); color:var(--chalk); }
+  .spec-chip.me{ border-color:var(--blue); }
+  .spec-kick{ background:none !important; border:none; box-shadow:none !important; padding:0 2px; min-height:0; font-size:.8rem; color:var(--chalk-dim); cursor:pointer; }
+  .spectator-badge{ text-align:center; font-size:.85rem; font-weight:800; color:var(--chalk-dim); margin:0 0 6px; }
+  body.is-spectator .spectator-badge{ color:#0f2a1d; background:var(--blue); border-radius:999px; padding:4px 14px; width:max-content; max-width:100%; margin:0 auto 8px; }
+  body.is-spectator #screen-watch .guess-inputs{ display:none !important; }
+  body.is-spectator #btn-next-round-mine, body.is-spectator #roundend-report{ display:none !important; }
+  /* ===== v3.38: phones — the guessing view never drags the page ===== */
+  html.watch-lock, html.watch-lock body{ overflow:hidden; overscroll-behavior:none; height:100%; }
+  html.watch-lock #screen-watch{ overscroll-behavior:none; }
+  html.watch-lock #screen-watch .guess-feed, html.watch-lock #watch-guess-feed{ overscroll-behavior:contain; }
 </style>
 </head>
 <body>
@@ -1778,6 +1799,9 @@
       <span class="input-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4.2" fill="currentColor"/><path d="M3.5 21 C4.5 15.5 8 13.6 12 13.6 C16 13.6 19.5 15.5 20.5 21 Z" fill="currentColor"/></svg>
       <input type="text" id="home-name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" maxlength="16" placeholder="pl. Anna" aria-label="A neved"></span>
       <div class="avatar-picker" id="avatar-picker"></div>
+      <label class="spectate-toggle" title="Nézőként mindent látsz, de nem rajzolsz, nem tippelsz és nem kapsz pontot — pl. kivetítőhöz">
+        <input type="checkbox" id="join-as-spectator"><span>👀 Csak nézőként csatlakozom</span>
+      </label>
     </div>
     <div id="invite-join-wrap" class="hidden" style="text-align:center;margin:10px 0 20px;">
       <button class="big" id="btn-invite-join" style="background:var(--green);">Csatlakozás a partihoz 🚀</button>
@@ -1975,6 +1999,7 @@
       <div class="watch-logo-slot"><span class="mini-logo" aria-hidden="true"><svg class="ml-crown" viewBox="0 0 40 32"><path class="deco-line" stroke="currentColor" d="M5 26 L3 7 L13 15 L20 3 L27 15 L37 7 L35 26 Z"/></svg><span class="lw-a">PIC-</span><span class="lw-b">ASS-O</span><svg class="ml-pencil" viewBox="0 0 60 80"><g transform="rotate(32 30 40)"><rect x="20" y="4" width="20" height="10" rx="4" style="fill:var(--pink)"/><rect x="20" y="13" width="20" height="7" fill="#c9ced3"/><rect x="20" y="20" width="20" height="40" style="fill:var(--yellow)"/><path d="M20 60 L40 60 L30 78 Z" fill="#f1d3a8"/><path d="M26.6 71.5 L33.4 71.5 L30 78 Z" fill="#3a3a3a"/></g></svg></span></div>
     </div>
     <div class="roster" id="watch-roster" aria-label="Játékosok a szobában"></div>
+    <div id="spectator-badge" class="spectator-badge hidden" aria-live="polite"></div>
     <div id="watch-waiting" class="waiting-banner hidden">
       <div class="big-emoji">👀</div>
       <div id="watch-waiting-text">Várj, mindjárt kezdődik a rajzolás...</div>
@@ -4927,6 +4952,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
 
   let joinOrderIds = [];              // order peers announced themselves, for turnOrder
   let lobbyPlayers = {};              // peerId -> name (during lobby)
+  // v3.38: spectators — in the room, see everything, but never draw, guess or score
+  let spectators = {};                // peerId -> name
+  let amSpectator = false;            // this device joined as a spectator
+  let joinAsSpectator = false;        // the home-screen choice
+  const MAX_SPECTATORS = 12;
   let showingRoundEnd = false;
   let localTickTimer = null;
   let lastTickPlayed = null;
@@ -4952,6 +4982,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     document.getElementById('screen-fulldraw').classList.toggle('hidden', !ids.includes('screen-fulldraw'));
     document.getElementById('fd-prepare').classList.toggle('hidden', !ids.includes('fd-prepare'));
     document.documentElement.classList.toggle('fd-open', ids.includes('screen-fulldraw') || ids.includes('fd-prepare'));
+    document.documentElement.classList.toggle('watch-lock', ids.includes('screen-watch') && window.innerWidth <= 859);
+    if(ids.includes('screen-watch')) try{ renderSpectatorBadge(); }catch(e){}
     if(!ids.includes('screen-roundend')) showingRoundEnd = false;
     // The connection/code banner is only useful while still in the lobby
     // (sharing the code with others); hide it during actual gameplay.
@@ -4968,6 +5000,38 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ musicScreensChanged(ids); }catch(e){}
     setTimeout(fitMainBoard, 30);   // v3.32: grow the board on big screens
   }
+  // v3.38: on a phone, a finger dragged anywhere on the guessing view used
+  // to scroll the whole page (the drawing itself has touch-action:none).
+  // Only the guess list and the player strip may scroll; everything else
+  // swallows the drag. The text box keeps working, it just can't pan the page.
+  (function(){
+    let sy = 0, sx = 0;
+    const scrollers = '#watch-guess-feed, .guess-feed, #watch-roster, #chat-panel, .chat-messages';
+    document.addEventListener('touchstart', e=>{ const t = e.touches[0]; if(t){ sy = t.clientY; sx = t.clientX; } }, { passive:true });
+    document.addEventListener('touchmove', e=>{
+      if(!document.documentElement.classList.contains('watch-lock')) return;
+      const w = document.getElementById('screen-watch');
+      if(!w || !w.contains(e.target) || e.touches.length > 1) return;   // pinch-zoom stays allowed
+      const sc = e.target.closest(scrollers);
+      if(sc){
+        const t = e.touches[0], dy = t ? t.clientY - sy : 0;
+        const vert = sc.scrollHeight > sc.clientHeight + 1;
+        const horiz = sc.scrollWidth > sc.clientWidth + 1;
+        const atTop = sc.scrollTop <= 0, atBottom = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 1;
+        if(horiz) return;                                      // the roster strip scrolls sideways
+        if(vert && !((dy > 0 && atTop) || (dy < 0 && atBottom))) return;   // a real scroll inside the list
+      }
+      if(e.cancelable) e.preventDefault();
+    }, { passive:false });
+    // the on-screen keyboard can leave the page shifted — put it back
+    const resetShift = ()=>{ if(document.documentElement.classList.contains('watch-lock') && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0); };
+    window.addEventListener('scroll', resetShift, { passive:true });
+    if(window.visualViewport) window.visualViewport.addEventListener('resize', ()=>setTimeout(resetShift, 60));
+    window.addEventListener('resize', ()=>{
+      const w = document.getElementById('screen-watch');
+      document.documentElement.classList.toggle('watch-lock', !!w && !w.classList.contains('hidden') && window.innerWidth <= 859);
+    });
+  })();
   // v3.32: on a big screen the board (home, room setup, lobby, results…) is
   // enlarged so it fills the window as far as it can — like "zoom to fit".
   // Small screens and the live drawing/guessing views are left untouched.
@@ -5427,6 +5491,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         clearTimeout(pendingLeaveTimers.get(peerId));
         pendingLeaveTimers.delete(peerId);
       }
+      if(spectators[peerId]){
+        const sn = spectators[peerId];
+        delete spectators[peerId];
+        try{ addSystemChatMessage(`👀 ${sn} (néző) kilépett.`); }catch(e){}
+        if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers();
+        try{ renderSpectatorBadge(); }catch(e){}
+      }
       if(lobbyPlayers[peerId]){
         const leftName = lobbyPlayers[peerId];
         delete lobbyPlayers[peerId];
@@ -5533,7 +5604,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         laterInRoom(()=>maybeFlushStrokes(true), 800);
       }
       helloAction.send({
-        name: myName, isHost, avatar: myAvatarColor,
+        name: myName, isHost, avatar: myAvatarColor, spectator: amSpectator || undefined,
         roomName: isHost ? currentRoomName : undefined,
         isPublic: isHost ? roomIsPublic : undefined
       }, { target: peerId });
@@ -5618,6 +5689,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     };
     helloAction.onMessage = (data, {peerId})=>{
       if(!isPlainObject(data)) data = {};
+      if(data.spectator === true && !data.isHost){ handleSpectatorHello(data, peerId); return; }
+      if(spectators[peerId]){ delete spectators[peerId]; }
       const isNew = !lobbyPlayers[peerId];
       // A game is already running (or has just finished): the newcomer may still
       // join it, as long as the room's player limit allows. Departed players
@@ -6391,13 +6464,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ livePeers = (room && room.getPeers && room.getPeers()) || {}; }catch(e){}
     const holderIds = new Set([selfId, ...Object.keys(lobbyPlayers)]);
     if(meta) Object.keys(meta.playerNames).forEach(id=>holderIds.add(id));
+    Object.keys(spectators).forEach(id=>holderIds.add(id));
     const takenKeys = new Set();
     holderIds.forEach(id=>{
       if(id === peerId) return;
-      const n = id === selfId ? myName : ((meta && meta.playerNames[id]) || lobbyPlayers[id]);
+      const n = id === selfId ? myName : ((meta && meta.playerNames[id]) || lobbyPlayers[id] || spectators[id]);
       if(!n) return;
       if(id !== selfId){
-        const live = (id in livePeers) && (!meta || activePlayerIds.has(id)) &&
+        const live = (id in livePeers) && (!meta || activePlayerIds.has(id) || !!spectators[id]) &&
           !(goneOnMqtt.has(id) && Date.now() - goneOnMqtt.get(id) < 120000);
         if(!live) return;
       }
@@ -6412,6 +6486,49 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     }
     return name;
   }
+  document.getElementById('join-as-spectator').addEventListener('change', e=>{
+    joinAsSpectator = e.target.checked;
+    try{ sndClick(); }catch(err){}
+  });
+  // v3.38: a spectator said hello — kept apart from the players, so the turn
+  // order, scores, player limit, guess checks and host election never see them
+  function handleSpectatorHello(data, peerId){
+    const isNewSpec = !spectators[peerId];
+    if(isNewSpec && isHost && votedOutIds.has(peerId)){ kickAction.send({ reason:'voted' }, { target:peerId }); return; }
+    if(isNewSpec && isHost && Object.keys(spectators).length >= MAX_SPECTATORS){ kickAction.send({ reason:'full' }, { target:peerId }); return; }
+    let nm = cleanName(data.name);
+    if(isHost){
+      const unique = uniqueNameFor(peerId, nm);
+      if(unique !== nm){ nm = unique; try{ renameAction && renameAction.send({ name: unique }, { target: peerId }); }catch(e){} }
+    }
+    spectators[peerId] = nm;
+    delete lobbyPlayers[peerId];
+    if(typeof data.avatar === 'string' && SAFE_COLOR_RE.test(data.avatar)) playerAvatars[peerId] = data.avatar;
+    if(isNewSpec){
+      sndPlayerJoin();
+      if(isHost) notifyRoomEvent(`👀 ${nm} nézőként belépett a szobába`, 'join-'+peerId);
+      try{ addSystemChatMessage(`👀 ${nm} nézőként csatlakozott.`); }catch(e){}
+      // a game is already running: the spectator gets the full picture, but no seat
+      if(isHost && meta){ try{ lateSyncAction.send(buildLateSnapshot(), { target:peerId }); }catch(e){} }
+    }
+    if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers();
+    try{ renderSpectatorBadge(); }catch(e){}
+  }
+  function spectatorListHtml(){
+    const ids = Object.keys(spectators);
+    if(!ids.length) return '';
+    return `<div class="spectator-row" aria-label="Nézők"><span class="spec-label">👀 Nézők:</span>` +
+      ids.map(id=>`<span class="spec-chip${id===selfId?' me':''}">${escapeHtml(spectators[id])}${id===selfId?' (Te)':''}${
+        isHost && id !== selfId ? `<button class="spec-kick" data-peer="${escapeHtml(id)}" title="Eltávolítás" aria-label="${escapeHtml(spectators[id])} eltávolítása">✕</button>` : ''}</span>`).join('') + `</div>`;
+  }
+  function renderSpectatorBadge(){
+    const b = document.getElementById('spectator-badge');
+    if(!b) return;
+    const n = Object.keys(spectators).length;
+    b.classList.toggle('hidden', !amSpectator && n === 0);
+    b.textContent = amSpectator ? `👀 Nézőként követed a játékot${n > 1 ? ` · ${n} néző` : ''}` : `👀 ${n} néző`;
+  }
+
   // v3.37: the rename is shown in a real dialog that has to be confirmed
   function showRenameNotice(oldName, newName){
     const ov = document.getElementById('rename-overlay');
@@ -6433,7 +6550,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!newName || newName === myName) return;
     const old = myName;
     myName = newName;              // only for this room; the saved name stays as typed
-    try{ helloAction.send({ name: myName, isHost:false, avatar: myAvatarColor }); }catch(e){}
+    try{ helloAction.send({ name: myName, isHost:false, avatar: myAvatarColor, spectator: amSpectator || undefined }); }catch(e){}
     try{ showRenameNotice(old, myName); }catch(e){}
     try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){}
     try{ renderRosters(); }catch(e){}
@@ -6587,7 +6704,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     Object.entries(snap.scores || {}).forEach(([id,v])=>{ if(names[cleanPeerId(id)]) scores[cleanPeerId(id)] = clampNum(v, 0, 1e6, 0); });
     Object.keys(names).forEach(id=>{ if(scores[id] === undefined) scores[id] = 0; });
     activePlayerIds = new Set((Array.isArray(snap.active) ? snap.active : []).map(cleanPeerId).filter(id=>names[id]));
-    activePlayerIds.add(selfId);
+    if(!amSpectator) activePlayerIds.add(selfId);
     gameEnded = !!snap.gameEnded;
     revealedWords = (Array.isArray(snap.revealedWords) ? snap.revealedWords : []).slice(-700).map(w=>String(w).slice(0,60));
     const gs = snap.gameStats || {};
@@ -6602,7 +6719,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     showingRoundEnd = false;
     hintRevealedCount = 0;
     lastHintMask = null;
-    addSystemChatMessage('🎮 Menet közben csatlakoztál a játékhoz.');
+    addSystemChatMessage(amSpectator ? '👀 Nézőként csatlakoztál a futó játékhoz.' : '🎮 Menet közben csatlakoztál a játékhoz.');
 
     if(gameEnded){
       renderGameEnd(scoreRows(), true);
@@ -6683,6 +6800,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
           // v2.97: a fresh attempt starts from nobody
           hostPeerId = null;
           Object.keys(lobbyPlayers).forEach(id=>{ if(id !== selfId) delete lobbyPlayers[id]; });
+          Object.keys(spectators).forEach(id=>{ if(id !== selfId) delete spectators[id]; });
           joinOrderIds = [selfId];
         }
         setConnStatus('connecting', 'Kapcsolódás a hálózathoz…');
@@ -8800,6 +8918,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     isHost = true;
     joinOrderIds = [selfId];
     lobbyPlayers = { [selfId]: myName };
+    spectators = {}; amSpectator = false; document.body.classList.remove('is-spectator');
     const nameInput = document.getElementById('room-name-input');
     let roomName = nameInput.value.trim() || `${myName} szobája`;
     // the default name is made unique by itself: "Adam szobája (2)"
@@ -8877,8 +8996,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     roomCode = code;
     isHost = false;
     roomIsPublic = false; // will be corrected by the host's hello, if different
-    joinOrderIds = [selfId];
-    lobbyPlayers = { [selfId]: myName };
+    amSpectator = joinAsSpectator;
+    joinOrderIds = amSpectator ? [] : [selfId];
+    lobbyPlayers = amSpectator ? {} : { [selfId]: myName };
+    spectators = amSpectator ? { [selfId]: myName } : {};
+    document.body.classList.toggle('is-spectator', amSpectator);
 
     // v2.78: ONE continuous attempt instead of three short ones. A handshake
     // through the relay (TURN) — typical on a phone on mobile data — can take
@@ -8987,6 +9109,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     guestNote.textContent = LOBBY_GUEST_NOTE;   // clear any "the owner left" notice from a previous room
     guestNote.classList.toggle('hidden', isHost);
     renderLobbyPlayers();
+    renderSpectatorBadge();
   }
   function updateLobbyVisibilityUI(){
     document.getElementById('lobby-code-section').classList.toggle('hidden', roomIsPublic);
@@ -9056,8 +9179,23 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         addSystemChatMessage(`🚫 ${name} eltávolítva a szobából.`);
       });
     });
+    document.getElementById('lobby-players').insertAdjacentHTML('beforeend', spectatorListHtml());
+    document.querySelectorAll('.spec-kick').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const pid = btn.dataset.peer, nm = spectators[pid] || 'A néző';
+        if(!confirm(`Biztosan eltávolítod ${nm} nézőt a szobából?`)) return;
+        sndClick();
+        kickAction.send({ reason:'kicked' }, { target:pid });
+        delete spectators[pid];
+        renderLobbyPlayers();
+      });
+    });
+    document.getElementById('lobby-words-box').classList.toggle('hidden', amSpectator);
     const note = document.getElementById('lobby-count-note');
-    if(isHost && ids.length < 2){
+    if(amSpectator){
+      note.textContent = `👀 Nézőként vagy itt — látsz mindent, de nem rajzolsz és nem tippelsz. Játékosok: ${ids.length} fő`;
+    } else if(isHost && ids.length < 2){
       note.textContent = `Csatlakozott: ${ids.length} fő — várj még valakit, legalább 2 játékos kell az induláshoz.`;
     } else if(isHost && settings.maxPlayers > 0){
       note.textContent = `Csatlakozott: ${ids.length} / ${settings.maxPlayers} fő`;
@@ -10546,6 +10684,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     updateGuessLock();
   }
   function guessLocked(){
+    if(amSpectator) return true;
     return !!currentRound && currentRound.drawerId !== selfId && drawingSeenKey !== roundKey(currentRound);
   }
   function updateGuessLock(){
@@ -10557,7 +10696,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const locked = guessLocked();
     input.disabled = locked;
     if(btn) btn.disabled = locked;
-    input.placeholder = locked ? '⏳ Várd meg, amíg elkezd rajzolni…' : input.dataset.ph0;
+    input.placeholder = amSpectator ? '👀 Nézőként nem tippelhetsz' : (locked ? '⏳ Várd meg, amíg elkezd rajzolni…' : input.dataset.ph0);
   }
   function submitWatchGuess(){
     const input = document.getElementById('watch-guess-input');
@@ -11328,6 +11467,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     hintRevealedCount = 0;
     joinOrderIds = [];
     lobbyPlayers = {};
+    spectators = {}; amSpectator = false; document.body.classList.remove('is-spectator');
     rematchYesVotes = new Set();
     rematchDeadline = 0; clearInterval(rematchTicker); rematchTicker = null;
     roomCode = '';
@@ -11575,6 +11715,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.38', changes:[
+      'Javítva (telefon): tippelés közben, ha a képernyőn húztad az ujjad, az egész játék elgörgett. Most csak a tipplista és a játékossáv görgethető, a többi rész nem mozdul.',
+      'Új: néző mód. A kezdőképernyőn bejelölheted, hogy „Csak nézőként csatlakozom” — így mindent látsz élőben (rajz, tippek, pontok, csevegés), de nem rajzolsz, nem tippelsz és nem kapsz pontot. Ideális kivetítőhöz egy bulin. A nézők nem számítanak bele a létszámkorlátba, a váróteremben külön sorban látszanak, a szobanyitó eltávolíthatja őket, és futó játékhoz is csatlakozhatnak.'
+    ]},
     { version:'3.37', changes:[
       'Ha a szobában már van ugyanilyen nevű játékos, az átnevezésről most egy jól látható, háttérrel ellátott ablak szól (régi név → új név), amit egy gombbal kell tudomásul venni.'
     ]},
