@@ -1660,6 +1660,10 @@
   body.fit-frame:not(.in-game) #main-board > #screen-home{ grid-area:home; margin:0; max-width:none; }
   body.fit-frame:not(.in-game) #main-board > footer.hint{ grid-area:foot; }
   body.fit-frame:not(.in-game) #main-board > #screen-error{ grid-column:1 / -1; }
+  body.fit-frame #screen-lobby h2{ margin:0 0 6px; }
+  body.fit-frame #screen-lobby .lobby-words{ margin-top:10px; }
+  body.fit-frame #screen-lobby .setup-hint{ font-size:.82rem; margin-top:4px; }
+  body.fit-frame #screen-lobby #lobby-words-input{ min-height:64px; }
   /* results: a bit more presence */
   body.fit-frame #screen-roundend .result-banner{ font-size:2.2rem; }
   body.fit-frame table.scores{ min-width:380px; }
@@ -2933,6 +2937,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function isPlainObject(v){ return !!v && typeof v === 'object' && !Array.isArray(v); }
   function cleanText(v, max){ return String(v === undefined || v === null ? '' : v).slice(0, max); }
   function cleanName(v){ return cleanText(v || 'Valaki', 16).trim() || 'Valaki'; }
+  // v3.35: names are compared case-, accent- and whitespace-insensitively,
+  // so "Ádám", "adam" and " Adam " count as the same name.
+  function nameKey(n){
+    return String(n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+  }
+  let renameAction = null, pendingRename = null;
   const SAFE_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
   // Network payload ceilings (a hostile or buggy peer must not be able to
   // freeze the page with one giant message).
@@ -4939,8 +4949,34 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       b.style.width = Math.floor((W - 48) / z) + 'px';
       b.style.minHeight = Math.floor((H - 48) / z) + 'px';
       b.style.maxWidth = 'none';
+      // v3.35: a screen that is only a bit too tall (waiting room, results)
+      // is scaled down until it fits — no scrolling. The long room setup
+      // keeps the normal scale and scrolls, it would get far too small.
+      for(let k = 0; k < 2; k++){
+        b.style.minHeight = '';
+        const h = b.getBoundingClientRect().height, availH = H - 48;
+        const zc = parseFloat(b.style.zoom) || 1;
+        if(h <= availH + 1) break;
+        const nz = Math.max(1, zc * availH / h);
+        if(nz < zc * 0.72) break;
+        b.style.zoom = nz > 1.01 ? nz.toFixed(3) : '';
+        b.style.width = Math.floor((W - 48) / nz) + 'px';
+      }
+      const zf = parseFloat(b.style.zoom) || 1;
+      b.style.minHeight = Math.floor((H - 48) / zf) + 'px';
+      fitBoardLast = b.scrollHeight + 'x' + b.scrollWidth;
     } finally { fitBoardBusy = false; }
   }
+  var fitBoardLast = '';
+  // content that grows or shrinks (players joining, room list…) is re-fitted
+  try{
+    new ResizeObserver(()=>{
+      if(fitBoardBusy) return;
+      const b = document.getElementById('main-board');
+      if(!document.body.classList.contains('fit-frame') || (b.scrollHeight + 'x' + b.scrollWidth) === fitBoardLast) return;
+      clearTimeout(window.__fitR); window.__fitR = setTimeout(fitMainBoard, 150);
+    }).observe(document.getElementById('main-board'));
+  }catch(e){}
   window.addEventListener('resize', ()=>{ clearTimeout(window.__fitT); window.__fitT = setTimeout(fitMainBoard, 120); });
   fitMainBoard();
 
@@ -5269,6 +5305,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     cwordsAction.onMessage = (data, {peerId})=>handleCwordsMessage(data, peerId);
     wflagAction = room.makeAction('wflag');            // v3.27: "this word is broken" marks
     wflagAction.onMessage = (data, {peerId})=>handleWflagMessage(data, peerId);
+    renameAction = room.makeAction('rename');          // v3.35: host -> one guest: "that name is taken, you are X"
+    renameAction.onMessage = (data, {peerId})=>{
+      if(isHost || !isPlainObject(data)) return;
+      const nn = cleanName(data.name);
+      if(hostPeerId === null){ pendingRename = { peerId, name:nn }; return; }
+      if(peerId !== hostPeerId) return;
+      applyHostRename(nn);
+    };
     lateJoinAction = room.makeAction('latejoin');     // host -> everybody: someone joined the running game
     lateSyncAction = room.makeAction('latesync');     // host -> the newcomer: the full state of the game
     rematchVoteAction = room.makeAction('rmvote');     // "yes, I want another game" — a "no" just leaves the room
@@ -5554,7 +5598,16 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         return;
       }
       if(isNew){ joinOrderIds.push(peerId); sndPlayerJoin(); }
-      lobbyPlayers[peerId] = cleanName(data.name);
+      let incomingName = cleanName(data.name);
+      if(isHost){
+        const unique = uniqueNameFor(peerId, incomingName);
+        if(unique !== incomingName){
+          clog('K13', `névütközés: „${incomingName}” már foglalt — az új játékos neve: „${unique}”`);
+          incomingName = unique;
+          try{ renameAction && renameAction.send({ name: unique }, { target: peerId }); }catch(e){}
+        }
+      }
+      lobbyPlayers[peerId] = incomingName;
       if(isNew && isHost) notifyRoomEvent(`🟢 ${lobbyPlayers[peerId]} belépett a szobába (${Object.keys(lobbyPlayers).length} játékos)`, 'join-'+peerId);
       if(isHost) announceMyRoom();
       if(typeof data.avatar === 'string' && SAFE_COLOR_RE.test(data.avatar)) playerAvatars[peerId] = data.avatar;
@@ -5580,6 +5633,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         }
         // A game snapshot that arrived before we knew who the host was is
         // applied now (the two messages can cross on slow connections).
+        if(pendingRename && pendingRename.peerId === peerId){ const nn = pendingRename.name; pendingRename = null; applyHostRename(nn); }
         if(pendingLateSnapshot && pendingLateSnapshot.peerId === peerId){
           const snap = pendingLateSnapshot.snap;
           pendingLateSnapshot = null;
@@ -5697,6 +5751,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         if(total > MAX_TOTAL_POINTS) return;
         latestStrokes = combined;
       } else return;
+      if(latestStrokes.length && currentRound) markDrawingSeen(roundKey(currentRound));
       if(watchCtx &&
          document.getElementById('screen-watch').classList.contains('hidden') === false &&
          document.getElementById('watch-live').classList.contains('hidden') === false){
@@ -5708,7 +5763,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // 'feed' action (with the verdict) and, for the first correct one, ends the round.
     guessAction.onMessage = (data, {peerId})=>{
       const iAmReferee = !!currentRound && currentRound.drawerId === selfId && currentRound.phase === 'drawing' &&
-        !processedResultRounds.has(roundKey(currentRound));
+        !processedResultRounds.has(roundKey(currentRound)) && fdLastModAt !== null;   // v3.35: nothing drawn yet = no guessing
       if(!iAmReferee || !meta || !meta.playerNames[peerId]) return;
       if(!isPlainObject(data)) return;
       if(tooOften(peerId, 'guess', 250)) return;           // no guess flooding
@@ -6285,6 +6340,47 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
 
   // HOST: let one more player into the running game.
+  // v3.35: the room owner keeps every player's name unique. Whoever had the
+  // name first keeps it; a newcomer with the same name becomes "Name 2"
+  // (3, 4…). A player who only reloaded the page (same name, the old copy no
+  // longer connected) is NOT a clash — that is them coming back.
+  function uniqueNameFor(peerId, name){
+    let livePeers = {};
+    try{ livePeers = (room && room.getPeers && room.getPeers()) || {}; }catch(e){}
+    const holderIds = new Set([selfId, ...Object.keys(lobbyPlayers)]);
+    if(meta) Object.keys(meta.playerNames).forEach(id=>holderIds.add(id));
+    const takenKeys = new Set();
+    holderIds.forEach(id=>{
+      if(id === peerId) return;
+      const n = id === selfId ? myName : ((meta && meta.playerNames[id]) || lobbyPlayers[id]);
+      if(!n) return;
+      if(id !== selfId){
+        const live = (id in livePeers) && (!meta || activePlayerIds.has(id)) &&
+          !(goneOnMqtt.has(id) && Date.now() - goneOnMqtt.get(id) < 120000);
+        if(!live) return;
+      }
+      takenKeys.add(nameKey(n));
+    });
+    if(!takenKeys.has(nameKey(name))) return name;
+    const base = name.replace(/\s+\d+$/, '').trim() || name;
+    for(let i = 2; i < 100; i++){
+      const suf = ' ' + i;
+      const cand = base.slice(0, 16 - suf.length).trim() + suf;
+      if(!takenKeys.has(nameKey(cand))) return cand;
+    }
+    return name;
+  }
+  // v3.35: on the guest — the owner said my name was taken in this room
+  function applyHostRename(newName){
+    if(!newName || newName === myName) return;
+    const old = myName;
+    myName = newName;              // only for this room; the saved name stays as typed
+    try{ helloAction.send({ name: myName, isHost:false, avatar: myAvatarColor }); }catch(e){}
+    try{ showFxBanner(`Te most „${myName}” vagy`, `Már van „${old}” nevű játékos a szobában`); }catch(e){}
+    try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){}
+    try{ renderRosters(); }catch(e){}
+  }
+
   function admitLateJoiner(peerId){
     if(!meta) return;
     const name = lobbyPlayers[peerId] || 'Valaki';
@@ -10071,6 +10167,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     lateElapsedMs = 0;
     fdRoundTimeTotal = settings.roundTime;
     startTicker(document.getElementById('watch-timer'), false);
+    if(latestStrokes.length) markDrawingSeen(roundKey(rd));
+    updateGuessLock();
   }
 
   // The drawing area is sized so that, on a phone, the canvas AND the guess
@@ -10382,8 +10480,30 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   document.getElementById('watch-guess-input').addEventListener('keydown', (e)=>{
     if(e.key === 'Enter') submitWatchGuess();
   });
+  // v3.35: guessing opens only once the drawer has actually started drawing
+  let drawingSeenKey = '';
+  function markDrawingSeen(key){
+    if(drawingSeenKey === key) return;
+    drawingSeenKey = key;
+    updateGuessLock();
+  }
+  function guessLocked(){
+    return !!currentRound && currentRound.drawerId !== selfId && drawingSeenKey !== roundKey(currentRound);
+  }
+  function updateGuessLock(){
+    const input = document.getElementById('watch-guess-input');
+    const btn = document.getElementById('btn-watch-guess');
+    if(!input) return;
+    if(myRoundHit && currentRound && myRoundHit.key === roundKey(currentRound)) return;   // "found it" state wins
+    if(input.dataset.ph0 === undefined) input.dataset.ph0 = input.placeholder;
+    const locked = guessLocked();
+    input.disabled = locked;
+    if(btn) btn.disabled = locked;
+    input.placeholder = locked ? '⏳ Várd meg, amíg elkezd rajzolni…' : input.dataset.ph0;
+  }
   function submitWatchGuess(){
     const input = document.getElementById('watch-guess-input');
+    if(guessLocked()) return;
     const text = input.value.trim().slice(0,80);
     if(!text || !currentRound || !guessAction) return;
     if(currentRound.drawerId === selfId) return;
@@ -10500,6 +10620,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(input){ input.disabled = false; if(input.dataset.ph0 === undefined) input.dataset.ph0 = input.placeholder; input.placeholder = input.dataset.ph0; }
     const btn = document.getElementById('btn-watch-guess');
     if(btn) btn.disabled = false;
+    updateGuessLock();
   }
   function onRoundResolved(result){
     if(!currentRound || !meta || !isPlainObject(result)) return;
@@ -11396,6 +11517,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.35', changes:[
+      'Nagy képernyőn a váróterem (és minden kicsit túl magas képernyő) most kicsinyít, hogy görgetés nélkül kiférjen.',
+      'Tippelni csak akkor lehet, ha a rajzoló már elkezdett rajzolni — addig a tippmező zárolva van.',
+      'Nem lehet két azonos nevű játékos egy szobában: aki később lép be ugyanazzal a névvel (kis-nagybetűtől és ékezettől függetlenül), automatikusan sorszámot kap (pl. „Adam 2”), és erről értesítést is lát. Az oldal újratöltése után visszatérő játékos megtartja a nevét és a pontjait.'
+    ]},
     { version:'3.34', changes:[
       'Nagy képernyőn minden képernyő (kezdő, szobanyitás, váróterem, kör vége, játék vége, "Te jössz!") ugyanabban a kitöltő keretben és ugyanakkora méretarányban jelenik meg, így az elrendezés egységes, nem ugrál a méret képernyőnként.'
     ]},
