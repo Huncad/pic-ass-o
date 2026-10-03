@@ -1112,8 +1112,8 @@
   .admin-note code{ color:var(--yellow); }
   .admin-note a{ color:var(--blue); }
   #admin-gist-result{ background:rgba(123,211,137,0.12); border:1px dashed var(--green); border-radius:8px; padding:8px; color:var(--chalk); }
-  .admin-columns{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-  @media (max-width:640px){ .admin-columns{ grid-template-columns:1fr; } }
+  .admin-columns{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:16px; }
+  @media (max-width:900px){ .admin-columns{ grid-template-columns:1fr; } }
   .admin-col h3{ margin:0 0 10px; color:var(--chalk-dim); font-size:.95rem; }
   .admin-add-row{ display:flex; gap:6px; margin-bottom:6px; align-items:flex-end; }
   .admin-add-row input, .admin-add-row textarea{ flex:1; padding:9px 10px; border-radius:8px; border:none; min-width:0; font-family:'Nunito',sans-serif; font-size:.92rem; resize:vertical; }
@@ -1873,10 +1873,11 @@
       </div>
     </div>
     <div class="setup-section">
-      <label class="field-label">Nehézségi szint (mindkettő választható)</label>
+      <label class="field-label">Nehézségi szint (több is választható)</label>
       <div class="pill-row" id="difficulty-row">
         <button class="pill active" data-tier="konnyu">Könnyű</button>
-        <button class="pill active" data-tier="kozepes">Nehéz</button>
+        <button class="pill active" data-tier="kozepes">Közepes</button>
+        <button class="pill" data-tier="nehez">Nehéz</button>
       </div>
     </div>
     <div class="setup-section">
@@ -2643,7 +2644,7 @@
         </div>
       </div>
       <div class="admin-col">
-        <h3>Nehéz szavak (<span id="admin-count-kozepes">0</span>)</h3>
+        <h3>Közepes szavak (<span id="admin-count-kozepes">0</span>)</h3>
         <div class="admin-add-row">
           <textarea id="admin-add-kozepes" rows="3" placeholder="Egy vagy több szó, soronként (pl. jegyzettömbből bemásolva)... — Ctrl+Enterrel is hozzáadhatod"></textarea>
           <button class="small" id="admin-add-kozepes-btn">+ Hozzáad</button>
@@ -2657,6 +2658,21 @@
           <button class="ghost small" id="admin-import-kozepes-btn">⬆️ Import: hozzáadás</button>
           <button class="ghost small" id="admin-import-kozepes-replace-btn">♻️ Import: felülírás</button>
           <input type="file" id="admin-import-kozepes" accept=".txt,text/plain" class="hidden">
+          <div class="admin-col">
+        <h3>Nehéz szavak (<span id="admin-count-nehez">0</span>)</h3>
+        <div class="admin-add-row">
+          <textarea id="admin-add-nehez" rows="3" placeholder="Egy vagy több szó, soronként (pl. jegyzettömbből bemásolva)... — Ctrl+Enterrel is hozzáadhatod"></textarea>
+          <button class="small" id="admin-add-nehez-btn">+ Hozzáad</button>
+        </div>
+        <div class="admin-add-status" id="admin-add-status-nehez"></div>
+        <div class="admin-search-row"><input type="search" id="admin-search-nehez" placeholder="🔍 Keresés a listában…" autocomplete="off" spellcheck="false"></div>
+        <div class="admin-search-info" id="admin-search-info-nehez"></div>
+        <div class="admin-word-list" id="admin-list-nehez"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button class="ghost small" id="admin-download-nehez">⬇️ Exportálás (szavak-nehez.txt)</button>
+          <button class="ghost small" id="admin-import-nehez-btn">⬆️ Import: hozzáadás</button>
+          <button class="ghost small" id="admin-import-nehez-replace-btn">♻️ Import: felülírás</button>
+          <input type="file" id="admin-import-nehez" accept=".txt,text/plain" class="hidden">
         </div>
       </div>
     </div>
@@ -3133,6 +3149,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       };
       take(parsed.konnyu, 'konnyu');
       take(parsed.kozepes, 'kozepes');
+      take(parsed.nehez, 'nehez');
       return combined.length ? combined : null;
     }catch(e){
       return null;
@@ -3267,6 +3284,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(adminSavedSnapshot === null) adminSavedSnapshot = currentWordsJson();
     renderAdminList('konnyu');
     renderAdminList('kozepes');
+    renderAdminList('nehez');
     try{ renderAdminDash(); }catch(e){}
     try{ renderAdminMusic(); }catch(e){}
     // show the right cloud-storage section depending on one-time setup state
@@ -3304,7 +3322,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     listEl.scrollTop = keepScroll;
     try{ updateAdminDirty(); }catch(e){}
   }
-  ['konnyu','kozepes'].forEach(tier=>{
+  ['konnyu','kozepes','nehez'].forEach(tier=>{
     // one delegated click handler per list instead of one per row (1000+ rows)
     document.getElementById('admin-list-'+tier).addEventListener('click', (e)=>{
       const btn = e.target.closest('.admin-del-btn');
@@ -3357,6 +3375,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   document.getElementById('admin-add-konnyu-btn').addEventListener('click', ()=>addAdminWord('konnyu'));
   document.getElementById('admin-add-kozepes-btn').addEventListener('click', ()=>addAdminWord('kozepes'));
+  document.getElementById('admin-add-nehez-btn').addEventListener('click', ()=>addAdminWord('nehez'));
+  document.getElementById('admin-add-nehez').addEventListener('keydown', (e)=>{ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)) addAdminWord('nehez'); });
   document.getElementById('admin-add-konnyu').addEventListener('keydown', (e)=>{ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)) addAdminWord('konnyu'); });
   document.getElementById('admin-add-kozepes').addEventListener('keydown', (e)=>{ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)) addAdminWord('kozepes'); });
 
@@ -3371,11 +3391,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   document.getElementById('admin-download-konnyu').addEventListener('click', ()=>downloadAdminList('konnyu','szavak-konnyu.txt'));
   document.getElementById('admin-download-kozepes').addEventListener('click', ()=>downloadAdminList('kozepes','szavak-kozepes.txt'));
+  document.getElementById('admin-download-nehez').addEventListener('click', ()=>downloadAdminList('nehez','szavak-nehez.txt'));
 
   // v2.67: import a .txt word list (one word per line). By default it only
   // ADDS the new words (duplicates skipped, same report as a paste); with
   // "teljes lista cseréje" ticked the tier is replaced by the file's words.
-  ['konnyu','kozepes'].forEach(tier=>{
+  ['konnyu','kozepes','nehez'].forEach(tier=>{
     const fileInput = document.getElementById('admin-import-'+tier);
     let replaceMode = false;
     document.getElementById('admin-import-'+tier+'-btn').addEventListener('click', ()=>{ replaceMode = false; fileInput.value = ''; fileInput.click(); });
@@ -3430,7 +3451,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function currentWordsJson(){
     const konnyu = WORDS.filter(w=>w.tier==='konnyu').map(w=>w.w).sort((a,b)=>a.localeCompare(b,'hu'));
     const kozepes = WORDS.filter(w=>w.tier==='kozepes').map(w=>w.w).sort((a,b)=>a.localeCompare(b,'hu'));
-    return JSON.stringify({ konnyu, kozepes });
+    const nehez = WORDS.filter(w=>w.tier==='nehez').map(w=>w.w).sort((a,b)=>a.localeCompare(b,'hu'));
+    return JSON.stringify({ konnyu, kozepes, nehez });
   }
   function saveGithubToken(token){
     adminTokenSet('gh', token);
@@ -3738,11 +3760,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     let peers = 0; try{ peers = directoryPeerCount(); }catch(e){}
     const inGame = rooms.filter(r=>r.inGame).length;
     const playersInRooms = rooms.reduce((a,r)=>a + (Number(r.players)||0), 0);
-    const konnyu = WORDS.filter(w=>w.tier==='konnyu').length, kozepes = WORDS.filter(w=>w.tier==='kozepes').length;
+    const konnyu = WORDS.filter(w=>w.tier==='konnyu').length, kozepes = WORDS.filter(w=>w.tier==='kozepes').length, nehez = WORDS.filter(w=>w.tier==='nehez').length;
     let tracks = 0; try{ tracks = MUSIC_TRACKS.length; }catch(e){}
     const tiles = [
       [peers + 1, 'játékos most online'], [rooms.length, 'nyitott szoba'], [inGame, 'játék folyamatban'],
-      [playersInRooms, 'játékos szobákban'], [konnyu, 'könnyű szó'], [kozepes, 'nehéz szó'], [tracks, 'zeneszám']
+      [playersInRooms, 'játékos szobákban'], [konnyu, 'könnyű szó'], [kozepes, 'közepes szó'], [nehez, 'nehéz szó'], [tracks, 'zeneszám']
     ];
     el.innerHTML = `<div class="dash-grid">${tiles.map(([n,l])=>`<div class="dash-tile"><b>${n}</b><span>${l}</span></div>`).join('')}</div>` +
       (rooms.length
@@ -3898,21 +3920,22 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function renderAdminHealth(){
     const el = document.getElementById('admin-health');
     if(!el) return;
-    const byTier = { konnyu:new Set(), kozepes:new Set() };
+    const byTier = { konnyu:new Set(), kozepes:new Set(), nehez:new Set() };
     WORDS.forEach(w=>{ if(byTier[w.tier]) byTier[w.tier].add(w.w); });
-    const both = [...byTier.konnyu].filter(w=>byTier.kozepes.has(w)).sort((a,b)=>a.localeCompare(b,'hu'));
+    // v3.39: a word in more than one level (any two of the three)
+    const inTiers = w=>['konnyu','kozepes','nehez'].filter(t=>byTier[t].has(w));
+    const both = [...new Set(WORDS.map(x=>x.w))].filter(w=>inTiers(w).length > 1).sort((a,b)=>a.localeCompare(b,'hu'));
     const LONG = 16;
     const long = WORDS.filter(w=>w.w.length > LONG);
     const short = WORDS.filter(w=>w.w.length < 3);
     const odd = WORDS.filter(w=>/[^a-záéíóöőúüűäß\- ]/i.test(w.w));
-    const lbl = { konnyu:'könnyű', kozepes:'nehéz' };
+    const lbl = { konnyu:'könnyű', kozepes:'közepes', nehez:'nehéz' };
     const row = (w, tier)=>`<div class="health-row"><span class="hw">${escapeHtml(w)}</span><small>${lbl[tier]}</small>
       <button class="ghost small" data-hdel="${escapeHtml(w)}" data-htier="${tier}">🗑️ törlés</button></div>`;
     const sec = (title, items)=> items ? `<div class="health-sec"><h4>${title}</h4>${items}</div>` : '';
     const html =
-      sec(`🔁 Mindkét listában szerepel (${both.length})`, both.map(w=>`<div class="health-row"><span class="hw">${escapeHtml(w)}</span>
-          <button class="ghost small" data-hdel="${escapeHtml(w)}" data-htier="konnyu">könnyűből ki</button>
-          <button class="ghost small" data-hdel="${escapeHtml(w)}" data-htier="kozepes">nehézből ki</button></div>`).join('')) +
+      sec(`🔁 Több listában is szerepel (${both.length})`, both.map(w=>`<div class="health-row"><span class="hw">${escapeHtml(w)}</span>${
+          inTiers(w).map(t=>`<button class="ghost small" data-hdel="${escapeHtml(w)}" data-htier="${t}">${lbl[t]}ből ki</button>`).join('')}</div>`).join('')) +
       sec(`📏 Túl hosszú, ${LONG} betűnél több (${long.length})`, long.map(w=>row(w.w, w.tier)).join('')) +
       sec(`🔹 Túl rövid, 3 betűnél kevesebb (${short.length})`, short.map(w=>row(w.w, w.tier)).join('')) +
       sec(`❓ Szám vagy furcsa karakter (${odd.length})`, odd.map(w=>row(w.w, w.tier)).join(''));
@@ -3930,7 +3953,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
 
   const TIER_INFO = {
     konnyu:  {label:"Könnyű",  color:"var(--green)"},
-    kozepes: {label:"Nehéz", color:"var(--blue)"},
+    kozepes: {label:"Közepes", color:"var(--blue)"},
+    nehez:   {label:"Nehéz", color:"var(--red)"},
     sajat:   {label:"Saját szavad · neked 0 pont", color:"var(--purple)"}
   };
   // v3.18: built-in words plus the room's own ones
@@ -3972,7 +3996,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     heldWordKeys.forEach(k=>used.add(k));   // v3.36: reported words are on hold everywhere
     const fresh = list => list.filter(w=>w && w.w && !used.has(squash(w.w)));
     const custom = customWordItems();
-    const levelTiers = tiers.filter(t=>t === 'konnyu' || t === 'kozepes');
+    const levelTiers = tiers.filter(t=>t === 'konnyu' || t === 'kozepes' || t === 'nehez');
     const lv = levelTiers.length ? levelTiers : ((settings && settings.difficulties) || ['konnyu','kozepes']);
     const builtinFiltered = WORDS.filter(w=>lv.includes(w.tier));
     const builtin = builtinFiltered.length ? builtinFiltered : WORDS;
@@ -5214,7 +5238,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       btns.forEach(b=>b.classList.toggle('active', b === hit));
       return hit ? hit.dataset[attr] : String(fallback);
     };
-    const tiers = (Array.isArray(p.difficulties) ? p.difficulties : []).filter(t=>t === 'konnyu' || t === 'kozepes');
+    const tiers = (Array.isArray(p.difficulties) ? p.difficulties : []).filter(t=>t === 'konnyu' || t === 'kozepes' || t === 'nehez');
     const useTiers = tiers.length ? tiers : ['konnyu','kozepes'];
     document.querySelectorAll('#difficulty-row .pill').forEach(b=>b.classList.toggle('active', useTiers.includes(b.dataset.tier)));
     settings.difficulties = useTiers.slice();
@@ -6300,7 +6324,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function sanitizeSettings(st){
     const s = isPlainObject(st) ? st : {};
     const out = {
-      difficulties: Array.isArray(s.difficulties) ? s.difficulties.filter(d=>d==='konnyu' || d==='kozepes') : [],
+      difficulties: Array.isArray(s.difficulties) ? s.difficulties.filter(d=>d==='konnyu' || d==='kozepes' || d==='nehez') : [],
       totalRounds: clampNum(s.totalRounds, 1, 20, 2),
       roundTime: clampNum(s.roundTime, 10, 900, 60),
       maxPlayers: clampNum(s.maxPlayers, 0, 20, 0),
@@ -11727,6 +11751,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     { version:'3.39', changes:[
       'Javítva (telefon): a rajzoló eszköztár jobb oldali ikonjai (radír, vissza, újra, törlés) túl kicsik voltak — most ugyanakkorák, mint a bal oldali eszközök.'
     ]},
+    { version:'3.39', changes:[
+      'Új: három nehézségi szint. A korábbi „Nehéz” lista neve mostantól „Közepes”, és van egy új, valóban „Nehéz” szint is — ritkább tárgyak, fogalmak és elvont szavak (pl. délibáb, kentaur, szerelem, visszhang). A szobanyitásnál bármelyik kombináció választható, alapból a könnyű és a közepes van bekapcsolva.',
+      'Az admin felületen a nehéz szavaknak is saját oszlopa van (hozzáadás, keresés, import, export).'
+    ]},
     { version:'3.38', changes:[
       'Javítva (telefon): tippelés közben, ha a képernyőn húztad az ujjad, az egész játék elgörgett. Most csak a tipplista és a játékossáv görgethető, a többi rész nem mozdul.',
       'Új: néző mód. A kezdőképernyőn bejelölheted, hogy „Csak nézőként csatlakozom” — így mindent látsz élőben (rajz, tippek, pontok, csevegés), de nem rajzolsz, nem tippelsz és nem kapsz pontot. Ideális kivetítőhöz egy bulin. A nézők nem számítanak bele a létszámkorlátba, a váróteremben külön sorban látszanak, a szobanyitó eltávolíthatja őket, és futó játékhoz is csatlakozhatnak.'
@@ -12723,7 +12751,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       // v3.36: reviewed — the word (or its fixed version) may come up again
       try{ await releaseHeldWord(g.word, token); }catch(err){ adminWrStatus(err.message, 'err'); }
       if(act !== 'keep'){
-        ['konnyu','kozepes'].forEach(t=>{ try{ renderAdminList(t); }catch(err){} });
+        ['konnyu','kozepes','nehez'].forEach(t=>{ try{ renderAdminList(t); }catch(err){} });
         try{ renderAdminHealth(); }catch(err){}
         try{ updateAdminDirty(); }catch(err){}
         adminWrStatus('Módosítva a szólistában. Ne felejtsd el: ☁️ Mentés élesben.', 'ok');
