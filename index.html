@@ -9556,7 +9556,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const parts = splitCompound(word);
       if(parts){
         const got = await Promise.all(parts.map(p=>wikiSummary(p).then(r=>r && wiRelevant(r.title, p) ? r : null).catch(()=>null)));
-        if(got.some(Boolean)) res = { compound:true, parts: parts.map((p,k)=>({ w:p, r:got[k] })) };
+        // v3.43: only when BOTH parts are explained — half an answer misleads ("autósiskola" ≠ "iskola")
+        if(got.every(Boolean)) res = { compound:true, parts: parts.map((p,k)=>({ w:p, r:got[k] })) };
       }
     }
     // 3) a search — but only a hit whose title is this very word
@@ -9567,9 +9568,16 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         for(const h of hits){ const r = await wikiSummary(h.title).catch(()=>null); if(r){ res = r; break; } }
       }catch(e){}
     }
-    const cut = (t, n)=> t && t.length > n ? t.slice(0, n).replace(/\s+\S*$/, '') + '…' : t;
+    // v3.43: whole sentences only — never stop in the middle of one
+    const cut = (t, n)=>{
+      if(!t) return t;
+      const sent = String(t).replace(/\s+/g,' ').trim().match(/[^.!?]+(?:[.!?]+|$)/g) || [t];
+      let out = '';
+      for(const x of sent){ if(out && (out + x).length > n) break; out += x; }
+      return out.trim();
+    };
     if(res && res.text) res.text = cut(res.text, 320);
-    if(res && res.compound) res.parts.forEach(pt=>{ if(pt.r) pt.r.text = cut(pt.r.text, 170); });
+    if(res && res.compound) res.parts.forEach(pt=>{ if(pt.r) pt.r.text = cut(pt.r.text, 200); });
     whatIsCache.set(word, res);
     return res;
   }
@@ -9587,15 +9595,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const res = await lookupWord(word);
     if(whatIsWord !== word || ov.classList.contains('hidden')) return;
     if(!res){
-      body.innerHTML = `<p class="whatis-none">Erről a szóról nem találtam leírást a Wikipédián. 🤔<br>Nézd meg képeken — a gomb új lapon nyílik, az óra közben megy tovább.</p>`;
+      body.innerHTML = `<p class="whatis-none">Erről a szóról nem találtam megbízható leírást. 🤔<br>Nézd meg képeken — a gomb új lapon nyílik, az óra közben megy tovább.</p>`;
       return;
     }
     if(res.compound){
       const found = res.parts.filter(pt=>pt.r);
       const img = (found.find(pt=>pt.r.img) || {}).r;
-      const head = found.length === res.parts.length
-        ? `Összetett szó: <b>${res.parts.map(pt=>escapeHtml(pt.w)).join(' + ')}</b>`
-        : `Erről a szóról nincs külön leírás, de ez segíthet: <b>${escapeHtml(found[0].w)}</b>`;
+      const head = `Összetett szó, a részei: <b>${res.parts.map(pt=>escapeHtml(pt.w)).join(' + ')}</b>`;
       body.innerHTML =
         `<div class="whatis-approx">${head}</div>` +
         (img ? `<img class="whatis-img" alt="" src="${escapeHtml(img.img)}" referrerpolicy="no-referrer" loading="eager">` : '') +
@@ -11924,6 +11930,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.43', changes:[
+      'A „Mi ez?” nem mutat félrevezető fél-választ: összetett szónál csak akkor magyaráz, ha mindkét részt megtalálta, különben a képkeresést ajánlja. A leírás mindig egész mondatokból áll, nem vágódik el mondat közepén.'
+    ]},
     { version:'3.42', changes:[
       'A „Mi ez?” gomb csak rajzolás közben látszik, a szóválasztásnál már nincs ott.',
       'A „Mi ez?” csak olyan leírást mutat, ami tényleg ahhoz a szóhoz tartozik. Összetett szavaknál (pl. hegedűhúr) a két részt magyarázza el külön (hegedű + húr). Ha nincs megbízható találat, ezt őszintén megírja, és a képkeresést ajánlja.'
