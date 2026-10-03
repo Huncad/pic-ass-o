@@ -1750,6 +1750,7 @@
   .whatis-text{ margin:0 0 8px; line-height:1.5; color:var(--chalk); font-size:.95rem; }
   .whatis-approx{ font-size:.82rem; color:var(--chalk-dim); margin-bottom:6px; }
   .whatis-src{ font-size:.8rem; color:var(--blue); }
+  .whatis-src-row{ font-size:.8rem; color:var(--chalk-dim); }
   .whatis-none, .whatis-loading{ color:var(--chalk-dim); line-height:1.5; margin:6px 0 10px; }
   .whatis-actions{ display:flex; gap:10px; margin-top:14px; }
   .whatis-actions > *{ flex:1; text-align:center; padding:11px 12px; border-radius:12px; font-weight:800; text-decoration:none; }
@@ -9487,16 +9488,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         buttons.forEach(disarmAutoPress);
         chooseWordAndStart(c);
       });
-      // v3.40: "Mi ez?" — a small help button next to every offered word
-      const wrap = document.createElement('div');
-      wrap.className = 'choice-wrap';
-      const q = document.createElement('button');
-      q.type = 'button'; q.className = 'whatis-btn'; q.textContent = '?';
-      q.title = `Mi az, hogy „${c.w}”? (csak te látod)`;
-      q.setAttribute('aria-label', `Mi az, hogy ${c.w}?`);
-      q.addEventListener('click', e=>{ e.stopPropagation(); openWhatIs(c.w); });
-      wrap.appendChild(b); wrap.appendChild(q);
-      choicesEl.appendChild(wrap);
+      choicesEl.appendChild(b);
       return b;
     });
     choicesEl.classList.remove('hidden');
@@ -9519,18 +9511,65 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     return { title: d.title, text: d.extract, img: (d.thumbnail && d.thumbnail.source) || '',
              url: (d.content_urls && d.content_urls.desktop && d.content_urls.desktop.page) || '' };
   }
+  // v3.42: only answers that really belong to the word. A search hit that
+  // merely mentions the word somewhere ("hegedűhúr" -> "kvantálás") is thrown
+  // away; a compound word is explained through its parts instead.
+  const wiNorm = t=>String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+    .replace(/\s*\(.*?\)\s*/g,'').replace(/[^a-z0-9]/g,'');
+  function wiRelevant(title, word){
+    const t = wiNorm(title), w = wiNorm(word);
+    if(!t || !w) return false;
+    if(t === w) return true;
+    // inflected/plural titles ("hegedűk") or a slightly longer form of the same word
+    if(t.length >= 4 && w.startsWith(t) && w.length - t.length <= 2) return true;
+    if(w.length >= 4 && t.startsWith(w) && t.length - w.length <= 3) return true;
+    return false;
+  }
+  let wiWordSet = null;
+  function splitCompound(word){
+    if(!wiWordSet){
+      wiWordSet = new Set();
+      try{ WORDS.forEach(x=>{ const v = String(x.w||'').toLowerCase(); if(/^[a-záéíóöőúüű]{2,}$/.test(v)) wiWordSet.add(v); }); }catch(e){}
+    }
+    const w = String(word||'').toLowerCase().trim();
+    if(!/^[a-záéíóöőúüű]{5,}$/.test(w)) return null;
+    // both parts known words is best; otherwise the longest known first part
+    // with a real-looking rest ("tigris" + "minta", "hegedű" + "húr")
+    let best = null;
+    for(let k = 2; k <= w.length - 3; k++){
+      const a = w.slice(0,k), b = w.slice(k);
+      const ka = wiWordSet.has(a), kb = wiWordSet.has(b);
+      if(!ka && !kb) continue;
+      if(!ka && a.length < 3) continue;
+      const score = (ka && kb ? 100 : 0) + (ka ? a.length : 0) + (kb ? b.length : 0);
+      if(!best || score > best.score) best = { a, b, score };
+    }
+    return best ? [best.a, best.b] : null;
+  }
   async function lookupWord(word){
     if(whatIsCache.has(word)) return whatIsCache.get(word);
     let res = null;
-    try{ res = await wikiSummary(word); }catch(e){}
+    // 1) the article for the word itself (redirects only if they still match)
+    try{ const r = await wikiSummary(word); if(r && wiRelevant(r.title, word)) res = r; }catch(e){}
+    // 2) a compound word: explain both parts
+    if(!res){
+      const parts = splitCompound(word);
+      if(parts){
+        const got = await Promise.all(parts.map(p=>wikiSummary(p).then(r=>r && wiRelevant(r.title, p) ? r : null).catch(()=>null)));
+        if(got.some(Boolean)) res = { compound:true, parts: parts.map((p,k)=>({ w:p, r:got[k] })) };
+      }
+    }
+    // 3) a search — but only a hit whose title is this very word
     if(!res){
       try{
-        const s = await fetchJson('https://hu.wikipedia.org/w/api.php?action=query&list=search&srlimit=3&format=json&origin=*&srsearch=' + encodeURIComponent(word));
-        const hits = (s && s.query && s.query.search) || [];
-        for(const h of hits){ res = await wikiSummary(h.title).catch(()=>null); if(res){ res.approx = true; break; } }
+        const sr = await fetchJson('https://hu.wikipedia.org/w/api.php?action=query&list=search&srlimit=5&format=json&origin=*&srsearch=' + encodeURIComponent(word));
+        const hits = ((sr && sr.query && sr.query.search) || []).filter(h=>wiRelevant(h.title, word));
+        for(const h of hits){ const r = await wikiSummary(h.title).catch(()=>null); if(r){ res = r; break; } }
       }catch(e){}
     }
-    if(res && res.text.length > 320) res.text = res.text.slice(0, 320).replace(/\s+\S*$/, '') + '…';
+    const cut = (t, n)=> t && t.length > n ? t.slice(0, n).replace(/\s+\S*$/, '') + '…' : t;
+    if(res && res.text) res.text = cut(res.text, 320);
+    if(res && res.compound) res.parts.forEach(pt=>{ if(pt.r) pt.r.text = cut(pt.r.text, 170); });
     whatIsCache.set(word, res);
     return res;
   }
@@ -9551,9 +9590,23 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       body.innerHTML = `<p class="whatis-none">Erről a szóról nem találtam leírást a Wikipédián. 🤔<br>Nézd meg képeken — a gomb új lapon nyílik, az óra közben megy tovább.</p>`;
       return;
     }
+    if(res.compound){
+      const found = res.parts.filter(pt=>pt.r);
+      const img = (found.find(pt=>pt.r.img) || {}).r;
+      const head = found.length === res.parts.length
+        ? `Összetett szó: <b>${res.parts.map(pt=>escapeHtml(pt.w)).join(' + ')}</b>`
+        : `Erről a szóról nincs külön leírás, de ez segíthet: <b>${escapeHtml(found[0].w)}</b>`;
+      body.innerHTML =
+        `<div class="whatis-approx">${head}</div>` +
+        (img ? `<img class="whatis-img" alt="" src="${escapeHtml(img.img)}" referrerpolicy="no-referrer" loading="eager">` : '') +
+        found.map(pt=>`<p class="whatis-text"><b>${escapeHtml(pt.w)}:</b> ${escapeHtml(pt.r.text)}</p>`).join('') +
+        `<div class="whatis-src-row">Forrás: Wikipédia</div>`;
+      const im = body.querySelector('.whatis-img');
+      if(im) im.addEventListener('error', ()=>im.remove(), { once:true });
+      return;
+    }
     body.innerHTML =
       (res.img ? `<img class="whatis-img" alt="" src="${escapeHtml(res.img)}" referrerpolicy="no-referrer" loading="eager">` : '') +
-      (res.approx && res.title.toLowerCase() !== word.toLowerCase() ? `<div class="whatis-approx">Legközelebbi találat: <b>${escapeHtml(res.title)}</b></div>` : '') +
       `<p class="whatis-text">${escapeHtml(res.text)}</p>` +
       (res.url ? `<a class="whatis-src" href="${escapeHtml(res.url)}" target="_blank" rel="noopener noreferrer">Forrás: Wikipédia ↗</a>` : '');
     const img = body.querySelector('.whatis-img');
@@ -11871,6 +11924,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.42', changes:[
+      'A „Mi ez?” gomb csak rajzolás közben látszik, a szóválasztásnál már nincs ott.',
+      'A „Mi ez?” csak olyan leírást mutat, ami tényleg ahhoz a szóhoz tartozik. Összetett szavaknál (pl. hegedűhúr) a két részt magyarázza el külön (hegedű + húr). Ha nincs megbízható találat, ezt őszintén megírja, és a képkeresést ajánlja.'
+    ]},
     { version:'3.41', changes:[
       'Új: „Mi ez?” segítség a rajzolónak. A felkínált szavak mellett és rajzolás közben a szó mellett is van egy kis ? gomb: rányomva megjelenik egy kép és egy rövid leírás a szóról (Wikipédiából), és egy gombbal képkeresés is indítható. Csak a rajzoló látja, a tippelők nem, és az óra közben megy tovább.'
     ]},
