@@ -1834,6 +1834,11 @@
   body.time-urgent .watch-top .timer, body.time-urgent #watch-timer{ color:#fff !important; background:var(--red) !important; transform:scale(1.15); }
   body.time-urgent #watch-guess-input{ border-color:var(--red) !important; box-shadow:0 0 0 3px rgba(255,90,80,.35); }
   @media (prefers-reduced-motion: reduce){ #urgency-overlay, .urgency-badge{ animation:none; } }
+
+  /* ===== v3.50: players who are away ===== */
+  .rchip.away, .player-chip.away{ opacity:.5; filter:grayscale(.7); }
+  .rchip .raway{ font-size:.68rem; font-weight:800; color:var(--chalk-dim); white-space:nowrap; }
+  .player-chip .chip-away{ font-size:.72rem; font-weight:800; opacity:.9; }
 </style>
 </head>
 <body>
@@ -4880,6 +4885,25 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let roomPresenceKey = '', roomPresenceCode = '';
   let currentIsSilent = null;                 // the live room's own silence check
   let currentScheduleGrace = null;            // the live room's grace starter
+  // v3.50: players who are (probably) not at the game right now: their page
+  // is closing, their phone put the game in the background, or their
+  // connection is being waited for. Shown greyed out with a "nincs itt" mark.
+  const awayPeers = new Map();               // peerId -> { since, why }
+  function setAway(peerId, why){
+    if(!peerId || peerId === selfId) return;
+    if(why){ if(!awayPeers.has(peerId) || awayPeers.get(peerId).why !== why) awayPeers.set(peerId, { since: Date.now(), why }); }
+    else if(!awayPeers.delete(peerId)) return;
+    refreshAwayUI();
+  }
+  function refreshAwayUI(){
+    try{ renderRosters(); }catch(e){}
+    try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){}
+  }
+  function awayLabel(id){
+    const a = awayPeers.get(id);
+    if(!a) return '';
+    return a.why === 'closing' ? 'kilépett?' : a.why === 'background' ? 'háttérben' : 'nincs kapcsolat';
+  }
   const goneOnMqtt = new Map();               // v3.04: peerId -> when its page said "I'm closing"
   // v3.10 (see diagnose()): the guest's box after a failed join; waits a few
   // seconds for the host's facts if they haven't arrived yet
@@ -5622,7 +5646,47 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // long gone. Every device now says "alive" every 4 s; someone silent
     // for 20 s counts as disconnected (with the usual grace period).
     const aliveAction = room.makeAction('alive');
-    aliveAction.onMessage = (_, {peerId})=>{ if(room === thisRoom) peerLastAlive.set(peerId, Date.now()); };
+    aliveAction.onMessage = (_, {peerId})=>{
+      if(room !== thisRoom) return;
+      peerLastAlive.set(peerId, Date.now());
+      // alive again after being away in the background / without a link
+      const a = awayPeers.get(peerId);
+      if(a && a.why !== 'closing' && Date.now() - a.since > 1500){
+        setAway(peerId, null);
+        if(pendingLeaveTimers.has(peerId)){ clearTimeout(pendingLeaveTimers.get(peerId)); pendingLeaveTimers.delete(peerId); }
+      }
+    };
+    // v3.50: "I am closing" / "my phone put me in the background" / "I'm back".
+    // Closing a tab is only waited for a few seconds (enough for a page
+    // reload to come back as the same player); a phone in the background
+    // for half a minute is taken as gone — before, both took over a minute.
+    const presenceAction = room.makeAction('presence');
+    const CLOSING_GRACE_MS = 10000, BACKGROUND_GRACE_MS = 30000;
+    presenceAction.onMessage = (data, {peerId})=>{
+      if(room !== thisRoom || !isPlainObject(data)) return;
+      const known = (meta && activePlayerIds.has(peerId)) || lobbyPlayers[peerId] !== undefined || spectators[peerId] !== undefined;
+      if(!known) return;
+      if(data.s === 'closing'){
+        setAway(peerId, 'closing');
+        // guests wait a little longer, so a reload is first recognised by the room owner
+        scheduleGraceLeave(peerId, CLOSING_GRACE_MS + (isHost ? 0 : 3000));
+      } else if(data.s === 'background'){
+        setAway(peerId, 'background');
+        scheduleGraceLeave(peerId, BACKGROUND_GRACE_MS);
+      } else if(data.s === 'back'){
+        setAway(peerId, null);
+        if(pendingLeaveTimers.has(peerId)){ clearTimeout(pendingLeaveTimers.get(peerId)); pendingLeaveTimers.delete(peerId); }
+      }
+    };
+    const sendPresence = st=>{ try{ if(room === thisRoom) presenceAction.send({ s: st }); }catch(e){} };
+    window.__picassoPresence = sendPresence;
+    document.addEventListener('visibilitychange', ()=>{
+      if(room !== thisRoom) return;
+      // only phones: a desktop tab in the background keeps running and
+      // playing (and gets notifications), so it is not "away"
+      if(!IS_MOBILE) return;
+      sendPresence(document.visibilityState === 'hidden' ? 'background' : 'back');
+    });
     const aliveTimer = setInterval(()=>{
       if(room !== thisRoom){ clearInterval(aliveTimer); return; }
       try{ aliveAction.send(1); }catch(e){}
@@ -5664,7 +5728,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       return (t !== undefined) && (Date.now() - t > ALIVE_STALE_MS);
     }
     currentIsSilent = isSilent;
-    currentScheduleGrace = (id)=>{ try{ scheduleGraceLeave(id); }catch(e){} };
+    currentScheduleGrace = (id, ms)=>{ try{ scheduleGraceLeave(id, ms); }catch(e){} };
 
     // Someone who deliberately leaves tells everyone first (see
     // leaveRoomAndGoHome), so we can remove them immediately instead of
@@ -5672,6 +5736,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     function removePeerNow(peerId, why){
       if(room !== thisRoom) return;
       lostSince.delete(peerId);
+      awayPeers.delete(peerId);
       clog(why === 'bye' ? 'K07' : 'K06', `${why === 'bye' ? 'szándékosan kilépett' : 'kilépettnek véve'}: ${(meta && meta.playerNames[peerId]) || lobbyPlayers[peerId] || '?'} (${String(peerId).slice(0,5)}) · MQTT-jelenlét: ${peerAliveOnMqtt(peerId) ? 'IGEN' : 'nincs'}`);
       if(pendingLeaveTimers.has(peerId)){
         clearTimeout(pendingLeaveTimers.get(peerId));
@@ -5730,8 +5795,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // rebuilt, so the live list momentarily empty — removed EVERYONE else
     // right away, ended the game on its own screen and "kicked itself out".
     const graceExtended = new Map();
-    function scheduleGraceLeave(peerId){
-      if(pendingLeaveTimers.has(peerId)) return;
+    function scheduleGraceLeave(peerId, shortMs){
+      if(pendingLeaveTimers.has(peerId)){
+        // v3.50: a page that said it is closing doesn't wait out a long grace
+        if(!shortMs) return;
+        clearTimeout(pendingLeaveTimers.get(peerId)); pendingLeaveTimers.delete(peerId);
+      }
+      if(!awayPeers.has(peerId)) setAway(peerId, 'lost');
       // v3.04: a reloaded page rejoins BEFORE its old connection is noticed
       // as dropped. When the old copy drops while a same-name copy is here
       // and connected, it's the same person: merge them now instead of
@@ -5739,16 +5809,18 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(isHost && meta && !gameEnded && hostReplaceReloadedPlayer(peerId)) return;
       noteLost(peerId);
       // what's left of the overall deadline (a rebuilt connection doesn't restart it)
-      const graceMs = Math.min(PEER_LEAVE_GRACE_MS, Math.max(5000, LOST_LIMIT_MS - lostFor(peerId)));
+      const graceMs = shortMs || Math.min(PEER_LEAVE_GRACE_MS, Math.max(5000, LOST_LIMIT_MS - lostFor(peerId)));
       clog('K04', `türelmi idő indul (${Math.round(graceMs/1000)} mp; ${Math.round(lostFor(peerId)/1000)} mp óta nincs kapcsolat): ${(meta && meta.playerNames[peerId]) || lobbyPlayers[peerId] || '?'}${isSilent(peerId) ? ' — csendben van (K03)' : ''}`);
       const timer = setTimeout(()=>{
         pendingLeaveTimers.delete(peerId);
         if(room !== thisRoom) return;
         const again = livePeerIdSet();
-        if(again && again.has(peerId) && !isSilent(peerId)) return;   // came back in the meantime
+        const closing = awayPeers.has(peerId) && awayPeers.get(peerId).why === 'closing';
+        if(!closing && again && again.has(peerId) && !isSilent(peerId)){ setAway(peerId, null); return; }   // came back in the meantime
+        if(isHost && meta && !gameEnded && hostReplaceReloadedPlayer(peerId)) return;   // it was a reload
         // v3.02: still in the room according to the direct MQTT channel —
         // only the connection broke. One more grace period while it's rebuilt.
-        if(peerAliveOnMqtt(peerId) && (graceExtended.get(peerId) || 0) < 1 && lostFor(peerId) < LOST_LIMIT_MS - 5000){
+        if(!shortMs && peerAliveOnMqtt(peerId) && (graceExtended.get(peerId) || 0) < 1 && lostFor(peerId) < LOST_LIMIT_MS - 5000){
           graceExtended.set(peerId, (graceExtended.get(peerId) || 0) + 1);
           clog('K05', `türelmi idő meghosszabbítva: ${(meta && meta.playerNames[peerId]) || lobbyPlayers[peerId] || '?'} az MQTT szerint még a szobában van`);
           scheduleGraceLeave(peerId);
@@ -5775,6 +5847,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
 
     room.onPeerJoin = (peerId)=>{
       if(room !== thisRoom) return;
+      setAway(peerId, null);
       if(pendingLeaveTimers.has(peerId)){
         clearTimeout(pendingLeaveTimers.get(peerId));
         pendingLeaveTimers.delete(peerId);
@@ -7841,7 +7914,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       roomAliveOnMqtt.delete(from);
       goneOnMqtt.set(from, Date.now());
       clog('K13', `${(meta && meta.playerNames[from]) || lobbyPlayers[from] || '?'} (${String(from).slice(0,5)}) oldala bezárult vagy újratöltődik`);
-      if(room && currentScheduleGrace && ((meta && activePlayerIds.has(from)) || lobbyPlayers[from] !== undefined)) currentScheduleGrace(from);
+      if(room && currentScheduleGrace && ((meta && activePlayerIds.has(from)) || lobbyPlayers[from] !== undefined)){ setAway(from, 'closing'); currentScheduleGrace(from, 10000 + (isHost ? 0 : 3000)); }
     }
     if(m.t === 'knockack' && m.to === selfId && typeof m.k === 'string' && pendingKnockKey && m.k === pendingKnockKey){
       knockAckedAt = Date.now();
@@ -9544,8 +9617,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       `<div class="player-chip pending" title="Most próbál csatlakozni — a kapcsolat még épül">⏳ ${escapeHtml(n)} csatlakozik…</div>`).join('') + ids.map(id=>{
       const canKick = isHost && id !== selfId;
       const canVote = !isHost && id !== selfId && id !== hostPeerId;
-      return `<div class="player-chip ${id===selfId?'me':''}">
-        ${nameDotHtml(id)}${escapeHtml(lobbyPlayers[id])}${id===selfId?' (Te)':''}
+      const away = awayLabel(id);
+      return `<div class="player-chip ${id===selfId?'me':''}${away?' away':''}"${away?` title="${away}"`:''}>
+        ${nameDotHtml(id)}${escapeHtml(lobbyPlayers[id])}${id===selfId?' (Te)':''}${away?` <small class="chip-away">💤 ${away}</small>`:''}
         ${canKick ? `<button class="lobby-kick-btn" data-peer="${escapeHtml(id)}" title="Kirúgás" aria-label="${escapeHtml(lobbyPlayers[id])} eltávolítása a szobából">✕</button>` : ''}
         ${canVote ? `<button class="lobby-kick-btn lobby-vote-btn" data-peer="${escapeHtml(id)}" title="Szavazás a kizárásáról" aria-label="Szavazás ${escapeHtml(lobbyPlayers[id])} kizárásáról">🗳️</button>` : ''}
       </div>`;
@@ -11100,11 +11174,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const name = meta.playerNames[id];
       const isMe = id === selfId, isDrawer = id === drawerId;
       const votable = !isMe && id !== roomHostId();
-      return `<div class="rchip${isMe?' me':''}${isDrawer?' drawer':''}${votable?' votable':''}" data-id="${escapeHtml(id)}" title="${escapeHtml(name)}${isDrawer?' — most ő rajzol':''}${votable?' · koppints a kizárás megszavazásához':''}">
+      const away = awayLabel(id);
+      return `<div class="rchip${isMe?' me':''}${isDrawer?' drawer':''}${votable?' votable':''}${away?' away':''}" data-id="${escapeHtml(id)}" title="${escapeHtml(name)}${away?' — '+away:''}${isDrawer?' — most ő rajzol':''}${votable?' · koppints a kizárás megszavazásához':''}">
         ${avatarHtml(id, name)}
         <span class="rname">${escapeHtml(name)}</span>
         ${isMe ? '<span class="rtag">Te</span>' : ''}${isDrawer ? '<span class="rtag">✏️</span>' : ''}
-        <span class="rscore">${scores[id]||0}</span>
+        ${away ? `<span class="raway">💤 ${away}</span>` : ''}<span class="rscore">${scores[id]||0}</span>
       </div>`;
     }).join('');
     ['watch-roster','fd-roster'].forEach(rid=>{
@@ -12034,6 +12109,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     joinOrderIds = [];
     lobbyPlayers = {};
     spectators = {}; amSpectator = false; document.body.classList.remove('is-spectator');
+    awayPeers.clear();
     rematchYesVotes = new Set();
     rematchDeadline = 0; clearInterval(rematchTicker); rematchTicker = null;
     roomCode = '';
@@ -12281,6 +12357,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.50', changes:[
+      'Aki bezárja a játékot, azt a többiek kb. 10 másodpercen belül kilépettnek látják (eddig akár egy percig is bent maradt). Ha csak újratöltötte az oldalt, ez alatt visszatér, és megmarad a helye és a pontjai.',
+      'Telefonon, ha valaki háttérbe teszi a játékot, a többiek azonnal látják („💤 háttérben”), és ha 30 másodpercen belül nem tér vissza, kilépettnek számít. Gépen a másik fülre váltás nem számít távollétnek.',
+      'A játékoslistákon és a váróteremben halványan, „💤” jelöléssel látszik, akinek épp nincs kapcsolata, háttérben van, vagy épp kilép.'
+    ]},
     { version:'3.49', changes:[
       'Javítva: a chatablak átméretezésekor a megfogott bal felső sarok követi az egeret, a szemközti (jobb alsó) sarok pedig a helyén marad — mint egy rendes ablaknál.'
     ]},
@@ -13405,6 +13486,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // Called from the page-level 'pagehide' hook: closing the tab must not
   // leave the microphone running or a dead room advertised in the list.
   window.__picassoCleanup = function(){
+    try{ window.__picassoPresence && window.__picassoPresence('closing'); }catch(e){}
     try{ stopRecording(true); }catch(e){}
     try{ if(isHost) withdrawMyRoom(); }catch(e){}
     // v3.04: tell the room right away that this page is going (a reload
