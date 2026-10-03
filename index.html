@@ -892,6 +892,7 @@
   #chat-panel{
     position:fixed; right:16px; bottom:82px; z-index:900;
     width:min(340px, calc(100vw - 32px)); max-height:min(60vh, 480px);
+    --chat-w:420px; --chat-h:560px;
     background:var(--panel); border:2px solid rgba(244,241,230,0.25); border-radius:16px;
     display:flex; flex-direction:column; overflow:hidden;
     box-shadow:0 20px 45px rgba(0,0,0,0.55);
@@ -1794,6 +1795,20 @@
   @media (max-width:1100px){ #admin-overlay .admin-columns{ grid-template-columns:1fr 1fr; } }
   @media (max-width:720px){ #admin-overlay .admin-columns{ grid-template-columns:1fr; } #admin-overlay .admin-box{ padding:20px 16px; }
     #admin-panel-box > .admin-panel-header{ margin:-20px -16px 12px; padding:14px 16px 10px; top:-20px; } }
+
+  /* ===== v3.45: chat — a proper size on PC, and resizable ===== */
+  @media (min-width:860px) and (pointer:fine){
+    #chat-panel{ width:min(var(--chat-w), calc(100vw - 32px)); height:min(var(--chat-h), calc(100vh - 110px)); max-height:none; font-size:1rem; }
+    #chat-messages{ font-size:.95rem; }
+    #chat-panel #chat-resize{ display:block; }
+  }
+  #chat-resize{ display:none; position:absolute; top:0; left:0; width:22px; height:22px; cursor:nwse-resize; z-index:3;
+    background:linear-gradient(135deg, var(--yellow) 0 18%, transparent 18% 32%, color-mix(in srgb, var(--yellow) 70%, transparent) 32% 44%, transparent 44%);
+    border-top-left-radius:14px; opacity:.75; touch-action:none; }
+  #chat-resize:hover{ opacity:1; }
+  #chat-panel.resizing{ user-select:none; transition:none; }
+  #chat-new-below{ position:absolute; left:50%; transform:translateX(-50%); bottom:64px; z-index:3; padding:5px 12px; border-radius:999px;
+    font-size:.8rem; font-weight:800; background:var(--yellow); color:#16302A; border:none; box-shadow:0 4px 12px rgba(0,0,0,.35); cursor:pointer; min-height:0; }
 </style>
 </head>
 <body>
@@ -6509,25 +6524,68 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const idx = currentRound ? currentRound.idx : -1;
     const nextIdx = idx + 1;
     const roundDone = !!currentRound && processedResultRounds.has(roundKey(currentRound));
-    if(roundDone && nextIdx < meta.turnOrder.length && !activePlayerIds.has(meta.turnOrder[nextIdx])){
-      const { id: newId } = pickNextActiveDrawer(nextIdx);
-      if(newId) meta.turnOrder[nextIdx] = newId;
-    }
-    // only reshuffle later turns if a player who is gone is still in them
-    if(meta.turnOrder.slice(nextIdx + 1).some(id=>!activePlayerIds.has(id))) rebuildFutureTurns();
+    // v3.45: turns of players who are gone are removed, not reassigned —
+    // so the remaining rounds get shorter instead of others drawing more
+    if(meta.turnOrder.slice(nextIdx).some(id=>!activePlayerIds.has(id))) dropGoneFutureTurns(nextIdx);
     try{ if(turnSyncAction) turnSyncAction.send({ turnOrder: meta.turnOrder }); }catch(e){}
     if(showingRoundEnd && roundDone) setupNextRoundControls(idx);
   }
   // v3.26: "Kör 2 / 3 · 4. rajz" — a round is one drawing per player
-  function drawingsPerRound(){
-    if(!meta) return 1;
-    return Math.max(1, Math.round(meta.turnOrder.length / Math.max(1, Number(settings && settings.totalRounds) || 1)));
+  // v3.45: rounds are read from the turn order itself — a new round starts
+  // when someone would draw for the second time. So when a player leaves and
+  // their turns are dropped, the following rounds simply get shorter
+  // (3 players -> 2 players = 2 drawings per round), on every device alike.
+  let roundSegCache = { key:'', seg:null };
+  function roundSegments(){
+    if(!meta) return { of:[], start:[], len:[] };
+    const key = meta.turnOrder.join(',');
+    if(roundSegCache.key === key && roundSegCache.seg) return roundSegCache.seg;
+    const of = [], start = [], len = [];
+    let seen = new Set(), r = -1;
+    meta.turnOrder.forEach((id, i)=>{
+      if(r < 0 || seen.has(id)){ r++; seen = new Set(); start.push(i); len.push(0); }
+      seen.add(id); of.push(r); len[r]++;
+    });
+    const seg = { of, start, len };
+    roundSegCache = { key, seg };
+    return seg;
   }
-  function roundOfTurn(idx){ return Math.min(Math.max(1, Number(settings && settings.totalRounds) || 1), Math.floor(idx / drawingsPerRound()) + 1); }
+  function drawingsPerRound(idx){
+    const sg = roundSegments();
+    if(!sg.of.length) return 1;
+    const i = Math.min(Math.max(0, idx == null ? (currentRound ? currentRound.idx : 0) : idx), sg.of.length - 1);
+    return sg.len[sg.of[i]] || 1;
+  }
+  function drawingPosInRound(idx){
+    const sg = roundSegments();
+    const i = Math.min(Math.max(0, idx), sg.of.length - 1);
+    return sg.of.length ? (i - sg.start[sg.of[i]] + 1) : 1;
+  }
+  function totalRoundCount(){ return Math.max(1, roundSegments().len.length); }
+  function roundOfTurn(idx){
+    const sg = roundSegments();
+    if(!sg.of.length) return 1;
+    return sg.of[Math.min(Math.max(0, idx), sg.of.length - 1)] + 1;
+  }
   function roundLabel(idx){
     if(!meta) return '';
-    const per = drawingsPerRound(), total = Math.max(1, Number(settings && settings.totalRounds) || 1);
-    return `Kör ${roundOfTurn(idx)} / ${total}` + (per > 1 ? ` · ${(idx % per) + 1}/${per}. rajz` : '');
+    const per = drawingsPerRound(idx);
+    return `Kör ${roundOfTurn(idx)} / ${totalRoundCount()}` + (per > 1 ? ` · ${drawingPosInRound(idx)}/${per}. rajz` : '');
+  }
+  // HOST: drop every future turn of players who are gone (instead of handing
+  // their turns to the others), and never let one person draw twice in a row.
+  function dropGoneFutureTurns(fromIdx){
+    const order = meta.turnOrder;
+    const head = order.slice(0, fromIdx);
+    let tail = order.slice(fromIdx).filter(id=>activePlayerIds.has(id));
+    for(let i = 0; i < tail.length; i++){
+      const prev = i === 0 ? head[head.length - 1] : tail[i-1];
+      if(tail[i] === prev){
+        const j = tail.findIndex((id, k)=>k > i && id !== prev);
+        if(j > i){ const t = tail[i]; tail[i] = tail[j]; tail[j] = t; }
+      }
+    }
+    meta.turnOrder = head.concat(tail);
   }
   function rebuildFutureTurns(){
     const order = meta.turnOrder;
@@ -8545,9 +8603,73 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     el.classList.remove('hidden');
   }
 
+  // v3.45: the message list follows new messages as long as you are at the
+  // bottom (also while the panel was closed, or a picture/voice message grows
+  // after it arrived). If you scrolled up to read, a "new message" pill shows.
+  let chatStick = true;
+  function chatToEnd(){
+    const list = document.getElementById('chat-messages');
+    list.scrollTop = list.scrollHeight;
+    requestAnimationFrame(()=>{ list.scrollTop = list.scrollHeight; });
+    const pill = document.getElementById('chat-new-below'); if(pill) pill.classList.add('hidden');
+    chatStick = true;
+  }
+  (function(){
+    const list = document.getElementById('chat-messages');
+    const panel = document.getElementById('chat-panel');
+    const pill = document.createElement('button');
+    pill.id = 'chat-new-below'; pill.type = 'button'; pill.className = 'hidden'; pill.textContent = '⬇ Új üzenet';
+    pill.addEventListener('click', chatToEnd);
+    panel.appendChild(pill);
+    list.addEventListener('scroll', ()=>{
+      chatStick = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+      if(chatStick) pill.classList.add('hidden');
+    }, { passive:true });
+    new MutationObserver(muts=>{
+      const added = muts.some(m=>m.addedNodes.length);
+      if(chatStick || panel.classList.contains('hidden')) chatToEnd();
+      else if(added) pill.classList.remove('hidden');
+    }).observe(list, { childList:true, subtree:true });
+    try{ new ResizeObserver(()=>{ if(chatStick) list.scrollTop = list.scrollHeight; }).observe(list); }catch(e){}
+    // resize handle (top-left corner) — size kept on this device
+    const KEY = 'picasso-chat-size';
+    try{ const v = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if(v && v.w && v.h){ panel.style.setProperty('--chat-w', v.w + 'px'); panel.style.setProperty('--chat-h', v.h + 'px'); } }catch(e){}
+    const h = document.createElement('div');
+    h.id = 'chat-resize'; h.title = 'Húzd a méretezéshez (dupla kattintás: alapméret)';
+    panel.appendChild(h);
+    let sx = 0, sy = 0, sw = 0, sh = 0, growLeft = true, growUp = true;
+    h.addEventListener('pointerdown', e=>{
+      e.preventDefault(); h.setPointerCapture(e.pointerId);
+      const r = panel.getBoundingClientRect();
+      sx = e.clientX; sy = e.clientY; sw = r.width; sh = r.height;
+      // the corner grows away from whichever side the panel is pinned to
+      growLeft = r.right > window.innerWidth / 2; growUp = r.bottom > window.innerHeight / 2;
+      panel.classList.add('resizing');
+    });
+    h.addEventListener('pointermove', e=>{
+      if(!panel.classList.contains('resizing')) return;
+      const w = Math.round(Math.min(window.innerWidth - 32, Math.max(300, sw + (growLeft ? sx - e.clientX : e.clientX - sx))));
+      const hh = Math.round(Math.min(window.innerHeight - 110, Math.max(260, sh + (growUp ? sy - e.clientY : e.clientY - sy))));
+      panel.style.setProperty('--chat-w', w + 'px'); panel.style.setProperty('--chat-h', hh + 'px');
+      if(chatStick) list.scrollTop = list.scrollHeight;
+    });
+    const end = ()=>{
+      if(!panel.classList.contains('resizing')) return;
+      panel.classList.remove('resizing');
+      const r = panel.getBoundingClientRect();
+      try{ localStorage.setItem(KEY, JSON.stringify({ w: Math.round(r.width), h: Math.round(r.height) })); }catch(e){}
+    };
+    h.addEventListener('pointerup', end); h.addEventListener('pointercancel', end);
+    h.addEventListener('dblclick', ()=>{
+      panel.style.removeProperty('--chat-w'); panel.style.removeProperty('--chat-h');
+      try{ localStorage.removeItem(KEY); }catch(e){}
+    });
+  })();
   function openChatPanel(opts){
     const panel = document.getElementById('chat-panel');
     panel.classList.remove('hidden');
+    chatToEnd();
     chatUnread = 0; updateChatBadge();
     if(opts && opts.focusInput) document.getElementById('chat-text-input').focus();
   }
@@ -9488,9 +9610,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!meta) return;
     showOnly(['fd-prepare']);
     document.getElementById('prep-round-num').textContent = roundOfTurn(idx);
-    document.getElementById('prep-round-total').textContent = Math.max(1, Number(settings.totalRounds) || 1);
+    document.getElementById('prep-round-total').textContent = totalRoundCount();
     const pd = document.getElementById('prep-drawing-num');
-    if(pd){ const per = drawingsPerRound(); pd.textContent = per > 1 ? `${(idx % per) + 1}. rajz a ${per}-ból` : ''; }
+    if(pd){ const per = drawingsPerRound(idx); pd.textContent = per > 1 ? `${drawingPosInRound(idx)}. rajz a ${per}-ból` : ''; }
     document.getElementById('prep-word-hidden').classList.remove('hidden');
     document.getElementById('prep-word-shown').classList.add('hidden');
     document.getElementById('prep-tier-badge').classList.add('hidden');
@@ -10951,7 +11073,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const locked = guessLocked();
     input.disabled = locked;
     if(btn) btn.disabled = locked;
-    input.placeholder = amSpectator ? '👀 Nézőként nem tippelhetsz' : (locked ? '⏳ Várd meg, amíg elkezd rajzolni…' : input.dataset.ph0);
+    input.placeholder = amSpectator ? '👀 Nézőként nem tippelhetsz' : (locked ? '⏳ Még nem rajzol…' : input.dataset.ph0);
   }
   function submitWatchGuess(){
     const input = document.getElementById('watch-guess-input');
@@ -11341,8 +11463,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
 
   function scoreRows(){
     if(!meta) return [];
-    const ids = Object.keys(meta.playerNames);
-    const rows = ids.map(id=>({ id, name: meta.playerNames[id], score: scores[id]||0 }));
+    // v3.45: players who left are not listed during the game; on the final
+    // scoreboard they stay (their points were real) but are marked
+    const ids = Object.keys(meta.playerNames).filter(id=>activePlayerIds.has(id) || (gameEnded && (scores[id]||0) > 0));
+    const rows = ids.map(id=>({ id, name: meta.playerNames[id] + (activePlayerIds.has(id) ? '' : ' (kilépett)'), score: scores[id]||0 }));
     rows.sort((a,b)=>b.score-a.score);
     return rows;
   }
@@ -11970,6 +12094,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.45', changes:[
+      'A chatablak PC-n nagyobb lett (420×560), és a bal felső sarkánál fogva átméretezhető; a méretet megjegyzi (dupla kattintás a sarokra: alapméret).',
+      'A chat mindig az új üzenetre görget, ha alul vagy — akkor is, ha az ablak zárva volt. Ha visszagörgettél olvasni, egy „⬇ Új üzenet” gomb jelzi, hogy jött új üzenet.',
+      'A kör végi pontlistán már nem szerepel, aki kilépett a játékból (a végső eredménynél „kilépett” jelöléssel megmarad, ha szerzett pontot).',
+      'Ha valaki kilép, a hátralévő körök rövidebbek lesznek: annyi rajz jut egy körre, ahány játékos maradt (pl. 3 helyett 2).',
+      'A tippmezőben rövidebb lett a várakozó szöveg, hogy kiférjen: „Még nem rajzol…”.'
+    ]},
     { version:'3.44', changes:[
       'Javítva: az admin felületen a visszajelzések és a bejelentett szavak betöltése HTTP 404 hibát adott (a Netlify megszüntette a régi lekérdezési módot) — most az oldalon keresztül olvassa be őket.',
       'Javítva: a „Nehéz szavak” oszlop rossz helyre, a közepes lista alá csúszott az admin felületen.',
