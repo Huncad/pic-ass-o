@@ -1752,6 +1752,8 @@
   .whatis-approx{ font-size:.82rem; color:var(--chalk-dim); margin-bottom:6px; }
   .whatis-src{ font-size:.8rem; color:var(--blue); }
   .whatis-src-row{ font-size:.8rem; color:var(--chalk-dim); }
+  .whatis-badimg{ display:block; margin:-6px auto 10px; background:none !important; border:none; box-shadow:none !important; min-height:0;
+    padding:2px 8px; font-size:.75rem; color:var(--chalk-dim); cursor:pointer; text-decoration:underline; }
   .whatis-none, .whatis-loading{ color:var(--chalk-dim); line-height:1.5; margin:6px 0 10px; }
   .whatis-actions{ display:flex; gap:10px; margin-top:14px; }
   .whatis-actions > *{ flex:1; text-align:center; padding:11px 12px; border-radius:12px; font-weight:800; text-decoration:none; }
@@ -9733,9 +9735,23 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   async function wikiSummary(title){
     const d = await fetchJson('https://hu.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(title.replace(/ /g,'_')) + '?redirect=true');
     if(!d || d.type === 'disambiguation' || !d.extract) return null;
-    return { title: d.title, text: d.extract, img: (d.thumbnail && d.thumbnail.source) || '',
+    // v3.47: an article about a film, band, person, village… that only shares
+    // the name is not what the drawer needs ("Ász" the film, "Fészek" the club)
+    const about = (String(d.description || '') + ' ' + String(d.extract || '').slice(0, 160)).toLowerCase();
+    const offTopic = WI_OFFTOPIC.test(String(d.description || '').toLowerCase()) ||
+      /^[^.]{0,120}\b(település|község|városrész|falu|amerikai film|magyar film|filmdráma|televíziós sorozat|tévésorozat|együttes|zenekar|nagylemez|stúdióalbum|kislemez|regény|folyóirat|videójáték|labdarúgó|színész|énekes|politikus|keresztnév|vezetéknév|családnév)\b/.test(about);
+    let img = (d.thumbnail && d.thumbnail.source) || '';
+    // maps, flags, coats of arms, logos, charts and portraits are not pictures of the thing
+    if(img && WI_BADIMG.test(decodeURIComponent(img))) img = '';
+    return { title: d.title, text: d.extract, img, offTopic,
              url: (d.content_urls && d.content_urls.desktop && d.content_urls.desktop.page) || '' };
   }
+  const WI_OFFTOPIC = /(film|sorozat|album|kislemez|dal\b|együttes|zenekar|regény|könyv|folyóirat|magazin|újság|videójáték|település|község|falu|város\b|megye|egyértelműsítő|keresztnév|vezetéknév|családnév|labdarúgó|színész|énekes|politikus|író\b|festő\b|zeneszerző|cég|vállalat|márka|párt\b)/;
+  const WI_BADIMG = /(map|térkép|terkep|locator|location|lage|flag|zászló|zaszlo|coat[_ ]of[_ ]arms|címer|cimer|wappen|logo|emblem|signature|aláírás|diagram|chart|graph|grafikon|icon|ikon|portrait|portré|seal|stamp|bélyeg|scheme|séma|svg\.png)/i;
+  // the drawer can hide a picture that does not fit; remembered on this device
+  const WI_HIDE_KEY = 'picasso-whatis-noimg';
+  function wiHiddenImgs(){ try{ const v = JSON.parse(localStorage.getItem(WI_HIDE_KEY) || '[]'); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
+  function wiHideImg(word){ try{ const v = wiHiddenImgs(); if(!v.includes(word)){ v.push(word); localStorage.setItem(WI_HIDE_KEY, JSON.stringify(v.slice(-500))); } }catch(e){} }
   // v3.42: only answers that really belong to the word. A search hit that
   // merely mentions the word somewhere ("hegedűhúr" -> "kvantálás") is thrown
   // away; a compound word is explained through its parts instead.
@@ -9775,12 +9791,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(whatIsCache.has(word)) return whatIsCache.get(word);
     let res = null;
     // 1) the article for the word itself (redirects only if they still match)
-    try{ const r = await wikiSummary(word); if(r && wiRelevant(r.title, word)) res = r; }catch(e){}
+    try{ const r = await wikiSummary(word); if(r && !r.offTopic && wiRelevant(r.title, word)) res = r; }catch(e){}
     // 2) a compound word: explain both parts
     if(!res){
       const parts = splitCompound(word);
       if(parts){
-        const got = await Promise.all(parts.map(p=>wikiSummary(p).then(r=>r && wiRelevant(r.title, p) ? r : null).catch(()=>null)));
+        const got = await Promise.all(parts.map(p=>wikiSummary(p).then(r=>r && !r.offTopic && wiRelevant(r.title, p) ? r : null).catch(()=>null)));
         // v3.43: only when BOTH parts are explained — half an answer misleads ("autósiskola" ≠ "iskola")
         if(got.every(Boolean)) res = { compound:true, parts: parts.map((p,k)=>({ w:p, r:got[k] })) };
       }
@@ -9788,9 +9804,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // 3) a search — but only a hit whose title is this very word
     if(!res){
       try{
-        const sr = await fetchJson('https://hu.wikipedia.org/w/api.php?action=query&list=search&srlimit=5&format=json&origin=*&srsearch=' + encodeURIComponent(word));
+        const sr = await fetchJson('https://hu.wikipedia.org/w/api.php?action=query&list=search&srlimit=8&format=json&origin=*&srsearch=' + encodeURIComponent(word));
         const hits = ((sr && sr.query && sr.query.search) || []).filter(h=>wiRelevant(h.title, word));
-        for(const h of hits){ const r = await wikiSummary(h.title).catch(()=>null); if(r){ res = r; break; } }
+        for(const h of hits){ const r = await wikiSummary(h.title).catch(()=>null); if(r && !r.offTopic){ res = r; break; } }
       }catch(e){}
     }
     // v3.43: whole sentences only — never stop in the middle of one
@@ -9832,16 +9848,25 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         (img ? `<img class="whatis-img" alt="" src="${escapeHtml(img.img)}" referrerpolicy="no-referrer" loading="eager">` : '') +
         found.map(pt=>`<p class="whatis-text"><b>${escapeHtml(pt.w)}:</b> ${escapeHtml(pt.r.text)}</p>`).join('') +
         `<div class="whatis-src-row">Forrás: Wikipédia</div>`;
-      const im = body.querySelector('.whatis-img');
-      if(im) im.addEventListener('error', ()=>im.remove(), { once:true });
+      wireWhatIsImg(body, word);
       return;
     }
     body.innerHTML =
       (res.img ? `<img class="whatis-img" alt="" src="${escapeHtml(res.img)}" referrerpolicy="no-referrer" loading="eager">` : '') +
       `<p class="whatis-text">${escapeHtml(res.text)}</p>` +
       (res.url ? `<a class="whatis-src" href="${escapeHtml(res.url)}" target="_blank" rel="noopener noreferrer">Forrás: Wikipédia ↗</a>` : '');
+    wireWhatIsImg(body, word);
+  }
+  function wireWhatIsImg(body, word){
     const img = body.querySelector('.whatis-img');
-    if(img) img.addEventListener('error', ()=>img.remove(), { once:true });
+    if(!img) return;
+    if(wiHiddenImgs().includes(word)){ img.remove(); return; }
+    img.addEventListener('error', ()=>{ img.remove(); bad.remove(); }, { once:true });
+    const bad = document.createElement('button');
+    bad.type = 'button'; bad.className = 'whatis-badimg'; bad.textContent = '🚫 Nem ez a kép';
+    bad.title = 'A kép nem ehhez a szóhoz tartozik — elrejtem, és ennél a szónál többé nem mutatom';
+    bad.addEventListener('click', ()=>{ wiHideImg(word); img.remove(); bad.remove(); });
+    img.insertAdjacentElement('afterend', bad);
   }
   function closeWhatIs(){
     whatIsWord = '';
@@ -12173,6 +12198,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.47', changes:[
+      '„Mi ez?”: nem mutat olyan szócikket, ami csak névrokon (pl. film, zenekar, település, személy), és kiszűri a térképeket, zászlókat, címereket, logókat, diagramokat és portrékat. Ha mégis rossz a kép, a „🚫 Nem ez a kép” gombbal elrejthető, és annál a szónál többé nem jelenik meg.'
+    ]},
     { version:'3.46', changes:[
       'Szobanyitáskor egyéni körszám is megadható (1–20) az „Egyéni:” mezőben.',
       'A tippelőknél az utolsó 15 másodpercben piros, pulzáló keret és nagy visszaszámláló jelzi, hogy fogy az idő; az utolsó 5 másodpercben még erősebben (telefonon rezgéssel).',
