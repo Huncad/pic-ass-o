@@ -1809,6 +1809,9 @@
     border-top-left-radius:14px; opacity:.75; touch-action:none; }
   #chat-resize:hover{ opacity:1; }
   #chat-panel.resizing{ user-select:none; transition:none; }
+  #chat-header{ cursor:grab; user-select:none; -webkit-user-select:none; }
+  #chat-panel.chat-dragging{ opacity:.92; box-shadow:0 30px 70px rgba(0,0,0,.7); user-select:none; }
+  #chat-panel.chat-dragging #chat-header{ cursor:grabbing; background:color-mix(in srgb, var(--yellow) 22%, rgba(0,0,0,.25)); }
   #chat-new-below{ position:absolute; left:50%; transform:translateX(-50%); bottom:64px; z-index:3; padding:5px 12px; border-radius:999px;
     font-size:.8rem; font-weight:800; background:var(--yellow); color:#16302A; border:none; box-shadow:0 4px 12px rgba(0,0,0,.35); cursor:pointer; min-height:0; }
 
@@ -8730,9 +8733,82 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       try{ localStorage.removeItem(KEY); }catch(e){}
     });
   })();
+  // v3.48: move the chat window like a desktop window — press and hold its
+  // title bar (≈0.35 s; with a mouse a plain drag works too), then drag.
+  // The place is kept on this device; double-click the title bar to reset.
+  (function(){
+    const panel = document.getElementById('chat-panel');
+    const head = document.getElementById('chat-header');
+    const KEY = 'picasso-chat-pos';
+    const m = 8;
+    const clampXY = (x, y)=>{
+      const w = panel.offsetWidth || 340, h = panel.offsetHeight || 300;
+      return [Math.round(Math.max(m, Math.min(x, window.innerWidth - w - m))), Math.round(Math.max(m, Math.min(y, window.innerHeight - h - m)))];
+    };
+    const place = (x, y)=>{
+      const [cx, cy] = clampXY(x, y);
+      panel.style.left = cx + 'px'; panel.style.top = cy + 'px';
+      panel.style.right = 'auto'; panel.style.bottom = 'auto';
+      panel.dataset.userPos = '1';
+    };
+    const restore = ()=>{
+      let v = null; try{ v = JSON.parse(localStorage.getItem(KEY) || 'null'); }catch(e){}
+      if(!v || typeof v.fx !== 'number') return;
+      place(v.fx * window.innerWidth, v.fy * window.innerHeight);
+    };
+    const reset = ()=>{
+      try{ localStorage.removeItem(KEY); }catch(e){}
+      delete panel.dataset.userPos;
+      ['left','top','right','bottom'].forEach(k=>panel.style.removeProperty(k));
+    };
+    window.__restoreChatPos = restore;
+    let timer = null, dragging = false, sx = 0, sy = 0, ox = 0, oy = 0, pid = null;
+    head.style.touchAction = 'none';
+    head.addEventListener('pointerdown', e=>{
+      if(e.target.closest('button') || e.button > 0) return;
+      const r = panel.getBoundingClientRect();
+      sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top; pid = e.pointerId;
+      const start = ()=>{
+        dragging = true; timer = null;
+        panel.classList.add('chat-dragging');
+        try{ head.setPointerCapture(pid); }catch(err){}
+        try{ navigator.vibrate && navigator.vibrate(15); }catch(err){}
+      };
+      if(e.pointerType === 'mouse') timer = setTimeout(start, 120);
+      else timer = setTimeout(start, 350);
+    });
+    head.addEventListener('pointermove', e=>{
+      if(e.pointerId !== pid) return;
+      if(!dragging){
+        // a mouse that already moves starts dragging at once; a finger that
+        // moves before the hold is up is not a drag
+        if(timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 6){
+          clearTimeout(timer); timer = null;
+          if(e.pointerType === 'mouse'){ dragging = true; panel.classList.add('chat-dragging'); try{ head.setPointerCapture(pid); }catch(err){} }
+        }
+        if(!dragging) return;
+      }
+      e.preventDefault();
+      place(ox + e.clientX - sx, oy + e.clientY - sy);
+    });
+    const end = ()=>{
+      if(timer){ clearTimeout(timer); timer = null; }
+      if(!dragging) return;
+      dragging = false; pid = null;
+      panel.classList.remove('chat-dragging');
+      const r = panel.getBoundingClientRect();
+      try{ localStorage.setItem(KEY, JSON.stringify({ fx: r.left / window.innerWidth, fy: r.top / window.innerHeight })); }catch(e){}
+    };
+    head.addEventListener('pointerup', end); head.addEventListener('pointercancel', end);
+    head.addEventListener('dblclick', e=>{ if(!e.target.closest('button')) reset(); });
+    head.title = 'Tartsd lenyomva és húzd az áthelyezéshez · dupla kattintás: alaphelyzet';
+    window.addEventListener('resize', ()=>{ if(panel.dataset.userPos === '1') restore(); });
+    restore();
+  })();
   function openChatPanel(opts){
     const panel = document.getElementById('chat-panel');
     panel.classList.remove('hidden');
+    if(window.__restoreChatPos) window.__restoreChatPos();
     chatToEnd();
     chatUnread = 0; updateChatBadge();
     if(opts && opts.focusInput) document.getElementById('chat-text-input').focus();
@@ -8780,6 +8856,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     function placePopup(name){
       const btn = document.getElementById(FABS[name]), pop = document.getElementById(POPUPS[name]);
       if(!btn || !pop) return;
+      if(pop.dataset.userPos === '1') return;   // v3.48: the person placed the chat window themselves
       if(!saved[name] || pop.classList.contains('hidden')){ if(!saved[name]) clearPx(pop); return; }
       const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight, m = 8;
       let y = r.top - ph - 8;
@@ -12198,6 +12275,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.48', changes:[
+      'A chatablak áthelyezhető, mint egy Windows-ablak: a fejlécét lenyomva tartva (egérrel egyszerűen megfogva) húzhatod bárhová. A helyét megjegyzi; a fejlécre duplán kattintva visszakerül az alaphelyére.'
+    ]},
     { version:'3.47', changes:[
       '„Mi ez?”: nem mutat olyan szócikket, ami csak névrokon (pl. film, zenekar, település, személy), és kiszűri a térképeket, zászlókat, címereket, logókat, diagramokat és portrékat. Ha mégis rossz a kép, a „🚫 Nem ez a kép” gombbal elrejthető, és annál a szónál többé nem jelenik meg.'
     ]},
