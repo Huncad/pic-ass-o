@@ -1725,6 +1725,36 @@
   @media (max-width:859px){
     #screen-fulldraw .fd-act::before{ width:24px !important; height:24px !important; min-width:24px; min-height:24px; }
   }
+
+  /* ===== v3.40: "Mi ez?" ===== */
+  .choice-wrap{ position:relative; display:flex; }
+  .choice-wrap > button:first-child{ flex:1; width:100%; }
+  .whatis-btn{ width:26px; height:26px; min-height:0 !important; padding:0 !important; border-radius:50% !important;
+    font-family:'Nunito',sans-serif !important; font-size:.95rem !important; font-weight:900; line-height:1;
+    background:var(--panel) !important; color:var(--yellow) !important; border:2px solid var(--yellow) !important;
+    box-shadow:0 2px 6px rgba(0,0,0,.4) !important; cursor:pointer; animation:none !important; flex:0 0 auto; }
+  .whatis-btn:hover{ transform:scale(1.12); }
+  .prep-choices .choice-wrap > .whatis-btn{ position:absolute; top:-9px; right:-9px; z-index:2; }
+  .fd-whatis{ margin-left:8px; align-self:center; }
+  #whatis-overlay{ position:fixed; inset:0; z-index:1200; background:rgba(10,20,16,.72); backdrop-filter:blur(2px);
+    display:flex; align-items:center; justify-content:center; padding:16px; }
+  .whatis-card{ position:relative; width:100%; max-width:440px; max-height:calc(100dvh - 32px); overflow:auto; background:var(--panel);
+    border:2px solid color-mix(in srgb, var(--yellow) 55%, transparent); border-radius:20px; padding:18px 20px 16px;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.7); animation:renamePop .2s ease-out; text-align:left; }
+  .whatis-kicker{ font-size:.8rem; font-weight:900; color:var(--yellow); text-transform:uppercase; letter-spacing:.04em; }
+  .whatis-kicker span{ color:var(--chalk-dim); text-transform:none; letter-spacing:0; font-weight:700; }
+  .whatis-card h2{ font-family:'Kalam',cursive; color:var(--chalk); margin:2px 30px 10px 0; font-size:1.8rem; line-height:1.15; }
+  .whatis-close{ position:absolute; top:10px; right:10px; width:32px; height:32px; min-height:0; padding:0; border-radius:50%;
+    background:rgba(0,0,0,.25); color:var(--chalk); border:none; box-shadow:none; font-size:1rem; cursor:pointer; }
+  .whatis-img{ display:block; max-width:100%; max-height:220px; margin:0 auto 12px; border-radius:12px; background:#fff; object-fit:contain; }
+  .whatis-text{ margin:0 0 8px; line-height:1.5; color:var(--chalk); font-size:.95rem; }
+  .whatis-approx{ font-size:.82rem; color:var(--chalk-dim); margin-bottom:6px; }
+  .whatis-src{ font-size:.8rem; color:var(--blue); }
+  .whatis-none, .whatis-loading{ color:var(--chalk-dim); line-height:1.5; margin:6px 0 10px; }
+  .whatis-actions{ display:flex; gap:10px; margin-top:14px; }
+  .whatis-actions > *{ flex:1; text-align:center; padding:11px 12px; border-radius:12px; font-weight:800; text-decoration:none; }
+  .whatis-search{ background:rgba(0,0,0,.25); color:var(--chalk); border:1.5px solid rgba(244,241,230,.2); }
+  .whatis-ok{ background:var(--green); color:#0f2a1d; border:none; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -2224,6 +2254,7 @@
       <span class="fd-word-label">Rajzold:</span>
       <span class="fd-word-text" id="fd-word-text"></span>
       <span class="tier-badge" id="fd-tier-badge"></span>
+      <button type="button" class="whatis-btn fd-whatis" id="fd-whatis" title="Mi ez? — kép és rövid leírás a szóhoz (csak te látod)" aria-label="Mi ez? Segítség a szóhoz">?</button>
     </div>
     <div class="timer" id="fd-timer">--</div>
     <div class="fd-logo"><span class="mini-logo" aria-hidden="true"><svg class="ml-crown" viewBox="0 0 40 32"><path class="deco-line" stroke="currentColor" d="M5 26 L3 7 L13 15 L20 3 L27 15 L37 7 L35 26 Z"/></svg><span class="lw-a">PIC-</span><span class="lw-b">ASS-O</span><svg class="ml-pencil" viewBox="0 0 60 80"><g transform="rotate(32 30 40)"><rect x="20" y="4" width="20" height="10" rx="4" style="fill:var(--pink)"/><rect x="20" y="13" width="20" height="7" fill="#c9ced3"/><rect x="20" y="20" width="20" height="40" style="fill:var(--yellow)"/><path d="M20 60 L40 60 L30 78 Z" fill="#f1d3a8"/><path d="M26.6 71.5 L33.4 71.5 L30 78 Z" fill="#3a3a3a"/></g></svg></span></div>
@@ -2367,6 +2398,19 @@
     <label class="fb-check afk-done-check hidden"><input type="checkbox" id="afk-done-check">
       <span>Ebben a körben már befejeztem a rajzolást, ne kérdezz többet</span></label>
     <button class="big" id="btn-afk-here" style="background:var(--green);">Igen, itt vagyok! ✋</button>
+  </div>
+</div>
+
+<div id="whatis-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="whatis-title">
+  <div class="whatis-card">
+    <button type="button" class="whatis-close" id="whatis-close" aria-label="Bezárás">✕</button>
+    <div class="whatis-kicker">💡 Mi ez? <span>· csak te látod</span></div>
+    <h2 id="whatis-title"></h2>
+    <div class="whatis-body" id="whatis-body"></div>
+    <div class="whatis-actions">
+      <a class="whatis-search" id="whatis-search" target="_blank" rel="noopener noreferrer">🔍 Képek keresése</a>
+      <button type="button" class="whatis-ok" id="whatis-ok">Értem 👍</button>
+    </div>
   </div>
 </div>
 
@@ -9443,13 +9487,91 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         buttons.forEach(disarmAutoPress);
         chooseWordAndStart(c);
       });
-      choicesEl.appendChild(b);
+      // v3.40: "Mi ez?" — a small help button next to every offered word
+      const wrap = document.createElement('div');
+      wrap.className = 'choice-wrap';
+      const q = document.createElement('button');
+      q.type = 'button'; q.className = 'whatis-btn'; q.textContent = '?';
+      q.title = `Mi az, hogy „${c.w}”? (csak te látod)`;
+      q.setAttribute('aria-label', `Mi az, hogy ${c.w}?`);
+      q.addEventListener('click', e=>{ e.stopPropagation(); openWhatIs(c.w); });
+      wrap.appendChild(b); wrap.appendChild(q);
+      choicesEl.appendChild(wrap);
       return b;
     });
     choicesEl.classList.remove('hidden');
     // Nobody picks in time: one of the three is chosen at random.
     armAutoPress(buttons[Math.floor(Math.random()*buttons.length)]);
   });
+  // ===== v3.40: "Mi ez?" — what does the word look like? =====
+  // Only on the drawer's own device; the clock keeps running. A short
+  // summary + picture from the Hungarian Wikipedia, with an image search as
+  // the always-working fallback.
+  const whatIsCache = new Map();
+  async function fetchJson(url){
+    const ctrl = new AbortController(); const t = setTimeout(()=>ctrl.abort(), 6000);
+    try{ const r = await fetch(url, { signal: ctrl.signal }); return r.ok ? await r.json() : null; }
+    finally{ clearTimeout(t); }
+  }
+  async function wikiSummary(title){
+    const d = await fetchJson('https://hu.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(title.replace(/ /g,'_')) + '?redirect=true');
+    if(!d || d.type === 'disambiguation' || !d.extract) return null;
+    return { title: d.title, text: d.extract, img: (d.thumbnail && d.thumbnail.source) || '',
+             url: (d.content_urls && d.content_urls.desktop && d.content_urls.desktop.page) || '' };
+  }
+  async function lookupWord(word){
+    if(whatIsCache.has(word)) return whatIsCache.get(word);
+    let res = null;
+    try{ res = await wikiSummary(word); }catch(e){}
+    if(!res){
+      try{
+        const s = await fetchJson('https://hu.wikipedia.org/w/api.php?action=query&list=search&srlimit=3&format=json&origin=*&srsearch=' + encodeURIComponent(word));
+        const hits = (s && s.query && s.query.search) || [];
+        for(const h of hits){ res = await wikiSummary(h.title).catch(()=>null); if(res){ res.approx = true; break; } }
+      }catch(e){}
+    }
+    if(res && res.text.length > 320) res.text = res.text.slice(0, 320).replace(/\s+\S*$/, '') + '…';
+    whatIsCache.set(word, res);
+    return res;
+  }
+  let whatIsWord = '';
+  async function openWhatIs(word){
+    if(!word) return;
+    whatIsWord = word;
+    sndClick();
+    const ov = document.getElementById('whatis-overlay');
+    document.getElementById('whatis-title').textContent = word;
+    const body = document.getElementById('whatis-body');
+    body.innerHTML = '<div class="whatis-loading">Keresem… ⏳</div>';
+    document.getElementById('whatis-search').href = 'https://www.google.com/search?tbm=isch&safe=active&q=' + encodeURIComponent(word);
+    ov.classList.remove('hidden');
+    const res = await lookupWord(word);
+    if(whatIsWord !== word || ov.classList.contains('hidden')) return;
+    if(!res){
+      body.innerHTML = `<p class="whatis-none">Erről a szóról nem találtam leírást a Wikipédián. 🤔<br>Nézd meg képeken — a gomb új lapon nyílik, az óra közben megy tovább.</p>`;
+      return;
+    }
+    body.innerHTML =
+      (res.img ? `<img class="whatis-img" alt="" src="${escapeHtml(res.img)}" referrerpolicy="no-referrer" loading="eager">` : '') +
+      (res.approx && res.title.toLowerCase() !== word.toLowerCase() ? `<div class="whatis-approx">Legközelebbi találat: <b>${escapeHtml(res.title)}</b></div>` : '') +
+      `<p class="whatis-text">${escapeHtml(res.text)}</p>` +
+      (res.url ? `<a class="whatis-src" href="${escapeHtml(res.url)}" target="_blank" rel="noopener noreferrer">Forrás: Wikipédia ↗</a>` : '');
+    const img = body.querySelector('.whatis-img');
+    if(img) img.addEventListener('error', ()=>img.remove(), { once:true });
+  }
+  function closeWhatIs(){
+    whatIsWord = '';
+    const ov = document.getElementById('whatis-overlay');
+    if(ov) ov.classList.add('hidden');
+  }
+  document.getElementById('whatis-close').addEventListener('click', closeWhatIs);
+  document.getElementById('whatis-ok').addEventListener('click', closeWhatIs);
+  document.getElementById('whatis-overlay').addEventListener('click', e=>{ if(e.target.id === 'whatis-overlay') closeWhatIs(); });
+  document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && !document.getElementById('whatis-overlay').classList.contains('hidden')) closeWhatIs(); });
+  document.getElementById('fd-whatis').addEventListener('click', ()=>{
+    if(currentRound && currentRound.drawerId === selfId && currentRound.word) openWhatIs(currentRound.word);
+  });
+
   function chooseWordAndStart(choice){
     if(!currentRound || currentRound.drawerId !== selfId || !roundAction) return;
     if(currentRound.phase === 'drawing') return;     // already started (double press)
@@ -9457,6 +9579,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const choicesEl = document.getElementById('prep-choices');
     choicesEl.querySelectorAll('button').forEach(disarmAutoPress);
     choicesEl.classList.add('hidden');
+    closeWhatIs();
     currentRound = Object.assign({}, currentRound, {
       word: choice.w, tier: TIER_INFO[choice.tier] ? choice.tier : 'konnyu',
       phase:'drawing', roundStartAt: Date.now()
@@ -11748,12 +11871,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
-    { version:'3.39', changes:[
-      'Javítva (telefon): a rajzoló eszköztár jobb oldali ikonjai (radír, vissza, újra, törlés) túl kicsik voltak — most ugyanakkorák, mint a bal oldali eszközök.'
+    { version:'3.41', changes:[
+      'Új: „Mi ez?” segítség a rajzolónak. A felkínált szavak mellett és rajzolás közben a szó mellett is van egy kis ? gomb: rányomva megjelenik egy kép és egy rövid leírás a szóról (Wikipédiából), és egy gombbal képkeresés is indítható. Csak a rajzoló látja, a tippelők nem, és az óra közben megy tovább.'
     ]},
-    { version:'3.39', changes:[
+    { version:'3.40', changes:[
       'Új: három nehézségi szint. A korábbi „Nehéz” lista neve mostantól „Közepes”, és van egy új, valóban „Nehéz” szint is — ritkább tárgyak, fogalmak és elvont szavak (pl. délibáb, kentaur, szerelem, visszhang). A szobanyitásnál bármelyik kombináció választható, alapból a könnyű és a közepes van bekapcsolva.',
       'Az admin felületen a nehéz szavaknak is saját oszlopa van (hozzáadás, keresés, import, export).'
+    ]},
+    { version:'3.39', changes:[
+      'Javítva (telefon): a rajzoló eszköztár jobb oldali ikonjai (radír, vissza, újra, törlés) túl kicsik voltak — most ugyanakkorák, mint a bal oldali eszközök.'
     ]},
     { version:'3.38', changes:[
       'Javítva (telefon): tippelés közben, ha a képernyőn húztad az ujjad, az egész játék elgörgett. Most csak a tipplista és a játékossáv görgethető, a többi rész nem mozdul.',
