@@ -1007,6 +1007,22 @@
     .prep-choices button, .fx-shake{ animation:none !important; }
   }
   /* v2.72: first-run tutorial, recommended-browser modal */
+  /* v3.37: "your name was taken" notice — must be acknowledged */
+  #rename-overlay{ position:fixed; inset:0; z-index:1150; background:rgba(10,20,16,0.82); backdrop-filter:blur(3px);
+    display:flex; align-items:center; justify-content:center; padding:20px; }
+  .rename-box{ text-align:center; max-width:420px; border-style:solid !important; border-color:color-mix(in srgb, var(--yellow) 55%, transparent);
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.7); animation:renamePop .22s ease-out; }
+  @keyframes renamePop{ from{ transform:scale(.92); opacity:0; } to{ transform:none; opacity:1; } }
+  .rename-emoji{ font-size:2.6rem; }
+  .rename-box h2{ margin:8px 0 10px; }
+  .rename-box p{ margin:0 0 14px; line-height:1.5; color:var(--chalk); }
+  .rename-names{ display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
+  .rename-names span{ padding:7px 14px; border-radius:999px; font-weight:800; }
+  .rn-old{ background:rgba(0,0,0,.3); color:var(--chalk-dim); text-decoration:line-through; }
+  .rn-new{ background:var(--yellow); color:#16302A; }
+  .rn-arrow{ padding:0 !important; color:var(--yellow); font-size:1.3rem; }
+  .rename-note{ font-size:.85rem; color:var(--chalk-dim) !important; }
+  #btn-rename-ok{ background:var(--green); color:#0f2a1d; width:100%; }
   #tutorial-overlay, #bw-modal{
     position:fixed; inset:0; z-index:1100; background:rgba(10,20,16,0.9);
     display:flex; align-items:center; justify-content:center; padding:20px;
@@ -2316,6 +2332,17 @@
     <label class="fb-check afk-done-check hidden"><input type="checkbox" id="afk-done-check">
       <span>Ebben a körben már befejeztem a rajzolást, ne kérdezz többet</span></label>
     <button class="big" id="btn-afk-here" style="background:var(--green);">Igen, itt vagyok! ✋</button>
+  </div>
+</div>
+
+<div id="rename-overlay" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="rename-title" aria-describedby="rename-text">
+  <div class="admin-box rename-box">
+    <div class="rename-emoji" aria-hidden="true">🪪</div>
+    <h2 id="rename-title">Új neved lett ebben a szobában</h2>
+    <p id="rename-text"></p>
+    <div class="rename-names"><span class="rn-old" id="rename-old"></span><span class="rn-arrow" aria-hidden="true">→</span><span class="rn-new" id="rename-new"></span></div>
+    <p class="rename-note">Ez csak erre a szobára szól, a mentett neved nem változik.</p>
+    <button class="big" id="btn-rename-ok" type="button">Rendben, értem 👍</button>
   </div>
 </div>
 
@@ -6385,13 +6412,29 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     }
     return name;
   }
+  // v3.37: the rename is shown in a real dialog that has to be confirmed
+  function showRenameNotice(oldName, newName){
+    const ov = document.getElementById('rename-overlay');
+    document.getElementById('rename-text').textContent = `Már van „${oldName}” nevű játékos a szobában, ezért hogy mindenki meg tudjon különböztetni titeket, automatikusan új nevet kaptál.`;
+    document.getElementById('rename-old').textContent = oldName;
+    document.getElementById('rename-new').textContent = newName;
+    ov.classList.remove('hidden');
+    try{ sndClick(); }catch(e){}
+    setTimeout(()=>{ try{ document.getElementById('btn-rename-ok').focus(); }catch(e){} }, 50);
+  }
+  document.getElementById('btn-rename-ok').addEventListener('click', ()=>{
+    document.getElementById('rename-overlay').classList.add('hidden');
+  });
+  document.getElementById('rename-overlay').addEventListener('keydown', e=>{
+    if(e.key === 'Enter' || e.key === 'Escape'){ e.preventDefault(); document.getElementById('rename-overlay').classList.add('hidden'); }
+  });
   // v3.35: on the guest — the owner said my name was taken in this room
   function applyHostRename(newName){
     if(!newName || newName === myName) return;
     const old = myName;
     myName = newName;              // only for this room; the saved name stays as typed
     try{ helloAction.send({ name: myName, isHost:false, avatar: myAvatarColor }); }catch(e){}
-    try{ showFxBanner(`Te most „${myName}” vagy`, `Már van „${old}” nevű játékos a szobában`); }catch(e){}
+    try{ showRenameNotice(old, myName); }catch(e){}
     try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){}
     try{ renderRosters(); }catch(e){}
   }
@@ -11532,6 +11575,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.37', changes:[
+      'Ha a szobában már van ugyanilyen nevű játékos, az átnevezésről most egy jól látható, háttérrel ellátott ablak szól (régi név → új név), amit egy gombbal kell tudomásul venni.'
+    ]},
     { version:'3.36', changes:[
       'Szóbejelentés: egy szó csak akkor számít hibásnak, ha legalább 2 játékos megjelöli — két játékosnál tehát mindkettőnek. Kettőnél több játékosnál továbbra is a játékosok legalább fele kell.',
       'A hibásnak jelölt szó azonnal felfüggesztésre kerül: az admin felülvizsgálatáig (javítás, törlés vagy „marad”) egyik játékban sem kerül elő többé.'
