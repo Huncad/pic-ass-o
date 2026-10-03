@@ -1756,6 +1756,44 @@
   .whatis-actions > *{ flex:1; text-align:center; padding:11px 12px; border-radius:12px; font-weight:800; text-decoration:none; }
   .whatis-search{ background:rgba(0,0,0,.25); color:var(--chalk); border:1.5px solid rgba(244,241,230,.2); }
   .whatis-ok{ background:var(--green); color:#0f2a1d; border:none; cursor:pointer; }
+
+  /* ===== v3.44: admin in the same look as the rest of the game ===== */
+  #admin-overlay{ background:rgba(10,20,16,.86); backdrop-filter:blur(3px); padding:24px; }
+  #admin-overlay .admin-box{ border:2px solid color-mix(in srgb, var(--green) 35%, transparent); border-radius:26px;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.6), 0 0 40px -14px color-mix(in srgb, var(--green) 35%, transparent);
+    padding:26px 30px; }
+  #admin-overlay .admin-panel-box{ max-width:1180px; }
+  #admin-overlay .admin-box h2{ font-family:'Kalam',cursive; font-size:2rem; }
+  #admin-panel-box > .admin-panel-header{ position:sticky; top:-26px; z-index:3; background:var(--panel); margin:-26px -30px 14px; padding:18px 30px 12px;
+    border-bottom:1.5px solid rgba(244,241,230,.1); border-radius:24px 24px 0 0; }
+  #admin-overlay .admin-note{ background:color-mix(in srgb, var(--bg) 70%, transparent); border:1.5px solid rgba(244,241,230,.1);
+    border-top:3px solid color-mix(in srgb, var(--green) 55%, transparent); border-radius:16px; padding:14px 18px; margin:0 0 14px;
+    font-size:.86rem; line-height:1.5; }
+  #admin-overlay select{ background:rgba(0,0,0,.28); color:var(--chalk); border:1.5px solid rgba(244,241,230,.16); border-radius:10px; padding:8px 10px; font-family:'Nunito',sans-serif; font-weight:700; }
+  #admin-overlay select option{ background:var(--panel); color:var(--chalk); }
+  #admin-overlay .admin-note strong:first-child{ color:var(--chalk); font-size:.95rem; }
+  #admin-overlay input[type=text], #admin-overlay input[type=password], #admin-overlay input[type=search], #admin-overlay textarea{
+    background:rgba(0,0,0,.28) !important; color:var(--chalk) !important; border:1.5px solid rgba(244,241,230,.16) !important;
+    border-radius:10px; outline:none; }
+  #admin-overlay input::placeholder, #admin-overlay textarea::placeholder{ color:var(--chalk-dim); opacity:.8; }
+  #admin-overlay input:focus, #admin-overlay textarea:focus{ border-color:var(--yellow) !important; box-shadow:0 0 0 3px color-mix(in srgb, var(--yellow) 25%, transparent); }
+  #admin-overlay .admin-columns{ gap:14px; margin-top:6px; }
+  #admin-overlay .admin-col{ background:color-mix(in srgb, var(--bg) 70%, transparent); border:1.5px solid rgba(244,241,230,.1);
+    border-radius:16px; padding:14px; min-width:0; }
+  #admin-overlay .admin-col:nth-child(1){ border-top:3px solid var(--green); }
+  #admin-overlay .admin-col:nth-child(2){ border-top:3px solid var(--blue); }
+  #admin-overlay .admin-col:nth-child(3){ border-top:3px solid var(--red); }
+  #admin-overlay .admin-col h3{ font-family:'Kalam',cursive; font-size:1.3rem; color:var(--chalk); }
+  #admin-overlay .admin-add-row{ flex-wrap:wrap; }
+  #admin-overlay .admin-add-row textarea{ min-height:62px; flex-basis:100%; }
+  #admin-overlay .admin-add-row button{ margin-left:auto; }
+  #admin-overlay .admin-word-list{ background:rgba(0,0,0,.22); scrollbar-width:thin; }
+  #admin-overlay .admin-word-row{ background:rgba(255,255,255,.04); }
+  #admin-overlay .admin-word-row:hover{ background:rgba(255,255,255,.08); }
+  #admin-overlay .admin-col > div:last-child .ghost.small{ font-size:.75rem; padding:6px 9px; }
+  @media (max-width:1100px){ #admin-overlay .admin-columns{ grid-template-columns:1fr 1fr; } }
+  @media (max-width:720px){ #admin-overlay .admin-columns{ grid-template-columns:1fr; } #admin-overlay .admin-box{ padding:20px 16px; }
+    #admin-panel-box > .admin-panel-header{ margin:-20px -16px 12px; padding:14px 16px 10px; top:-20px; } }
 </style>
 </head>
 <body>
@@ -2668,7 +2706,7 @@
 
     <p class="admin-note">
       A letöltés gombokkal is elmentheted a listákat tartalék/kézi megoldásként — ezeket kézzel kell feltöltened és
-      lecserélned a <code>szavak-konnyu.txt</code> / <code>szavak-kozepes.txt</code> fájlokat a tárhelyeden.
+      lecserélned a <code>szavak-konnyu.txt</code> / <code>szavak-kozepes.txt</code> / <code>szavak-nehez.txt</code> fájlokat a tárhelyeden.
     </p>
     <div class="admin-columns">
       <div class="admin-col">
@@ -2703,7 +2741,9 @@
           <button class="ghost small" id="admin-import-kozepes-btn">⬆️ Import: hozzáadás</button>
           <button class="ghost small" id="admin-import-kozepes-replace-btn">♻️ Import: felülírás</button>
           <input type="file" id="admin-import-kozepes" accept=".txt,text/plain" class="hidden">
-          <div class="admin-col">
+        </div>
+      </div>
+      <div class="admin-col">
         <h3>Nehéz szavak (<span id="admin-count-nehez">0</span>)</h3>
         <div class="admin-add-row">
           <textarea id="admin-add-nehez" rows="3" placeholder="Egy vagy több szó, soronként (pl. jegyzettömbből bemásolva)... — Ctrl+Enterrel is hozzáadhatod"></textarea>
@@ -11930,6 +11970,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.44', changes:[
+      'Javítva: az admin felületen a visszajelzések és a bejelentett szavak betöltése HTTP 404 hibát adott (a Netlify megszüntette a régi lekérdezési módot) — most az oldalon keresztül olvassa be őket.',
+      'Javítva: a „Nehéz szavak” oszlop rossz helyre, a közepes lista alá csúszott az admin felületen.',
+      'Az admin felület új külsőt kapott, a játék többi képernyőjéhez illően: keretes kártyák, sötét beviteli mezők, színkódolt szólisták, és a fejléc görgetéskor is látszik.'
+    ]},
     { version:'3.43', changes:[
       'A „Mi ez?” nem mutat félrevezető fél-választ: összetett szónál csak akkor magyaráz, ha mindkét részt megtalálta, különben a képkeresést ajánlja. A leírás mindig egész mondatokból áll, nem vágódik el mondat közepén.'
     ]},
@@ -12704,6 +12749,33 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     el.textContent = text;
     el.style.color = kind === 'ok' ? 'var(--green)' : (kind === 'info' ? 'var(--chalk-dim)' : 'var(--red)');
   }
+  // v3.44: Netlify no longer answers the account-wide /forms list (HTTP 404),
+  // so the forms are looked up through the site this page is served from.
+  let netlifySiteCache = null;
+  async function netlifyFindForms(formName, token){
+    if(!netlifySiteCache || netlifySiteCache.token !== token){
+      const sites = [];
+      for(let page = 1; page <= 5; page++){
+        const b = await netlifyApi(`/sites?filter=all&per_page=100&page=${page}`, token);
+        if(!Array.isArray(b) || !b.length) break;
+        sites.push(...b);
+        if(b.length < 100) break;
+      }
+      const host = location.hostname.toLowerCase();
+      const hostOf = u=>{ try{ return new URL(u).hostname.toLowerCase(); }catch(e){ return String(u||'').toLowerCase(); } };
+      const matches = site=>[site.url, site.ssl_url, site.admin_url && null, site.custom_domain, ...(site.domain_aliases||[])]
+        .filter(Boolean).map(hostOf).some(h=>h === host || (site.name && host === site.name.toLowerCase() + '.netlify.app') || host.endsWith('--' + h));
+      const here = sites.filter(matches);
+      netlifySiteCache = { token, ordered: here.concat(sites.filter(x=>!here.includes(x))) };
+    }
+    for(const site of netlifySiteCache.ordered.slice(0, 25)){
+      let forms = [];
+      try{ forms = await netlifyApi(`/sites/${encodeURIComponent(site.id)}/forms`, token); }catch(e){ continue; }
+      const f = (Array.isArray(forms) ? forms : []).filter(x=>x && x.name === formName);
+      if(f.length) return f;
+    }
+    return [];
+  }
   async function netlifyApi(path, token, opts){
     const res = await fetch('https://api.netlify.com/api/v1' + path, Object.assign({
       headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
@@ -12763,8 +12835,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     btn.disabled = true;
     adminFbStatus('Betöltés…', 'info');
     try{
-      const forms = await netlifyApi('/forms', token);
-      const mine = (Array.isArray(forms) ? forms : []).filter(f=>f && f.name === FEEDBACK_FORM);
+      const mine = await netlifyFindForms(FEEDBACK_FORM, token);
       if(mine.length === 0){
         adminFbStatus('Nem találom a "' + FEEDBACK_FORM + '" űrlapot a Netlify fiókodban. Töltsd fel újra az oldalt Netlify-ra, és küldj egy próba-visszajelzést; a Netlify-nál a Forms (űrlapfelismerés) legyen bekapcsolva.', 'err');
         document.getElementById('admin-fb-list').innerHTML = '';
@@ -12892,8 +12963,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     el.style.color = kind === 'ok' ? 'var(--green)' : (kind === 'info' ? 'var(--chalk-dim)' : 'var(--red)');
   }
   async function loadFormSubmissions(formName, token){
-    const forms = await netlifyApi('/forms', token);
-    const mine = (Array.isArray(forms) ? forms : []).filter(f=>f && f.name === formName);
+    const mine = await netlifyFindForms(formName, token);
     if(!mine.length) return null;
     mine.sort((a,b)=>{
       const ha = String(a.url || '').includes(location.hostname) ? 1 : 0, hb = String(b.url || '').includes(location.hostname) ? 1 : 0;
