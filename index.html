@@ -2535,7 +2535,7 @@
         <strong style="color:var(--chalk);">🚩 Bejelentett szavak <span id="admin-wr-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
         <button class="secondary small" id="admin-wr-load" type="button">🚩 Betöltés</button>
       </div>
-      Ezeket a szavakat egy játékban a játékosok legalább fele hibásnak vagy értelmetlennek jelölte. A betöltéshez a lenti Netlify tokent használjuk.
+      Ezeket a szavakat egy játékban legalább 2 játékos, és a játékosok legalább fele hibásnak vagy értelmetlennek jelölte. Felülvizsgálatig egyik játékban sem jelennek meg. A betöltéshez a lenti Netlify tokent használjuk.
       A javítás vagy törlés a szólistában történik: utána nyomd meg a <b>☁️ Mentés élesben</b> gombot. A bejelentés ilyenkor (és a „Marad” gombra is) törlődik a Netlify-ból.
       <div id="admin-wr-status" class="admin-warning" style="text-align:left;"></div>
       <div id="admin-wr-list"></div>
@@ -3891,9 +3891,24 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // both levels count as one. When the room's own words run out, built-in
   // ones take over instead of repeating; only if EVERYTHING is used up may
   // a word come again.
+  // v3.36: words that players reported as broken are on hold in every game
+  // until the admin reviews them. The list lives in a Netlify function.
+  const heldWordKeys = new Set();
+  const WORDBLOCK_URL = '/.netlify/functions/wordblock';
+  async function refreshHeldWords(){
+    try{
+      const r = await fetch(WORDBLOCK_URL, { cache:'no-cache' });
+      if(!r.ok) return;
+      const d = await r.json();
+      if(d && Array.isArray(d.words)){ heldWordKeys.clear(); d.words.forEach(w=>{ const k = squash(w); if(k) heldWordKeys.add(k); }); }
+    }catch(e){}
+  }
+  refreshHeldWords();
+  setInterval(refreshHeldWords, 5*60*1000);
   function pickWordAvoidingRepeats(difficulties, usedWords){
     const tiers = Array.isArray(difficulties) && difficulties.length ? difficulties : ['konnyu','kozepes'];
     const used = new Set((usedWords || []).map(squash));
+    heldWordKeys.forEach(k=>used.add(k));   // v3.36: reported words are on hold everywhere
     const fresh = list => list.filter(w=>w && w.w && !used.has(squash(w.w)));
     const custom = customWordItems();
     const levelTiers = tiers.filter(t=>t === 'konnyu' || t === 'kozepes');
@@ -11517,6 +11532,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.36', changes:[
+      'Szóbejelentés: egy szó csak akkor számít hibásnak, ha legalább 2 játékos megjelöli — két játékosnál tehát mindkettőnek. Kettőnél több játékosnál továbbra is a játékosok legalább fele kell.',
+      'A hibásnak jelölt szó azonnal felfüggesztésre kerül: az admin felülvizsgálatáig (javítás, törlés vagy „marad”) egyik játékban sem kerül elő többé.'
+    ]},
     { version:'3.35', changes:[
       'Nagy képernyőn a váróterem (és minden kicsit túl magas képernyő) most kicsinyít, hogy görgetés nélkül kiférjen.',
       'Tippelni csak akkor lehet, ha a rajzoló már elkezdett rajzolni — addig a tippmező zárolva van.',
@@ -12367,7 +12386,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let wflagAction = null;
   const wordFlags = {};          // roundKey -> { word, tier, ids:Set, sent:bool }
   let reportableRound = null;    // { rk, word, tier } of the result on screen
-  function flagThreshold(){ return Math.max(1, Math.ceil(Math.max(1, activePlayerIds.size) / 2)); }
+  // v3.36: at least 2 marks (so with 2 players both have to mark it), and with
+  // more players at least half of them
+  function flagThreshold(){ const n = Math.max(2, activePlayerIds.size); return Math.max(2, Math.ceil(n / 2)); }
   function renderReportUi(){
     const box = document.getElementById('roundend-report');
     if(!reportableRound){ box.classList.add('hidden'); return; }
@@ -12397,12 +12418,26 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       clog('W01', `szóbejelentés elküldve: ${f.word} (HTTP ${res.status})`);
     }catch(e){ clog('W02', 'szóbejelentés nem ment el: ' + (e && e.message)); }
   }
+  async function holdWordGlobally(f){
+    try{
+      const r = await fetch(WORDBLOCK_URL, { method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ word: f.word, votes: f.ids.size, players: activePlayerIds.size }) });
+      clog('W03', `szó felfüggesztve minden játékban: ${f.word} (HTTP ${r.status})`);
+    }catch(e){ clog('W04', 'a szó felfüggesztése nem ment el: ' + (e && e.message)); }
+  }
+  async function releaseHeldWord(word, token){
+    const r = await fetch(WORDBLOCK_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'x-netlify-token': token },
+      body: JSON.stringify({ action:'release', word }) });
+    if(!r.ok) throw new Error('A felfüggesztés feloldása nem sikerült (HTTP ' + r.status + ').');
+    heldWordKeys.delete(squash(word));
+  }
   function checkWordFlag(rk){
     const f = wordFlags[rk];
     if(!f || f.sent || f.ids.size < flagThreshold()) return;
     f.sent = true;
+    heldWordKeys.add(squash(f.word));   // never offered again on this device, right away
     const sender = [...f.ids].sort()[0];
-    if(sender === selfId) submitWordReport(f);
+    if(sender === selfId){ submitWordReport(f); holdWordGlobally(f); }
     if(reportableRound && reportableRound.rk === rk) renderReportUi();
   }
   function applyWordFlag(rk, word, on, pid){
@@ -12483,6 +12518,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       }
       try{ for(const id of g.ids) await netlifyApi('/submissions/' + encodeURIComponent(id), token, { method:'DELETE' }); }
       catch(err){ adminWrStatus('A bejelentést nem sikerült törölni a Netlify-ból: ' + err.message, 'err'); }
+      // v3.36: reviewed — the word (or its fixed version) may come up again
+      try{ await releaseHeldWord(g.word, token); }catch(err){ adminWrStatus(err.message, 'err'); }
       if(act !== 'keep'){
         ['konnyu','kozepes'].forEach(t=>{ try{ renderAdminList(t); }catch(err){} });
         try{ renderAdminHealth(); }catch(err){}
