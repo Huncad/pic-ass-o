@@ -1800,7 +1800,7 @@
 
   /* ===== v3.45: chat — a proper size on PC, and resizable ===== */
   @media (min-width:860px) and (pointer:fine){
-    #chat-panel{ width:min(var(--chat-w), calc(100vw - 32px)); height:min(var(--chat-h), calc(100vh - 110px)); max-height:none; font-size:1rem; }
+    #chat-panel{ width:min(var(--chat-w), calc(100vw - 16px)); height:min(var(--chat-h), calc(100vh - 16px)); max-height:none; font-size:1rem; }
     #chat-messages{ font-size:.95rem; }
     #chat-panel #chat-resize{ display:block; }
   }
@@ -8705,20 +8705,23 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const h = document.createElement('div');
     h.id = 'chat-resize'; h.title = 'Húzd a méretezéshez (dupla kattintás: alapméret)';
     panel.appendChild(h);
-    let sx = 0, sy = 0, sw = 0, sh = 0, growLeft = true, growUp = true;
+    let sx = 0, sy = 0, sw = 0, sh = 0, r0 = null;
     h.addEventListener('pointerdown', e=>{
       e.preventDefault(); h.setPointerCapture(e.pointerId);
       const r = panel.getBoundingClientRect();
-      sx = e.clientX; sy = e.clientY; sw = r.width; sh = r.height;
-      // the corner grows away from whichever side the panel is pinned to
-      growLeft = r.right > window.innerWidth / 2; growUp = r.bottom > window.innerHeight / 2;
+      sx = e.clientX; sy = e.clientY; sw = r.width; sh = r.height; r0 = r;
       panel.classList.add('resizing');
     });
     h.addEventListener('pointermove', e=>{
       if(!panel.classList.contains('resizing')) return;
-      const w = Math.round(Math.min(window.innerWidth - 32, Math.max(300, sw + (growLeft ? sx - e.clientX : e.clientX - sx))));
-      const hh = Math.round(Math.min(window.innerHeight - 110, Math.max(260, sh + (growUp ? sy - e.clientY : e.clientY - sy))));
+      // v3.49: the grabbed (top-left) corner follows the mouse, the opposite
+      // (bottom-right) corner stays exactly where it was
+      const w = Math.round(Math.min(r0.right - 8, window.innerWidth - 16, Math.max(300, sw + sx - e.clientX)));
+      const hh = Math.round(Math.min(r0.bottom - 8, window.innerHeight - 16, Math.max(260, sh + sy - e.clientY)));
       panel.style.setProperty('--chat-w', w + 'px'); panel.style.setProperty('--chat-h', hh + 'px');
+      panel.style.maxHeight = 'none';
+      panel.style.left = (r0.right - w) + 'px'; panel.style.top = (r0.bottom - hh) + 'px';
+      panel.style.right = 'auto'; panel.style.bottom = 'auto';
       if(chatStick) list.scrollTop = list.scrollHeight;
     });
     const end = ()=>{
@@ -8726,6 +8729,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       panel.classList.remove('resizing');
       const r = panel.getBoundingClientRect();
       try{ localStorage.setItem(KEY, JSON.stringify({ w: Math.round(r.width), h: Math.round(r.height) })); }catch(e){}
+      // the window now has a fixed place: remember it like a moved window
+      panel.dataset.userPos = '1';
+      try{ localStorage.setItem('picasso-chat-pos', JSON.stringify({ fx: r.left / window.innerWidth, fy: r.top / window.innerHeight })); }catch(e){}
     };
     h.addEventListener('pointerup', end); h.addEventListener('pointercancel', end);
     h.addEventListener('dblclick', ()=>{
@@ -12275,6 +12281,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.49', changes:[
+      'Javítva: a chatablak átméretezésekor a megfogott bal felső sarok követi az egeret, a szemközti (jobb alsó) sarok pedig a helyén marad — mint egy rendes ablaknál.'
+    ]},
     { version:'3.48', changes:[
       'A chatablak áthelyezhető, mint egy Windows-ablak: a fejlécét lenyomva tartva (egérrel egyszerűen megfogva) húzhatod bárhová. A helyét megjegyzi; a fejlécre duplán kattintva visszakerül az alaphelyére.'
     ]},
