@@ -1716,6 +1716,15 @@
   html.watch-lock, html.watch-lock body{ overflow:hidden; overscroll-behavior:none; height:100%; }
   html.watch-lock #screen-watch{ overscroll-behavior:none; }
   html.watch-lock #screen-watch .guess-feed, html.watch-lock #watch-guess-feed{ overscroll-behavior:contain; }
+
+  /* v3.39: the eraser / undo / redo / clear icons were squeezed to a few
+     pixels on phones (the masked ::before could shrink inside the flex
+     button) — now they are as big as the tool icons on the left */
+  #screen-fulldraw .fd-act::before{ flex:0 0 auto !important; width:22px !important; height:22px !important; min-width:22px; min-height:22px; }
+  #screen-fulldraw .fd-act{ min-width:44px; min-height:40px; }
+  @media (max-width:859px){
+    #screen-fulldraw .fd-act::before{ width:24px !important; height:24px !important; min-width:24px; min-height:24px; }
+  }
 </style>
 </head>
 <body>
@@ -11715,6 +11724,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.39', changes:[
+      'Javítva (telefon): a rajzoló eszköztár jobb oldali ikonjai (radír, vissza, újra, törlés) túl kicsik voltak — most ugyanakkorák, mint a bal oldali eszközök.'
+    ]},
     { version:'3.38', changes:[
       'Javítva (telefon): tippelés közben, ha a képernyőn húztad az ujjad, az egész játék elgörgett. Most csak a tipplista és a játékossáv görgethető, a többi rész nem mozdul.',
       'Új: néző mód. A kezdőképernyőn bejelölheted, hogy „Csak nézőként csatlakozom” — így mindent látsz élőben (rajz, tippek, pontok, csevegés), de nem rajzolsz, nem tippelsz és nem kapsz pontot. Ideális kivetítőhöz egy bulin. A nézők nem számítanak bele a létszámkorlátba, a váróteremben külön sorban látszanak, a szobanyitó eltávolíthatja őket, és futó játékhoz is csatlakozhatnak.'
