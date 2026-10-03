@@ -1633,6 +1633,48 @@
     body:not(.in-game) .title-row h1.logo{ font-size:clamp(3.4rem, 6vw, 5.6rem); }
     body:not(.in-game) .title-row .subtitle{ font-size:1.2rem; max-width:420px; }
   }
+
+  /* ===== v3.34: one frame for every screen on big displays =====
+     The board always fills the window at the SAME scale (driven by the window
+     size, not the content), so home / room setup / lobby / results all share
+     the same frame size, proportions and text size. */
+  body.fit-frame #main-board:not(.wide-mode){ display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:34px 40px 30px; box-sizing:border-box; }
+  body.fit-frame.in-game #main-board:not(.wide-mode) > *:not(.board-deco){ width:100%; }
+  body.fit-frame.in-game #main-board > #screen-create,
+  body.fit-frame.in-game #main-board > #screen-join,
+  body.fit-frame.in-game #main-board > #screen-lobby,
+  body.fit-frame.in-game #main-board > #screen-roundend,
+  body.fit-frame.in-game #main-board > #screen-gameend,
+  body.fit-frame.in-game #main-board > #screen-error{ max-width:920px; margin:0 auto; box-sizing:border-box; padding:26px 34px; }
+  body.fit-frame.in-game #main-board > #conn-status{ width:auto; margin:0 auto 12px; }
+  /* compact logo above every non-home card (same as on room setup) */
+  body.fit-frame.in-game.show-deco .title-row{ display:flex; margin-bottom:18px; }
+  body.fit-frame.in-game.show-deco .title-row h1.logo{ font-size:3.4rem; margin:10px 0 6px; }
+  body.fit-frame.in-game.show-deco .title-row .subtitle{ display:none; }
+  body.fit-frame.on-create .title-row .subtitle{ display:block; margin-top:14px; font-size:1rem; }
+  /* home: two columns centred inside the full frame */
+  body.fit-frame:not(.in-game) #main-board{ display:grid; grid-template-columns:minmax(0,600px) minmax(0,760px);
+    grid-template-areas:"title home" "foot foot"; justify-content:center; align-content:center; column-gap:56px; max-width:none; }
+  body.fit-frame:not(.in-game) #main-board > .title-row{ grid-area:title; }
+  body.fit-frame:not(.in-game) #main-board > #screen-home{ grid-area:home; margin:0; max-width:none; }
+  body.fit-frame:not(.in-game) #main-board > footer.hint{ grid-area:foot; }
+  body.fit-frame:not(.in-game) #main-board > #screen-error{ grid-column:1 / -1; }
+  /* results: a bit more presence */
+  body.fit-frame #screen-roundend .result-banner{ font-size:2.2rem; }
+  body.fit-frame table.scores{ min-width:380px; }
+  body.fit-frame table.scores td{ font-size:1.15rem; padding:10px 22px; }
+  /* "Te jössz!" round intro: same framed board and same scale */
+  body.fit-frame #fd-prepare{ padding:24px; }
+  body.fit-frame #fd-prepare::before{ content:""; position:absolute; inset:24px; border-radius:26px; background:var(--panel); z-index:-1;
+    border:2px solid color-mix(in srgb, var(--green) 30%, transparent);
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.55), 0 0 40px -12px color-mix(in srgb, var(--green) 35%, transparent); }
+  body.fit-frame #fd-prepare .prepare-card{ zoom:var(--ui-z, 1); max-width:620px; width:100%; padding:30px 34px; border-radius:22px;
+    background:color-mix(in srgb, var(--bg) 82%, transparent); border:1.5px solid rgba(244,241,230,.12);
+    border-top-color:color-mix(in srgb, var(--green) 45%, transparent); box-shadow:0 18px 40px -18px rgba(0,0,0,.6); }
+  body.fit-frame #fd-prepare .prep-choices{ max-width:420px; }
+  body.fit-frame #fd-prepare .prep-choices.many{ max-width:540px; gap:10px; }
+  body.fit-frame #fd-prepare .prep-choices button{ font-size:1.15rem; padding:12px 14px; }
 </style>
 </head>
 <body>
@@ -4877,42 +4919,30 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // v3.32: on a big screen the board (home, room setup, lobby, results…) is
   // enlarged so it fills the window as far as it can — like "zoom to fit".
   // Small screens and the live drawing/guessing views are left untouched.
-  var fitBoardBusy = false, fitBoardNatural = '';
+  // v3.34: the scale depends only on the window size, never on the content,
+  // so every screen gets the same frame and the same text size.
+  var fitBoardBusy = false;
   function fitMainBoard(){
     const b = document.getElementById('main-board');
     if(!b || fitBoardBusy) return;
-    const usable = !b.classList.contains('hidden') && !b.classList.contains('wide-mode');
-    const big = window.innerWidth >= 1200 && window.innerHeight >= 680;
-    if(!usable || !big){ if(b.style.zoom){ b.style.zoom = ''; } fitBoardNatural = ''; return; }
+    const W = window.innerWidth, H = window.innerHeight;
+    const big = W >= 1200 && H >= 680;
+    document.body.classList.toggle('fit-frame', big);
+    const z = big ? Math.max(1, Math.min(1.8, W / 1500, H / 900)) : 1;
+    document.documentElement.style.setProperty('--ui-z', z.toFixed(3));
+    const usable = big && !b.classList.contains('hidden') && !b.classList.contains('wide-mode');
+    if(!usable){ b.style.zoom = ''; b.style.width = ''; b.style.minHeight = ''; b.style.maxWidth = ''; return; }
     fitBoardBusy = true;
     try{
-      b.style.zoom = '1';
-      const r = b.getBoundingClientRect();
-      if(!r.width || !r.height) return;
-      const availW = window.innerWidth - 64, availH = window.innerHeight - 56;
-      const fitH = availH / r.height, fitW = availW / r.width;
-      // fits in height: as big as both sides allow; a page that scrolls a lot
-      // anyway (room setup) gets a moderate enlargement; one that almost fits
-      // is left alone, so it doesn't start scrolling
-      let sc = fitH >= 1 ? Math.min(fitW, fitH) : (fitH < 0.75 ? Math.min(fitW, 1.2) : 1);
-      sc = Math.max(1, Math.min(1.8, sc));
-      b.style.zoom = sc > 1.02 ? sc.toFixed(3) : '';
-      fitBoardNatural = Math.round(r.width) + 'x' + Math.round(r.height);
+      // body has 24px padding on each side
+      b.style.zoom = z > 1.01 ? z.toFixed(3) : '';
+      b.style.width = Math.floor((W - 48) / z) + 'px';
+      b.style.minHeight = Math.floor((H - 48) / z) + 'px';
+      b.style.maxWidth = 'none';
     } finally { fitBoardBusy = false; }
   }
   window.addEventListener('resize', ()=>{ clearTimeout(window.__fitT); window.__fitT = setTimeout(fitMainBoard, 120); });
-  // content that grows or shrinks (room list, players joining…) is re-fitted
-  try{
-    const ro = new ResizeObserver(()=>{
-      if(fitBoardBusy) return;
-      const b = document.getElementById('main-board');
-      const z = parseFloat(b.style.zoom) || 1, r = b.getBoundingClientRect();
-      const nat = Math.round(r.width / z) + 'x' + Math.round(r.height / z);
-      if(nat === fitBoardNatural) return;
-      clearTimeout(window.__fitR); window.__fitR = setTimeout(fitMainBoard, 150);
-    });
-    ro.observe(document.getElementById('main-board'));
-  }catch(e){}
+  fitMainBoard();
 
   function fatalError(msg){
     document.getElementById('error-detail').textContent = msg;
@@ -11366,6 +11396,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.34', changes:[
+      'Nagy képernyőn minden képernyő (kezdő, szobanyitás, váróterem, kör vége, játék vége, "Te jössz!") ugyanabban a kitöltő keretben és ugyanakkora méretarányban jelenik meg, így az elrendezés egységes, nem ugrál a méret képernyőnként.'
+    ]},
     { version:'3.33', changes:[
       'Nagy képernyőn a tippelő nézetben a rajz most kitölti az ablak teljes magasságát (eddig legfeljebb 760 pixel magas lehetett), és a tipp-oszlop is szélesebb.'
     ]},
