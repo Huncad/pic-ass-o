@@ -5756,7 +5756,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const beaconTimer = setInterval(()=>{
       if(room !== thisRoom){ clearInterval(beaconTimer); return; }
       if(!isHost || !meta || gameEnded || !currentRound) return;
-      try{ turnSyncAction.send({ turnOrder: meta.turnOrder, at: currentRound.idx }); }catch(e){}
+      // v3.55: also which stage that drawing is in (0 choosing, 1 drawing, 2 over)
+      const st = processedResultRounds.has(roundKey(currentRound)) ? 2 : (currentRound.phase === 'drawing' ? 1 : 0);
+      try{ turnSyncAction.send({ turnOrder: meta.turnOrder, at: currentRound.idx, st }); }catch(e){}
     }, 5000);
     const aliveAction = room.makeAction('alive');
     aliveAction.onMessage = (_, {peerId})=>{
@@ -5828,7 +5830,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(Number.isFinite(data.at)){
         const mine = currentRound ? currentRound.idx : -1;
         const iDraw = currentRound && currentRound.drawerId === selfId;
-        if(data.at > mine && !iDraw){ behindBeacons++; if(behindBeacons >= 2) requestResync(`le vagyok maradva (${mine} < ${data.at})`); }
+        // v3.55: same drawing, but I'm a stage behind (still "choosing" while
+        // everybody watches the drawing, or still drawing while it's over)
+        const myStage = !currentRound ? -1 : (processedResultRounds.has(roundKey(currentRound)) ? 2 : (currentRound.phase === 'drawing' ? 1 : 0));
+        const behind = data.at > mine || (data.at === mine && Number.isFinite(data.st) && data.st > myStage);
+        if(behind && !iDraw){ behindBeacons++; if(behindBeacons >= 2) requestResync(`le vagyok maradva (${mine}/${myStage} < ${data.at}/${data.st})`); }
         else behindBeacons = 0;
       }
       if(showingRoundEnd && currentRound && processedResultRounds.has(roundKey(currentRound))){
@@ -12647,6 +12653,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.55', changes:[
+      'Javítva: aki lemaradt egy rajz indulásáról, annál „X most nézi a szavát” maradt kint, miközben a többiek már látták a rajzot. Az egyeztetés most a rajz állapotát is figyeli (szóválasztás / rajzolás / vége), és pár másodpercen belül beállítja a lemaradt eszközt.'
+    ]},
     { version:'3.54', changes:[
       'Javítva: aki menet közben lépett be, lemaradhatott egy kör indulásáról, és utána rossz játékosra várt („Évire vár”), miközben a többiek már rá vártak. Mostantól a szobanyitó pár másodpercenként jelzi, hol tart a játék, és aki lemaradt, automatikusan újraszinkronizál. Ha a következő rajz az övé, megkapja az „Én jövök” gombot. A belépő a következő két rajz sorrendjét sem változtatja már meg.'
     ]},
