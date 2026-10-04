@@ -1905,6 +1905,17 @@
   .stats-open-btn{ display:block; margin:8px auto 0; }
   #home-stats{ cursor:pointer; }
   #home-stats:hover{ text-decoration:underline; }
+
+  /* ===== v3.58: the chosen word, unmissable ===== */
+  #chosen-word-flash{ position:fixed; left:50%; top:38%; transform:translate(-50%,-50%); z-index:1300; pointer-events:none;
+    background:var(--yellow); color:#16302A; font-family:'Nunito',sans-serif; font-weight:800; font-size:1.3rem;
+    padding:14px 24px; border-radius:18px; box-shadow:0 20px 50px rgba(0,0,0,.45); text-align:center; max-width:90vw; }
+  #chosen-word-flash b{ display:block; font-family:'Kalam',cursive; font-size:2.4rem; line-height:1.1; margin-top:2px; overflow-wrap:anywhere; }
+  #chosen-word-flash.go{ animation:cwFlash 2.2s ease forwards; }
+  @keyframes cwFlash{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(.7); } 12%{ opacity:1; transform:translate(-50%,-50%) scale(1.05); }
+    20%{ transform:translate(-50%,-50%) scale(1); } 80%{ opacity:1; } 100%{ opacity:0; transform:translate(-50%,-60%) scale(.96); } }
+  #fd-word-text.word-pulse{ animation:wordPulse 1.2s ease 2; }
+  @keyframes wordPulse{ 0%,100%{ transform:none; } 50%{ transform:scale(1.12); text-shadow:0 0 14px var(--yellow); } }
 </style>
 </head>
 <body>
@@ -2579,6 +2590,8 @@
     </div>
   </div>
 </div>
+
+<div id="chosen-word-flash" class="hidden" aria-live="assertive">✏️ Ezt rajzolod: <b></b></div>
 
 <div id="urgency-overlay" class="hidden" aria-hidden="true"><div class="urgency-badge">⏰ <span id="urgency-num"></span> mp</div></div>
 
@@ -10021,6 +10034,23 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(btn._autoTimer){ clearInterval(btn._autoTimer); btn._autoTimer = null; }
     if(btn.dataset.baseLabel) btn.textContent = btn.dataset.baseLabel;
   }
+  let choicePointerAt = 0;
+  (function(){
+    const el = document.getElementById('prep-choices');
+    const grab = ()=>{
+      choicePointerAt = Date.now();
+      el.querySelectorAll('button').forEach(b=>disarmAutoPress(b));
+      // touched but did not pick (slid off the word): a short new countdown
+      clearTimeout(el._rearm);
+      el._rearm = setTimeout(()=>{
+        if(!currentRound || currentRound.drawerId !== selfId || currentRound.phase === 'drawing' || el.classList.contains('hidden')) return;
+        const bs = [...el.querySelectorAll('button')];
+        if(bs.length && !bs.some(x=>x._autoTimer)) armAutoPress(bs[Math.floor(Math.random()*bs.length)], 5);
+      }, 2500);
+    };
+    el.addEventListener('pointerdown', grab, true);
+    el.addEventListener('touchstart', grab, { capture:true, passive:true });
+  })();
   function armAutoPress(btn, seconds){
     if(!btn) return;
     disarmAutoPress(btn);
@@ -10032,7 +10062,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(btn.getClientRects().length === 0){ disarmAutoPress(btn); return; }
       const left = Math.max(0, Math.ceil((endAt - Date.now())/1000));
       btn.textContent = `${base} (${left})`;
-      if(left <= 0){ disarmAutoPress(btn); btn.click(); }
+      if(left <= 0){
+        disarmAutoPress(btn);
+        // v3.58: a finger/mouse already on one of the words wins over the
+        // automatic pick — they used to fire in the same instant
+        if(btn.closest && btn.closest('#prep-choices') && Date.now() - choicePointerAt < 1500) return;
+        btn.click();
+      }
     };
     btn._autoTimer = setInterval(tick, 250);
     btn.textContent = `${base} (${seconds || AUTO_PRESS_SECONDS})`;
@@ -10282,6 +10318,18 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // reproduce the drawing at the same proportions.
     enterDrawingMine(currentRound.idx, currentRound);
     roundAction.send(publicRound(currentRound));
+    // v3.58: show clearly WHICH word was taken (an automatic pick in the
+    // last moment used to go unnoticed — you drew one word, the game had another)
+    showChosenWordFlash(choice.w);
+  }
+  function showChosenWordFlash(w){
+    const el = document.getElementById('chosen-word-flash');
+    if(!el) return;
+    el.querySelector('b').textContent = w;
+    el.classList.remove('hidden', 'go'); void el.offsetWidth; el.classList.add('go');
+    clearTimeout(el._t); el._t = setTimeout(()=>el.classList.add('hidden'), 2200);
+    const bar = document.getElementById('fd-word-text');
+    if(bar){ bar.classList.remove('word-pulse'); void bar.offsetWidth; bar.classList.add('word-pulse'); }
   }
 
   function enterDrawingMine(idx, rd){
@@ -12725,6 +12773,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.58', changes:[
+      'Javítva: ha az utolsó pillanatban választottál szót, a lejáró automatikus választás „lecsaphatott” egy másik szóra ugyanabban a pillanatban — te az egyiket rajzoltad, a játék a másikat várta. Mostantól ha az ujjad / egered már egy szón van, az automatikus választás nem lép közbe.',
+      'A választás után 2 másodpercre nagy felirat mutatja: „✏️ Ezt rajzolod: …”, és a szó a rajzlap fölött is felvillan — így azonnal látszik, ha nem az lett, amire gondoltál.'
+    ]},
     { version:'3.57', changes:[
       'Súlyos hiba javítva: ha a sorrend-egyeztetés miatt valaki túl korán elindította a saját rajzát, az a még futó rajzot „felülírhatta” a többieknél — a rajzoló pl. „zongorázás”-t rajzolt, a kör végén mégis „héja” jelent meg. Mostantól egy futó rajzot semmilyen későbbi rajz nem válthat le; aki túl korán indított, automatikusan visszalép, és a sorra kerülésekor rajzol. A rajzoló 5 másodpercenként megerősíti a saját futó körét, így a lemaradók is utolérik.'
     ]},
