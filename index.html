@@ -3386,13 +3386,17 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
 
   async function loadWords(){
     const fromGist = await loadWordsFromGist();
-    if(fromGist){ WORDS = fromGist; return; }
+    // v3.57: where the words came from goes into the diagnostics (ⓘ) — a
+    // failed load leaves only a tiny backup list, which repeats a lot
+    const tally = list=>['konnyu','kozepes','nehez'].map(t=>list.filter(x=>x.tier===t).length).join('/');
+    if(fromGist){ WORDS = fromGist; try{ clog('W10', 'szavak: élő lista, ' + tally(WORDS)); }catch(e){} return; }
     const [easy, medium] = await Promise.all([
       loadWordFile('szavak-konnyu.txt', 'konnyu'),
       loadWordFile('szavak-kozepes.txt', 'kozepes')
     ]);
     const combined = [...easy, ...medium];
     if(combined.length > 0) WORDS = combined;
+    try{ clog('W11', combined.length ? 'szavak: tartalék .txt fájlok, ' + tally(combined) : 'szavak: CSAK A BEÉPÍTETT MINI LISTA (' + WORDS.length + ' szó) — az élő lista nem töltődött be'); }catch(e){}
     // else: keep FALLBACK_WORDS so the game still works if everything else is missing
   }
 
@@ -5769,6 +5773,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // for 20 s counts as disconnected (with the usual grace period).
     // v3.54: the room owner repeats the turn order + where the game is,
     // every few seconds while a game runs (tiny message)
+    const drawerBeacon = setInterval(()=>{
+      if(room !== thisRoom){ clearInterval(drawerBeacon); return; }
+      if(!meta || gameEnded || !currentRound || currentRound.drawerId !== selfId) return;
+      if(processedResultRounds.has(roundKey(currentRound))) return;
+      try{ roundAction.send(publicRound(currentRound)); }catch(e){}
+    }, 5000);
     const beaconTimer = setInterval(()=>{
       if(room !== thisRoom){ clearInterval(beaconTimer); return; }
       if(!isHost || !meta || gameEnded || !currentRound) return;
@@ -6234,7 +6244,29 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(cleanPeerId(rd.drawerId) !== peerId) return;      // you may only announce your OWN round
       const idx = clampNum(rd.idx, 0, 500, -1);
       if(idx < 0 || idx >= meta.turnOrder.length) return;
+      // v3.57: I started a drawing too early (my copy of the game thought the
+      // previous one was over), but its scheduled drawer is still on it —
+      // I step back and follow theirs; my turn comes again after it
+      if(currentRound && idx < currentRound.idx && currentRound.drawerId === selfId && meta.turnOrder[idx] === peerId &&
+         activePlayerIds.has(peerId) && rd.phase === 'drawing' && !processedResultRounds.has(roundKey({ idx, drawerId: peerId }))){
+        clog('K17', `visszalépek: #${idx} még fut (${String(peerId).slice(0,5)}), én túl korán indítottam a #${currentRound.idx}-et`);
+        try{ stopTicker(); }catch(e){}
+        try{ addSystemChatMessage('↩️ Még tart az előző rajz — a te köröd utána jön.'); }catch(e){}
+        currentRound = null;
+      }
       if(currentRound && idx < currentRound.idx) return;   // a stale round from earlier
+      // v3.57: NEVER let a later drawing replace one that is still running
+      // with its drawer present. Two people drawing at once (after a
+      // turn-order mix-up) used to switch my screen to the other one's
+      // round — the drawer drew "zongorázás" while the result said "héja".
+      if(currentRound && idx > currentRound.idx && !processedResultRounds.has(roundKey(currentRound)) &&
+         currentRound.drawerId !== peerId &&
+         (currentRound.drawerId === selfId || (activePlayerIds.has(currentRound.drawerId) && currentRound.phase === 'drawing'))){
+        clog('K16', `korai kör elutasítva: ${String(peerId).slice(0,5)} #${idx}, fut még #${currentRound.idx}`);
+        // the other one is out of date: tell them which drawing is on
+        if(currentRound.drawerId === selfId){ try{ roundAction.send(publicRound(currentRound), { target: peerId }); }catch(e){} }
+        return;
+      }
       const scheduled = meta.turnOrder[idx] === peerId;
       const sameRound = !!currentRound && currentRound.idx === idx;
       // A takeover is only legitimate while the scheduled drawer is gone
@@ -12693,6 +12725,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.57', changes:[
+      'Súlyos hiba javítva: ha a sorrend-egyeztetés miatt valaki túl korán elindította a saját rajzát, az a még futó rajzot „felülírhatta” a többieknél — a rajzoló pl. „zongorázás”-t rajzolt, a kör végén mégis „héja” jelent meg. Mostantól egy futó rajzot semmilyen későbbi rajz nem válthat le; aki túl korán indított, automatikusan visszalép, és a sorra kerülésekor rajzol. A rajzoló 5 másodpercenként megerősíti a saját futó körét, így a lemaradók is utolérik.'
+    ]},
     { version:'3.56', changes:[
       'Javítva: egy saját szóként beküldött szó (pl. „vonalkód”) minden visszavágóban újra előkerült, és mivel saját szó mindig van a felkínáltak között, újra és újra felajánlotta a játék. Visszavágóban most már csak a még nem rajzolt saját szavak maradnak meg.',
       'Az eszköz megjegyzi az elmúlt játékokban rajzolt szavakat (kb. 600-at), és ezeket is kerüli, amíg van elég más szó — így a beépített szavak sem ismétlődnek játékok között.',
