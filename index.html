@@ -2832,6 +2832,14 @@
       </div>
     </div>
 
+    <div class="admin-note" id="admin-usedever-box" style="margin-bottom:18px;">
+      <div class="admin-panel-header" style="margin-bottom:6px;">
+        <strong style="color:var(--chalk);">♻️ Már lerajzolt szavak <span id="admin-ue-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
+        <button class="ghost small" id="admin-ue-reset" type="button">♻️ Nullázás</button>
+      </div>
+      Egy szó, ami bármelyik játékban már feladvány volt, többet nem kerül elő, amíg az adott szint összes szava el nem fogyott. A nullázással minden szó újra „friss” lesz (ehhez a lenti Netlify token kell).
+      <div id="admin-ue-status" class="admin-warning" style="text-align:left;"></div>
+    </div>
     <div class="admin-note" id="admin-wordreport-box" style="margin-bottom:18px;">
       <div class="admin-panel-header" style="margin-bottom:6px;">
         <strong style="color:var(--chalk);">🚩 Bejelentett szavak <span id="admin-wr-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
@@ -3545,6 +3553,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     renderAdminList('konnyu');
     renderAdminList('kozepes');
     renderAdminList('nehez');
+    try{ adminUsedEverRefresh(); }catch(e){}
     try{ renderAdminDash(); }catch(e){}
     try{ renderAdminMusic(); }catch(e){}
     // show the right cloud-storage section depending on one-time setup state
@@ -4240,6 +4249,27 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // until the admin reviews them. The list lives in a Netlify function.
   const heldWordKeys = new Set();
   const WORDBLOCK_URL = '/.netlify/functions/wordblock';
+  // v3.65: words that were already the puzzle in ANY game, on any device.
+  // They are not offered again until a level runs out of other words.
+  const usedEverKeys = new Set();
+  const WORDUSED_URL = '/.netlify/functions/wordused';
+  async function refreshUsedEver(){
+    try{
+      const r = await fetch(WORDUSED_URL, { cache:'no-cache' });
+      if(!r.ok) return;
+      const d = await r.json();
+      if(d && Array.isArray(d.words)) d.words.forEach(w=>{ const k = squash(w); if(k) usedEverKeys.add(k); });
+    }catch(e){}
+  }
+  refreshUsedEver();
+  setInterval(refreshUsedEver, 3*60*1000);
+  function markUsedEver(word){
+    const k = squash(word); if(!k) return;
+    usedEverKeys.add(k);
+  }
+  async function postUsedEver(word){
+    try{ await fetch(WORDUSED_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ word }) }); }catch(e){}
+  }
   async function refreshHeldWords(){
     try{
       const r = await fetch(WORDBLOCK_URL, { cache:'no-cache' });
@@ -4270,7 +4300,17 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // too (not just in this game) — as long as enough other words are left
     const recent = recentWordSet();
     const freshAny = list => list.filter(w=>w && w.w && !used.has(squash(w.w)));
-    const fresh = list => { const a = freshAny(list); const b = a.filter(w=>!recent.has(squash(w.w))); return b.length ? b : a; };
+    // v3.65: first the words never drawn in any game; only when a level has
+    // none left, the ones drawn before (and then also this device's recent ones)
+    const fresh = list => {
+      const a = freshAny(list);
+      const never = a.filter(w=>!usedEverKeys.has(squash(w.w)) && !recent.has(squash(w.w)));
+      if(never.length) return never;
+      const notRecent = a.filter(w=>!usedEverKeys.has(squash(w.w)));
+      if(notRecent.length) return notRecent;
+      const b = a.filter(w=>!recent.has(squash(w.w)));
+      return b.length ? b : a;
+    };
     const custom = customWordItems();
     const levelTiers = tiers.filter(t=>t === 'konnyu' || t === 'kozepes' || t === 'nehez');
     const lv = levelTiers.length ? levelTiers : ((settings && settings.difficulties) || ['konnyu','kozepes']);
@@ -6466,6 +6506,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       // this game — a device that missed a round used to offer it once more
       if(meta && isPlainObject(data) && meta.playerNames[peerId]){
         noteUsedWords([data.word].concat(Array.isArray(data.offered) ? data.offered.slice(0, 12) : []));
+        if(typeof data.word === 'string') markUsedEver(data.word);
       }
       // The drawer alone decides how a round ends (see guessAction below).
       if(!currentRound || !isPlainObject(data) || peerId !== currentRound.drawerId) return;
@@ -11720,6 +11761,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       result.drawMs = fdLastModAt ? Math.max(0, fdLastModAt - currentRound.roundStartAt) : (Number(result.elapsedMs) || 0);
     }
     resultAction.send(result);
+    // v3.65: the drawer records the word as used, for every future game
+    if(result.word && currentRound.tier !== 'sajat'){ markUsedEver(result.word); postUsedEver(result.word); }
     onRoundResolved(result);
   }
   // v2.90: who gets what for a round — worked out the same way on every
@@ -12852,6 +12895,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.65', changes:[
+      'Ami egyszer már feladvány volt bármelyik játékban (bármelyik eszközön), az többet nem kerül elő — csak akkor, ha az adott szint összes szava elfogyott. A lerajzolt szavak listáját egy közös tárhely őrzi; az admin felületen látszik, hány szó fogyott el, és ott nullázható is.'
+    ]},
     { version:'3.64', changes:[
       'Sötét módban a nevek melletti színes karikák, az animált gyorsreakciók, a reakció- és chatgombok, valamint az ünneplő effektek (konfetti, emojik) is sötétebbek lettek, hogy illeszkedjenek a többihez.'
     ]},
@@ -13935,6 +13981,26 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
 
   // ---- admin: the reported words ----
+  async function adminUsedEverRefresh(){
+    try{
+      const r = await fetch(WORDUSED_URL, { cache:'no-store' }); const d = r.ok ? await r.json() : null;
+      const total = WORDS.length;
+      document.getElementById('admin-ue-count').textContent = d ? `(${d.n || 0} / ${total})` : '(nem elérhető)';
+    }catch(e){ document.getElementById('admin-ue-count').textContent = '(nem elérhető)'; }
+  }
+  document.getElementById('admin-ue-reset').addEventListener('click', async ()=>{
+    const st = document.getElementById('admin-ue-status');
+    const token = document.getElementById('admin-fb-token').value.trim();
+    if(!token){ st.textContent = 'Add meg lent a Netlify tokent (a Visszajelzéseknél).'; st.style.color = 'var(--red)'; return; }
+    if(!confirm('Biztosan nullázod a már lerajzolt szavak listáját? Ezután minden szó újra előkerülhet.')) return;
+    try{
+      const r = await fetch(WORDUSED_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'x-netlify-token': token }, body: JSON.stringify({ action:'reset' }) });
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      usedEverKeys.clear();
+      st.textContent = 'Nullázva — minden szó újra friss.'; st.style.color = 'var(--green)';
+    }catch(e){ st.textContent = 'Nem sikerült: ' + e.message; st.style.color = 'var(--red)'; }
+    adminUsedEverRefresh();
+  });
   function adminWrStatus(text, kind){
     const el = document.getElementById('admin-wr-status');
     el.textContent = text;
