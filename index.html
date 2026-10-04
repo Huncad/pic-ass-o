@@ -2131,6 +2131,7 @@
       <div class="pill-row" id="customonly-row">
         <button class="pill active" data-customonly="mix">Keverve a beépítettekkel</button>
         <button class="pill" data-customonly="only">Csak a saját szavak</button>
+        <button class="pill" data-customonly="off">Nincsenek saját szavak</button>
       </div>
       <p class="setup-hint">A váróteremben minden játékos (te is) beírhat legfeljebb 15 saját szót. Mindenki csak a saját beküldött szavait kaphatja rajzolásra, és ha ilyet választ, a rajzoló nem kap érte pontot (a kitalálók igen). Ha senki nem ír be semmit, a beépített szavakkal játszotok.</p>
     </div>
@@ -3254,6 +3255,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     return String(n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
   }
   let renameAction = null, pendingRename = null;
+  let roomNoCustom = false;   // v3.63: guest side — the owner switched own words off
   let resyncAction = null, behindBeacons = 0, resyncAskedAt = 0, resyncPending = false;
   const resyncSentAt = new Map();
   let unknownBeacons = 0;
@@ -5515,7 +5517,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         totalRounds: settings.totalRounds, roundsAreCycles: true, roundTime: settings.roundTime,
         hintsEnabled: settings.hintsEnabled, maxPlayers: settings.maxPlayers, wordChoices: settings.wordChoices,
         guessMode: settings.guessMode,
-        customOnly: settings.customOnly,
+        customOnly: settings.customOnly, customOff: !!settings.customOff,
         visibility: vis ? vis.dataset.visibility : 'private',
         roomName: document.getElementById('room-name-input').value.slice(0,30)
       }));
@@ -5550,7 +5552,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     roomIsPublic = pick('visibility-row', 'visibility', p.visibility, 'private') === 'public';
     if(typeof p.roomName === 'string') document.getElementById('room-name-input').value = p.roomName.slice(0,30);
     settings.customWords = [];
-    settings.customOnly = pick('customonly-row', 'customonly', p.customOnly ? 'only' : 'mix', 'mix') === 'only';
+    { const cm = pick('customonly-row', 'customonly', p.customOff ? 'off' : (p.customOnly ? 'only' : 'mix'), 'mix');
+      settings.customOnly = cm === 'only'; settings.customOff = cm === 'off'; }
 
   }
   // ---- v3.25: own words, collected in the lobby from every player ----
@@ -5585,6 +5588,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   // the host turns the submissions into the room's word list at game start
   function buildCustomEntries(ids){
+    if(settings.customOff) return [];   // v3.63: this room plays with the built-in words only
     const list = [];
     ids.forEach(id=>(lobbyCustom[id] || []).forEach(w=>list.push({ w, by:[id] })));
     return cleanCustomEntries(list);
@@ -5615,6 +5619,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     btn.addEventListener('click', ()=>{
       sndClick();
       settings.customOnly = btn.dataset.customonly === 'only';
+      settings.customOff = btn.dataset.customonly === 'off';   // v3.63: a room without own words
       document.querySelectorAll('#customonly-row .pill').forEach(b=>b.classList.toggle('active', b === btn));
     });
   });
@@ -6067,7 +6072,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       helloAction.send({
         name: myName, isHost, avatar: myAvatarColor, spectator: amSpectator || undefined,
         roomName: isHost ? currentRoomName : undefined,
-        isPublic: isHost ? roomIsPublic : undefined
+        isPublic: isHost ? roomIsPublic : undefined,
+        noCustom: isHost ? !!settings.customOff : undefined
       }, { target: peerId });
     };
     room.onPeerLeave = (peerId)=>{
@@ -6202,6 +6208,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         if(data.roomName){
           currentRoomName = cleanText(data.roomName, 60);
           document.getElementById('lobby-room-name').textContent = currentRoomName;
+        }
+        if(typeof data.noCustom === 'boolean'){
+          roomNoCustom = data.noCustom;
+          try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){}
         }
         if(typeof data.isPublic === 'boolean'){
           roomIsPublic = data.isPublic;
@@ -6795,7 +6805,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       wordChoices: WORD_CHOICE_OPTIONS.includes(Number(s.wordChoices)) ? Number(s.wordChoices) : 3,
       guessMode: s.guessMode === 'all' ? 'all' : 'first',
       customWords: cleanCustomEntries(s.customWords),
-      customOnly: s.customOnly === true
+      customOnly: s.customOnly === true && s.customOff !== true,
+      customOff: s.customOff === true
     };
     if(out.difficulties.length === 0) out.difficulties = ['konnyu','kozepes'];
     return out;
@@ -9732,6 +9743,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     roomCode = code;
     isHost = false;
     roomIsPublic = false; // will be corrected by the host's hello, if different
+    roomNoCustom = false;
     amSpectator = joinAsSpectator;
     joinOrderIds = amSpectator ? [] : [selfId];
     lobbyPlayers = amSpectator ? {} : { [selfId]: myName };
@@ -9928,7 +9940,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         renderLobbyPlayers();
       });
     });
-    document.getElementById('lobby-words-box').classList.toggle('hidden', amSpectator);
+    document.getElementById('lobby-words-box').classList.toggle('hidden', amSpectator || (isHost ? !!settings.customOff : roomNoCustom));
     const note = document.getElementById('lobby-count-note');
     if(amSpectator){
       note.textContent = `👀 Nézőként vagy itt — látsz mindent, de nem rajzolsz és nem tippelsz. Játékosok: ${ids.length} fő`;
@@ -12833,6 +12845,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.63', changes:[
+      'Szobanyitáskor a „Saját szavak a játékosoktól” résznél választható a „Nincsenek saját szavak” is: ilyenkor a váróteremben nem jelenik meg a saját szavak mezője, és csak a beépített szavakkal játszotok.'
+    ]},
     { version:'3.62', changes:[
       'Átnéztem a kör-, szó- és jelöléskezelést, és több rejtett hibát javítottam:',
       '• A kör végén az „Én jövök” 10 másodperces visszaszámlálása a v3.54 óta 5 másodpercenként újraindult, így automatikusan sosem indult el a következő rajz.',
