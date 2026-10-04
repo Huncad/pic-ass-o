@@ -1963,6 +1963,24 @@
   body.chat-dock-left #screen-fulldraw, body.chat-dock-left #fd-prepare, body.chat-dock-left #urgency-overlay{ left:var(--dock-w) !important; }
   body.chat-dock-right #chat-toggle-btn, body.chat-dock-right #reaction-toggle-btn, body.chat-dock-right #reaction-picker, body.chat-dock-right #settings-fab{ right:calc(var(--dock-w) + 16px) !important; left:auto !important; }
   body.chat-dock-left #chat-new-below{ }
+
+  /* ===== v3.70: chat font size ===== */
+  #chat-panel{ --chat-fs:1; }
+  #chat-messages{ font-size:calc(.86rem * var(--chat-fs)) !important; }
+  @media (min-width:860px) and (pointer:fine){ #chat-messages{ font-size:calc(.95rem * var(--chat-fs)) !important; } }
+  .chat-msg .who{ font-size:calc(.76rem * var(--chat-fs)) !important; }
+  #chat-text-input{ font-size:calc(.95rem * max(1, var(--chat-fs))) !important; }
+  #chat-typing-indicator{ font-size:calc(.78rem * var(--chat-fs)); }
+  #chat-settings{ position:absolute; top:52px; right:10px; z-index:6; width:min(300px, calc(100% - 20px)); background:var(--panel);
+    border:1.5px solid rgba(var(--line-rgb),.22); border-radius:14px; padding:12px 14px; box-shadow:0 14px 34px rgba(0,0,0,.5); }
+  #chat-settings .cs-title{ font-weight:900; color:var(--yellow); margin-bottom:8px; }
+  #chat-settings .cs-label{ font-size:.8rem; font-weight:800; color:var(--chalk-dim); margin-bottom:6px; }
+  #chat-settings .cs-row{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  #chat-settings .cs-row .pill{ padding:6px 10px; }
+  #chat-settings .cs-fine{ margin-top:8px; justify-content:center; gap:12px; }
+  #chat-fs-val{ font-weight:900; color:var(--chalk); min-width:46px; text-align:center; }
+  #chat-settings .cs-preview{ margin:10px 0 0; padding:6px 10px; border-radius:10px; background:rgba(0,0,0,.22); color:var(--chalk);
+    font-size:calc(.95rem * var(--chat-fs)); }
 </style>
 </head>
 <body>
@@ -2574,9 +2592,26 @@
   💬<span id="chat-unread-badge" class="hidden">0</span>
 </button>
 <div id="chat-panel" class="hidden">
+  <div id="chat-settings" class="hidden" role="dialog" aria-label="Chat beállításai">
+    <div class="cs-title">⚙️ Beállítások</div>
+    <div class="cs-label">Betűméret</div>
+    <div class="cs-row" id="chat-fs-row">
+      <button type="button" class="pill" data-fs="0.85" style="font-size:.8rem">Kicsi</button>
+      <button type="button" class="pill" data-fs="1" style="font-size:.95rem">Normál</button>
+      <button type="button" class="pill" data-fs="1.2" style="font-size:1.1rem">Nagy</button>
+      <button type="button" class="pill" data-fs="1.45" style="font-size:1.25rem">Óriás</button>
+    </div>
+    <div class="cs-row cs-fine">
+      <button type="button" class="ghost small" id="chat-fs-minus" aria-label="Kisebb betű">A−</button>
+      <span id="chat-fs-val">100%</span>
+      <button type="button" class="ghost small" id="chat-fs-plus" aria-label="Nagyobb betű">A+</button>
+    </div>
+    <p class="cs-preview">Így néz ki egy üzenet 🙂</p>
+  </div>
   <div id="chat-header">
     <span>💬 Chat</span>
     <div style="display:flex;gap:6px;">
+      <button class="ghost small" id="chat-settings-btn" aria-label="Chat beállításai" title="Beállítások (betűméret)" aria-expanded="false">⚙️</button>
       <button class="ghost small" id="chat-dock-btn" aria-label="Chat rögzítése oldalra" title="Rögzítés a képernyő szélére (oldalsáv)">📌</button>
       <button class="ghost small" id="chat-close-btn" aria-label="Chat bezárása">✕</button>
     </div>
@@ -9267,6 +9302,35 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     window.addEventListener('resize', ()=>{ if(panel.dataset.userPos === '1') restore(); });
     restore();
   })();
+  // ===== v3.70: chat settings — font size (kept on this device) =====
+  (function(){
+    const KEY = 'picasso-chat-fs';
+    const panel = document.getElementById('chat-panel');
+    const box = document.getElementById('chat-settings');
+    const btn = document.getElementById('chat-settings-btn');
+    let fs = 1;
+    try{ const v = parseFloat(localStorage.getItem(KEY)); if(v >= 0.7 && v <= 1.8) fs = v; }catch(e){}
+    const apply = ()=>{
+      fs = Math.round(Math.min(1.8, Math.max(0.7, fs)) * 100) / 100;
+      panel.style.setProperty('--chat-fs', String(fs));
+      document.getElementById('chat-fs-val').textContent = Math.round(fs * 100) + '%';
+      document.querySelectorAll('#chat-fs-row .pill').forEach(b=>b.classList.toggle('active', Math.abs(parseFloat(b.dataset.fs) - fs) < 0.01));
+      try{ localStorage.setItem(KEY, String(fs)); }catch(e){}
+      try{ chatToEnd(); }catch(e){}
+    };
+    const toggle = open=>{
+      const on = open === undefined ? box.classList.contains('hidden') : open;
+      box.classList.toggle('hidden', !on);
+      btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    };
+    btn.addEventListener('click', e=>{ e.stopPropagation(); sndClick(); toggle(); });
+    document.querySelectorAll('#chat-fs-row .pill').forEach(b=>b.addEventListener('click', ()=>{ sndClick(); fs = parseFloat(b.dataset.fs); apply(); }));
+    document.getElementById('chat-fs-minus').addEventListener('click', ()=>{ sndClick(); fs -= 0.05; apply(); });
+    document.getElementById('chat-fs-plus').addEventListener('click', ()=>{ sndClick(); fs += 0.05; apply(); });
+    document.addEventListener('click', e=>{ if(!box.classList.contains('hidden') && !box.contains(e.target) && e.target !== btn) toggle(false); });
+    document.addEventListener('keydown', e=>{ if(e.key === 'Escape') toggle(false); });
+    apply();
+  })();
   // ===== v3.68: dockable chat (desktop) =====
   // Pinned, the chat becomes a full-height side column and the game uses
   // the rest of the screen — nothing is covered. The drawing keeps its
@@ -13026,6 +13090,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.70', changes:[
+      'A chat fejlécén új ⚙️ Beállítások gomb: itt állítható a chat betűmérete (Kicsi / Normál / Nagy / Óriás, vagy A− / A+ gombokkal 5%-onként, 70–180% között). A beállítást a gép megjegyzi.'
+    ]},
     { version:'3.69', changes:[
       'Javítva: sötét módban a rajzlap melletti díszítő rajzok (ceruza, csillag, pálcikaember stb.) a sötétítés helyett világosabbak lettek. Most sötét módban halványabbak, mint világosban.'
     ]},
