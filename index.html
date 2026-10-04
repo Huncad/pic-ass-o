@@ -1889,6 +1889,22 @@
   #theme-picker{ flex-wrap:wrap; max-width:min(320px, calc(100vw - 32px)); justify-content:center; }
   .theme-swatch-btn.light-swatch{ border-color:rgba(38,48,44,.35) !important; }
   .theme-swatch-btn.light-swatch.active{ border-color:var(--yellow) !important; }
+
+  /* ===== v3.52: statistics ===== */
+  #stats-overlay{ position:fixed; inset:0; z-index:1000; background:rgba(10,20,16,.86); backdrop-filter:blur(3px); display:flex; align-items:flex-start; justify-content:center; padding:20px; overflow-y:auto; }
+  #stats-overlay.hidden{ display:none; }
+  .stats-box{ max-width:820px; width:100%; border-style:solid !important; border-color:color-mix(in srgb, var(--green) 35%, transparent) !important; border-radius:24px !important; }
+  .stat-sec{ font-family:'Kalam',cursive; font-size:1.3rem; color:var(--yellow); margin:16px 0 8px; }
+  .stat-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; }
+  .stat-card{ background:color-mix(in srgb, var(--bg) 70%, transparent); border:1.5px solid rgba(var(--line-rgb),.12); border-radius:14px; padding:12px 12px 10px; text-align:center; min-width:0; }
+  .stat-ico{ font-size:1.4rem; line-height:1; }
+  .stat-val{ font-size:1.35rem; font-weight:900; color:var(--chalk); margin-top:6px; overflow-wrap:anywhere; line-height:1.2; }
+  .stat-lbl{ font-size:.8rem; font-weight:800; color:var(--chalk-dim); margin-top:2px; }
+  .stat-sub{ font-size:.72rem; color:var(--chalk-dim); opacity:.85; margin-top:4px; }
+  .stats-foot{ font-size:.8rem; color:var(--chalk-dim); text-align:center; margin:16px 0 0; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
+  .stats-open-btn{ display:block; margin:8px auto 0; }
+  #home-stats{ cursor:pointer; }
+  #home-stats:hover{ text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -2004,6 +2020,7 @@
       <button class="ghost" id="btn-open-privacy"><span class="ico" aria-hidden="true">🔒</span>Adatvédelem</button>
     </div>
     <p class="home-stats hidden" id="home-stats"></p>
+    <button class="ghost small stats-open-btn" id="btn-open-stats" type="button">📊 Statisztikáim</button>
     <p class="center-note" id="words-loading-note">Szavak betöltése…</p>
   </div>
 
@@ -2308,6 +2325,16 @@
     <div id="lastround-body"></div>
   </div>
 </div>
+<div id="stats-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="stats-title">
+  <div class="admin-box stats-box">
+    <div class="admin-panel-header">
+      <h2 id="stats-title">📊 Statisztikáim</h2>
+      <button class="ghost small" id="stats-close-btn" aria-label="Bezárás">Bezárás ✕</button>
+    </div>
+    <div id="stats-body"></div>
+    <p class="stats-foot">Csak ezen az eszközön tárolódik, sehova nem küldjük el. <button type="button" class="ghost small" id="stats-reset-btn">🗑️ Nullázás</button></p>
+  </div>
+</div>
 <div id="privacy-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
   <div class="admin-box" style="max-width:560px;">
     <div class="admin-panel-header">
@@ -2576,6 +2603,7 @@
     <div class="menu-list">
       <button class="big secondary hidden" id="btn-fd-giveup" style="width:100%;">🙅 Passz</button>
       <button class="ghost" id="menu-btn-darkmode" style="width:100%;text-align:left;"></button>
+      <button class="ghost" id="menu-btn-stats" style="width:100%;text-align:left;">📊 Statisztikáim</button>
       <div class="menu-theme">
         <div class="menu-theme-label">🎨 Színvilág</div>
         <div class="menu-theme-row">
@@ -9751,6 +9779,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   });
 
   function applyMeta(m){
+    setTimeout(()=>{ try{ playTickAt = 0; flushPlayTime(); }catch(e){} }, 0);   // v3.52: start the play clock
     const clean = sanitizeMeta(m);
     if(!clean) return;
     stopTicker();
@@ -11853,6 +11882,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         : `A szót nem ismerjük (a rajzoló kapcsolata megszakadt) — senki sem kapott pontot.`;
     }
     renderScoreTable('roundend-scores', scoreRows());
+    try{ recordRoundStats(result); }catch(e){}
     try{ setupReportFor(roundKey(currentRound), shownWord, currentRound.tier); }catch(e){}
     rememberRoundRecap(idx);
 
@@ -11903,24 +11933,152 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ const v = JSON.parse(localStorage.getItem(STATS_KEY) || 'null'); if(isPlainObject(v)) return v; }catch(e){}
     return { games:0, wins:0, points:0, best:0 };
   }
+  function savePersonalStats(st){ try{ localStorage.setItem(STATS_KEY, JSON.stringify(st)); }catch(e){} }
+  const N = v=>Number(v)||0;
   function recordPersonalStats(rows){
     if(statsRecordedThisGame || !rows.some(r=>r.id === selfId)) return;
     statsRecordedThisGame = true;
+    flushPlayTime();
     const st = loadPersonalStats();
     const me = rows.find(r=>r.id === selfId);
-    st.games = (Number(st.games)||0) + 1;
-    if(rows.length > 1 && me.score === rows[0].score && me.score > 0) st.wins = (Number(st.wins)||0) + 1;
-    st.points = (Number(st.points)||0) + me.score;
-    st.best = Math.max(Number(st.best)||0, me.score);
-    try{ localStorage.setItem(STATS_KEY, JSON.stringify(st)); }catch(e){}
+    const place = 1 + rows.filter(r=>r.score > me.score).length;
+    st.games = N(st.games) + 1;
+    if(rows.length > 1 && place === 1 && me.score > 0) st.wins = N(st.wins) + 1;
+    if(rows.length > 2 && place <= 3) st.podium = N(st.podium) + 1;
+    st.points = N(st.points) + me.score;
+    if(me.score >= N(st.best)){ st.best = me.score; st.bestAt = Date.now(); st.bestPlayers = rows.length; }
+    st.biggestRoom = Math.max(N(st.biggestRoom), rows.length);
+    // v3.52: who you play with most (by name — ids change every game)
+    st.mates = isPlainObject(st.mates) ? st.mates : {};
+    rows.forEach(r=>{ if(r.id === selfId) return; const n = String(r.name||'').replace(/ \(kilépett\)$/,'').slice(0,16); if(n) st.mates[n] = N(st.mates[n]) + 1; });
+    const keep = Object.entries(st.mates).sort((a,b)=>b[1]-a[1]).slice(0, 40); st.mates = Object.fromEntries(keep);
+    savePersonalStats(st);
     renderHomeStats();
   }
+  // v3.52: time spent in games — counted while a game is running, saved
+  // every 15 s so a closed tab loses at most that much
+  let playTickAt = 0;
+  function flushPlayTime(){
+    const now = Date.now();
+    if(playTickAt && meta && !gameEnded && room){
+      const d = Math.min(now - playTickAt, 60000);
+      if(d > 0){ const st = loadPersonalStats(); st.playMs = N(st.playMs) + d; st.lastPlayed = now; savePersonalStats(st); }
+    }
+    playTickAt = (meta && !gameEnded && room) ? now : 0;
+  }
+  setInterval(flushPlayTime, 15000);
+  window.addEventListener('pagehide', flushPlayTime);
+  // v3.52: what happened in each drawing, for the statistics page
+  const statsRoundsDone = new Set();
+  function recordRoundStats(result){
+    if(!currentRound || !meta) return;
+    const key = roundKey(currentRound);
+    if(statsRoundsDone.has(key)) return;
+    statsRoundsDone.add(key);
+    const st = loadPersonalStats();
+    const word = String(result.word || (currentRound.drawerId === selfId ? currentRound.word : '') || '').slice(0, 60);
+    const tier = currentRound.tier;
+    if(currentRound.drawerId === selfId){
+      st.drawn = N(st.drawn) + 1;
+      if(tier === 'konnyu' || tier === 'kozepes' || tier === 'nehez'){ st.tiers = isPlainObject(st.tiers) ? st.tiers : {}; st.tiers[tier] = N(st.tiers[tier]) + 1; }
+      if(result.type === 'correct'){
+        const award = result.award || roundAward(result);
+        st.drawnHit = N(st.drawnHit) + 1;
+        st.drawPts = N(st.drawPts) + N(award.drawerPts);
+        const ms = N(award.drawMs);
+        if(word && ms > 0 && (!st.easiest || ms < N(st.easiest.ms))) st.easiest = { w: word, ms };
+        if(word && ms > 0 && (!st.hardestHit || ms > N(st.hardestHit.ms))) st.hardestHit = { w: word, ms };
+      } else if(result.type === 'pass'){
+        st.passes = N(st.passes) + 1;
+      } else {
+        st.drawnMiss = N(st.drawnMiss) + 1;
+        if(word){ st.missed = (Array.isArray(st.missed) ? st.missed : []).filter(x=>x !== word); st.missed.unshift(word); st.missed = st.missed.slice(0, 5); }
+      }
+    } else if(activePlayerIds.has(selfId) && !amSpectator){
+      st.guessRounds = N(st.guessRounds) + 1;
+      const award = result.type === 'correct' ? (result.award || roundAward(result)) : null;
+      const mine = award && award.guessers.find(g=>g.pid === selfId);
+      if(mine){
+        st.guessHit = N(st.guessHit) + 1;
+        st.guessPts = N(st.guessPts) + N(mine.pts);
+        st.guessMsSum = N(st.guessMsSum) + N(mine.ms);
+        if(word && mine.ms > 0 && (!st.fastest || mine.ms < N(st.fastest.ms))) st.fastest = { w: word, ms: mine.ms };
+        if(award.guessers[0] && award.guessers[0].pid === selfId) st.firstHits = N(st.firstHits) + 1;
+      }
+    }
+    savePersonalStats(st);
+  }
+  function fmtDuration(ms){
+    const min = Math.round(N(ms) / 60000);
+    if(min < 1) return 'kevesebb mint 1 perc';
+    if(min < 60) return `${min} perc`;
+    const h = Math.floor(min / 60), m = min % 60;
+    return m ? `${h} óra ${m} perc` : `${h} óra`;
+  }
+  const fmtSec = ms=> `${(N(ms)/1000).toFixed(N(ms) < 10000 ? 1 : 0).replace('.', ',')} mp`;
+  const pct = (a, b)=> b ? Math.round(100 * a / b) + '%' : '—';
+  function renderStatsPage(){
+    const st = loadPersonalStats();
+    const body = document.getElementById('stats-body');
+    if(!N(st.games) && !N(st.drawn) && !N(st.guessRounds) && !N(st.playMs)){
+      body.innerHTML = '<p class="center-note">Még nincs statisztikád ezen az eszközön. Játssz egy kört, és itt látod majd az eredményeidet! 🎨</p>';
+      return;
+    }
+    const card = (ico, val, lbl, sub)=>`<div class="stat-card"><div class="stat-ico" aria-hidden="true">${ico}</div><div class="stat-val">${val}</div><div class="stat-lbl">${lbl}</div>${sub?`<div class="stat-sub">${sub}</div>`:''}</div>`;
+    const sec = (t, inner)=>`<h3 class="stat-sec">${t}</h3><div class="stat-grid">${inner}</div>`;
+    const avgGuess = N(st.guessHit) ? fmtSec(N(st.guessMsSum) / N(st.guessHit)) : '—';
+    const avgPts = N(st.games) ? Math.round(N(st.points) / N(st.games)) : 0;
+    const mates = Object.entries(isPlainObject(st.mates) ? st.mates : {}).sort((a,b)=>b[1]-a[1]).slice(0, 3);
+    const tiers = isPlainObject(st.tiers) ? st.tiers : {};
+    const tierTxt = ['konnyu','kozepes','nehez'].filter(t=>N(tiers[t])).map(t=>`${TIER_INFO[t].label}: ${N(tiers[t])}`).join(' · ');
+    body.innerHTML =
+      sec('🏆 Összesítés',
+        card('⏱️', fmtDuration(st.playMs), 'játékidő', st.lastPlayed ? 'utoljára: ' + new Date(st.lastPlayed).toLocaleDateString('hu-HU') : '') +
+        card('🎮', N(st.games), 'lejátszott játék', N(st.biggestRoom) ? `legnagyobb társaság: ${N(st.biggestRoom)} fő` : '') +
+        card('🥇', N(st.wins), 'győzelem', `győzelmi arány: ${pct(N(st.wins), N(st.games))}` + (N(st.podium) ? ` · dobogó: ${N(st.podium)}×` : '')) +
+        card('⭐', N(st.points), 'összes pont', `átlag: ${avgPts} pont / játék`) +
+        card('🚀', N(st.best), 'legjobb eredmény', st.bestAt ? new Date(st.bestAt).toLocaleDateString('hu-HU') + (N(st.bestPlayers) ? ` · ${N(st.bestPlayers)} játékossal` : '') : '')
+      ) +
+      sec('🎨 Rajzolóként',
+        card('✏️', N(st.drawn), 'rajz', tierTxt) +
+        card('✅', pct(N(st.drawnHit), N(st.drawn)), 'kitalált rajzok', `${N(st.drawnHit)} / ${N(st.drawn)}` + (N(st.passes) ? ` · passz: ${N(st.passes)}` : '')) +
+        card('💎', N(st.drawPts), 'pont rajzolásért', '') +
+        card('⚡', st.easiest ? escapeHtml(st.easiest.w) : '—', 'legkönnyebben kitalált szavad', st.easiest ? `${fmtSec(st.easiest.ms)} alatt kitalálták` : '') +
+        card('🐢', st.hardestHit ? escapeHtml(st.hardestHit.w) : '—', 'legtovább tartott', st.hardestHit ? `${fmtSec(st.hardestHit.ms)} kellett hozzá` : '') +
+        card('🤷', (Array.isArray(st.missed) && st.missed.length) ? escapeHtml(st.missed[0]) : '—', 'senki nem találta ki', (Array.isArray(st.missed) && st.missed.length > 1) ? 'előtte: ' + st.missed.slice(1, 4).map(escapeHtml).join(', ') : '')
+      ) +
+      sec('🔍 Tippelőként',
+        card('🎯', pct(N(st.guessHit), N(st.guessRounds)), 'eltalált rajzok', `${N(st.guessHit)} / ${N(st.guessRounds)}`) +
+        card('🥇', N(st.firstHits), 'elsőként kitalálva', '') +
+        card('⚡', st.fastest ? fmtSec(st.fastest.ms) : '—', 'leggyorsabb tipped', st.fastest ? escapeHtml(st.fastest.w) : '') +
+        card('⏳', avgGuess, 'átlagos tippidő', '') +
+        card('💎', N(st.guessPts), 'pont tippelésért', '')
+      ) +
+      (mates.length ? sec('👯 Akikkel a legtöbbet játszol', mates.map(([n, c], i)=>card(['🥇','🥈','🥉'][i], escapeHtml(n), `${c} közös játék`, '')).join('')) : '');
+  }
+  function openStats(){
+    flushPlayTime();
+    renderStatsPage();
+    document.getElementById('stats-overlay').classList.remove('hidden');
+    document.getElementById('stats-close-btn').focus();
+  }
+  document.getElementById('btn-open-stats').addEventListener('click', ()=>{ sndClick(); openStats(); });
+  document.getElementById('menu-btn-stats').addEventListener('click', ()=>{ sndClick(); document.getElementById('ingame-menu-overlay').classList.add('hidden'); openStats(); });
+  document.getElementById('home-stats').addEventListener('click', ()=>{ sndClick(); openStats(); });
+  document.getElementById('stats-close-btn').addEventListener('click', ()=>document.getElementById('stats-overlay').classList.add('hidden'));
+  document.getElementById('stats-overlay').addEventListener('click', e=>{ if(e.target.id === 'stats-overlay') e.target.classList.add('hidden'); });
+  document.addEventListener('keydown', e=>{ if(e.key === 'Escape') document.getElementById('stats-overlay').classList.add('hidden'); });
+  document.getElementById('stats-reset-btn').addEventListener('click', ()=>{
+    if(!confirm('Biztosan nullázod a statisztikádat ezen az eszközön? Ez nem vonható vissza.')) return;
+    try{ localStorage.removeItem(STATS_KEY); }catch(e){}
+    renderStatsPage(); renderHomeStats();
+  });
   function renderHomeStats(){
     const el = document.getElementById('home-stats');
     if(!el) return;
     const st = loadPersonalStats();
     if(!st.games){ el.classList.add('hidden'); return; }
-    el.textContent = `📊 Ezen az eszközön eddig ${st.games} játék, ${st.wins} győzelem, legjobb eredményed ${st.best} pont.`;
+    el.textContent = `📊 Ezen az eszközön eddig ${st.games} játék, ${st.wins} győzelem, legjobb eredményed ${st.best} pont.` + (N(st.playMs) ? ` Játékidő: ${fmtDuration(st.playMs)}.` : '');
     el.classList.remove('hidden');
   }
   renderHomeStats();
@@ -12120,6 +12278,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   });
 
   function leaveRoomAndGoHome(){
+    try{ flushPlayTime(); }catch(e){}
     if(isHost) withdrawMyRoom();
     // Everything that could still fire for the room being left is
     // invalidated in one go (delayed handoffs, a pending game-end screen, a
@@ -12422,6 +12581,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.52', changes:[
+      'Új: 📊 Statisztikáim (a kezdőképernyőn és a játék menüjében). Játékidő, lejátszott játékok, győzelmek és dobogók, összes és legjobb pontszám; rajzolóként a kitalált rajzok aránya, a legkönnyebben és a legnehezebben kitalált szavad, és amit senki nem talált ki; tippelőként a találati arány, a leggyorsabb és az átlagos tippidő; és hogy kikkel játszol a legtöbbet. Csak az eszközödön tárolódik.'
+    ]},
     { version:'3.51', changes:[
       'Új témák a 🎨 gomb alatt: Kávé, Smaragd, valamint két világos téma, a Fehér tábla és a Krémpapír. A világos témákon minden szöveg, keret és mező sötét színű lett, hogy mindenhol jól olvasható legyen; a sötét mód ezeken is működik.'
     ]},
