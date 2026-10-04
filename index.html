@@ -1918,6 +1918,13 @@
   @keyframes wordPulse{ 0%,100%{ transform:none; } 50%{ transform:scale(1.12); text-shadow:0 0 14px var(--yellow); } }
   .recap-report{ margin-top:12px; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
   #btn-report-word-recap[aria-pressed="true"]{ background:color-mix(in srgb, var(--red) 25%, transparent); border-color:var(--red); color:var(--chalk); }
+
+  /* ===== v3.64: dark mode also dims the coloured avatars, reactions and effects ===== */
+  html.dark-mode .rav, html.dark-mode .name-dot, html.dark-mode .avatar-swatch{ filter:brightness(.72) saturate(.85); }
+  html.dark-mode .floating-reaction, html.dark-mode #reaction-picker button, html.dark-mode #reaction-toggle-btn,
+  html.dark-mode #chat-toggle-btn, html.dark-mode .chat-reacts > *, html.dark-mode .urgency-badge{ filter:brightness(.78) saturate(.85); }
+  html.dark-mode #fx-canvas{ filter:brightness(.75) saturate(.85); }
+  html.dark-mode .rav{ color:#0d0d0d; }
 </style>
 </head>
 <body>
@@ -12845,6 +12852,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.64', changes:[
+      'Sötét módban a nevek melletti színes karikák, az animált gyorsreakciók, a reakció- és chatgombok, valamint az ünneplő effektek (konfetti, emojik) is sötétebbek lettek, hogy illeszkedjenek a többihez.'
+    ]},
     { version:'3.63', changes:[
       'Szobanyitáskor a „Saját szavak a játékosoktól” résznél választható a „Nincsenek saját szavak” is: ilyenkor a váróteremben nem jelenik meg a saját szavak mezője, és csak a beépített szavakkal játszotok.'
     ]},
