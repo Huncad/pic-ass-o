@@ -96,7 +96,7 @@
   }
   /* light borders/glows and white highlights are toned down too */
   html.dark-mode button, html.dark-mode .pill, html.dark-mode .avatar-swatch, html.dark-mode .swatch{ filter:brightness(.9); }
-  html.dark-mode .board-deco, html.dark-mode .fd-side-deco{ opacity:.6; }
+  html.dark-mode .board-deco{ opacity:.6; }
   html.dark-mode input[type=text], html.dark-mode input[type=password], html.dark-mode input[type=email], html.dark-mode textarea{
     background:#242428; color:#ECECEC;
   }
@@ -1620,6 +1620,8 @@
     body:not(.fabs-top) #screen-fulldraw .fd-logo{ display:block; grid-area:logo; justify-self:center; }
     #screen-fulldraw .fd-word-text{ font-size:2.4rem; }
     .fd-side-deco{ display:block; position:absolute; inset:0; pointer-events:none; z-index:-1; color:var(--chalk); opacity:.16; }
+    /* v3.69: in dark mode they used to get BRIGHTER (.6) — now dimmer than normal */
+    html.dark-mode .fd-side-deco{ opacity:.07; }
     .fd-side-deco svg{ position:absolute; top:150px; bottom:110px; height:calc(100% - 260px); width:56px; }
     .fd-side-deco .sd-l{ left:calc(50% - min(820px, 50vw - 12px) + 18px); } .fd-side-deco .sd-r{ right:calc(50% - min(820px, 50vw - 12px) + 18px); }
     #screen-fulldraw .fd-toolbar{ margin-bottom:14px !important; }
@@ -13024,6 +13026,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.69', changes:[
+      'Javítva: sötét módban a rajzlap melletti díszítő rajzok (ceruza, csillag, pálcikaember stb.) a sötétítés helyett világosabbak lettek. Most sötét módban halványabbak, mint világosban.'
+    ]},
     { version:'3.68', changes:[
       'Új (gépen): a chat rögzíthető a képernyő bal vagy jobb széléhez oldalsávként — a fejlécén lévő 📌 gombbal, vagy úgy, hogy az ablakot a képernyő széléhez húzod. Ilyenkor a játék (a rajzlap is) a maradék helyen rendeződik el, így a chat semmit nem takar ki. Az oldalsáv belső széle húzással szélesíthető, a 🪟 gombbal pedig visszaalakítható lebegő ablakká. A beállítást a gép megjegyzi.'
     ]},
