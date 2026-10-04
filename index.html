@@ -3156,10 +3156,10 @@ let PREV_LOAD_CRASHED = false;
 try{
   PREV_LOAD_CRASHED = sessionStorage.getItem('picasso-running') === '1';
   sessionStorage.setItem('picasso-running', '1');
-  window.addEventListener('pagehide', ()=>{
+  window.addEventListener('pagehide', (ev)=>{
     try{ sessionStorage.removeItem('picasso-running'); }catch(e){}
     // release the microphone and take the room off the public list
-    try{ window.__picassoCleanup && window.__picassoCleanup(); }catch(e){}
+    try{ window.__picassoCleanup && window.__picassoCleanup(ev); }catch(e){}
   });
 }catch(e){}
 // A fixed, always-joined room used purely as a live "room directory" so the
@@ -5737,7 +5737,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       peerLastAlive.set(peerId, Date.now());
       // alive again after being away in the background / without a link
       const a = awayPeers.get(peerId);
-      if(a && a.why !== 'closing' && Date.now() - a.since > 1500){
+      // v3.53: still sending "alive" after a "closing"/"background" note =
+      // the page did not go away after all — keep the player, no removal
+      if(a && Date.now() - a.since > 2500){
         setAway(peerId, null);
         if(pendingLeaveTimers.has(peerId)){ clearTimeout(pendingLeaveTimers.get(peerId)); pendingLeaveTimers.delete(peerId); }
       }
@@ -5747,7 +5749,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // reload to come back as the same player); a phone in the background
     // for half a minute is taken as gone — before, both took over a minute.
     const presenceAction = room.makeAction('presence');
-    const CLOSING_GRACE_MS = 10000, BACKGROUND_GRACE_MS = 30000;
+    const CLOSING_GRACE_MS = 10000;
     presenceAction.onMessage = (data, {peerId})=>{
       if(room !== thisRoom || !isPlainObject(data)) return;
       const known = (meta && activePlayerIds.has(peerId)) || lobbyPlayers[peerId] !== undefined || spectators[peerId] !== undefined;
@@ -5757,8 +5759,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         // guests wait a little longer, so a reload is first recognised by the room owner
         scheduleGraceLeave(peerId, CLOSING_GRACE_MS + (isHost ? 0 : 3000));
       } else if(data.s === 'background'){
+        // v3.53: background is only SHOWN ("💤 háttérben"); nobody is removed
+        // for it. Removing a phone after 30 s in the background made the room
+        // unstable — e.g. the room owner sharing the invite in a chat app
+        // was dropped and the room changed owner while others were joining.
         setAway(peerId, 'background');
-        scheduleGraceLeave(peerId, BACKGROUND_GRACE_MS);
       } else if(data.s === 'back'){
         setAway(peerId, null);
         if(pendingLeaveTimers.has(peerId)){ clearTimeout(pendingLeaveTimers.get(peerId)); pendingLeaveTimers.delete(peerId); }
@@ -5901,8 +5906,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         pendingLeaveTimers.delete(peerId);
         if(room !== thisRoom) return;
         const again = livePeerIdSet();
-        const closing = awayPeers.has(peerId) && awayPeers.get(peerId).why === 'closing';
-        if(!closing && again && again.has(peerId) && !isSilent(peerId)){ setAway(peerId, null); return; }   // came back in the meantime
+        // came back in the meantime (or, after "closing", kept talking: it was not closed)
+        const aw = awayPeers.get(peerId);
+        const talkedSince = aw && aw.why === 'closing' && (peerLastAlive.get(peerId) || 0) > aw.since + 2500;
+        if(again && again.has(peerId) && !isSilent(peerId) && (!aw || aw.why !== 'closing' || talkedSince)){ setAway(peerId, null); return; }
         if(isHost && meta && !gameEnded && hostReplaceReloadedPlayer(peerId)) return;   // it was a reload
         // v3.02: still in the room according to the direct MQTT channel —
         // only the connection broke. One more grace period while it's rebuilt.
@@ -12581,6 +12588,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.53', changes:[
+      'Javítva: instabil kapcsolat a v3.50 óta. Aki telefonon háttérbe tette a játékot (pl. a szobanyitó, miközben elküldte a meghívót), azt 30 másodperc után kiléptette a játék — a szobanyitónál ez a szoba gazdájának cseréjét is okozta, és az újonnan belépők nem tudtak csatlakozni. Mostantól a háttérbe tétel csak jelzés („💤 háttérben”), senkit nem léptet ki. A „kilépek” jelzést is csak a ténylegesen bezáruló oldal küldi, és ha utána mégis jelentkezik, bent marad.'
+    ]},
     { version:'3.52', changes:[
       'Új: 📊 Statisztikáim (a kezdőképernyőn és a játék menüjében). Játékidő, lejátszott játékok, győzelmek és dobogók, összes és legjobb pontszám; rajzolóként a kitalált rajzok aránya, a legkönnyebben és a legnehezebben kitalált szavad, és amit senki nem talált ki; tippelőként a találati arány, a leggyorsabb és az átlagos tippidő; és hogy kikkel játszol a legtöbbet. Csak az eszközödön tárolódik.'
     ]},
@@ -12589,7 +12599,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     ]},
     { version:'3.50', changes:[
       'Aki bezárja a játékot, azt a többiek kb. 10 másodpercen belül kilépettnek látják (eddig akár egy percig is bent maradt). Ha csak újratöltötte az oldalt, ez alatt visszatér, és megmarad a helye és a pontjai.',
-      'Telefonon, ha valaki háttérbe teszi a játékot, a többiek azonnal látják („💤 háttérben”), és ha 30 másodpercen belül nem tér vissza, kilépettnek számít. Gépen a másik fülre váltás nem számít távollétnek.',
+      'Telefonon, ha valaki háttérbe teszi a játékot, a többiek látják („💤 háttérben”). Gépen a másik fülre váltás nem számít távollétnek.',
       'A játékoslistákon és a váróteremben halványan, „💤” jelöléssel látszik, akinek épp nincs kapcsolata, háttérben van, vagy épp kilép.'
     ]},
     { version:'3.49', changes:[
@@ -13715,13 +13725,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
 
   // Called from the page-level 'pagehide' hook: closing the tab must not
   // leave the microphone running or a dead room advertised in the list.
-  window.__picassoCleanup = function(){
-    try{ window.__picassoPresence && window.__picassoPresence('closing'); }catch(e){}
+  window.__picassoCleanup = function(ev){
+    // v3.53: only a page that is really going away says "closing" — a page
+    // only put aside (back/forward cache, app switch) stays in the game
+    try{ if(!(ev && ev.persisted)) window.__picassoPresence && window.__picassoPresence('closing'); }catch(e){}
     try{ stopRecording(true); }catch(e){}
     try{ if(isHost) withdrawMyRoom(); }catch(e){}
     // v3.04: tell the room right away that this page is going (a reload
     // comes back with a new id — see hostReplaceReloadedPlayer)
-    try{ if(roomPresenceKey) dirqPublish({ t:'gone', k: roomPresenceKey }); }catch(e){}
+    try{ if(roomPresenceKey && !(ev && ev.persisted)) dirqPublish({ t:'gone', k: roomPresenceKey }); }catch(e){}
   };
 
   // v2.82: long word on the drawer's bar → slow back-and-forth scroll
