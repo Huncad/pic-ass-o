@@ -1916,6 +1916,8 @@
     20%{ transform:translate(-50%,-50%) scale(1); } 80%{ opacity:1; } 100%{ opacity:0; transform:translate(-50%,-60%) scale(.96); } }
   #fd-word-text.word-pulse{ animation:wordPulse 1.2s ease 2; }
   @keyframes wordPulse{ 0%,100%{ transform:none; } 50%{ transform:scale(1.12); text-shadow:0 0 14px var(--yellow); } }
+  .recap-report{ margin-top:12px; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
+  #btn-report-word-recap[aria-pressed="true"]{ background:color-mix(in srgb, var(--red) 25%, transparent); border-color:var(--red); color:var(--chalk); }
 </style>
 </head>
 <body>
@@ -12019,7 +12021,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let lastRoundRecap = null, roundEndReleased = false;
   function rememberRoundRecap(idx){
     const b = document.getElementById('roundend-banner'), w = document.getElementById('roundend-word');
-    lastRoundRecap = { label: roundLabel(idx), cls: b.className, banner: b.innerHTML, word: w.innerHTML };
+    lastRoundRecap = { label: roundLabel(idx), cls: b.className, banner: b.innerHTML, word: w.innerHTML, report: reportableRound ? Object.assign({}, reportableRound) : null };
     const btn = document.getElementById('btn-last-round');
     if(btn) btn.classList.remove('hidden');
   }
@@ -12028,6 +12030,16 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const body = document.getElementById('lastround-body');
     body.innerHTML = `<p class="center-note">${escapeHtml(lastRoundRecap.label)}</p><div class="${escapeHtml(lastRoundRecap.cls)}">${lastRoundRecap.banner}</div><div style="text-align:center;margin-top:8px;">${lastRoundRecap.word}</div><table class="scores" id="lastround-scores"></table>`;
     renderScoreTable('lastround-scores', scoreRows());
+    // v3.60: the word can be marked (or the mark taken back) here too —
+    // the round-end screen often moves on before you get to it
+    if(lastRoundRecap.report){
+      const box = document.createElement('div');
+      box.className = 'recap-report';
+      box.innerHTML = '<button type="button" class="ghost small" id="btn-report-word-recap"></button> <span id="report-status-recap" class="center-note"></span>';
+      body.appendChild(box);
+      document.getElementById('btn-report-word-recap').addEventListener('click', ()=>toggleWordFlag(lastRoundRecap.report));
+      renderRecapReportUi();
+    }
     document.getElementById('lastround-overlay').classList.remove('hidden');
     document.getElementById('lastround-close-btn').focus();
   }
@@ -12778,6 +12790,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.60', changes:[
+      'A hibás szó megjelölése visszavonható akkor is, ha a kör végi képernyő már továbblépett: az „📋 Előző kör” ablakban is ott van a jelölés gombja. A gomb felirata egyértelműbb lett („↩️ Jelölés visszavonása”). Ha a jelölések száma elérte a küszöböt, a bejelentés azonnal elmegy az adminnak — ezt már nem lehet visszavonni, és a játék ezt ki is írja.'
+    ]},
     { version:'3.59', changes:[
       'A kör végén a fő feliratban az is látszik, kinek a rajzáról volt szó, pl. „🎉 Kitti kitalálta Marci rajzát!”, „🎉 Eltaláltad Évi rajzát!”, „⌛ Lejárt az idő — senki nem találta ki Adam rajzát!”.'
     ]},
@@ -13754,11 +13769,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const mine = f.ids.has(selfId), need = flagThreshold();
     const btn = document.getElementById('btn-report-word');
     btn.setAttribute('aria-pressed', mine ? 'true' : 'false');
-    btn.textContent = mine ? '🚩 Megjelölted (visszavonás)' : '🚩 Hibás vagy értelmetlen szó';
+    btn.textContent = f.sent ? '🚩 Elküldve' : (mine ? '↩️ Jelölés visszavonása' : '🚩 Hibás vagy értelmetlen szó');
     btn.disabled = !!f.sent;
     document.getElementById('report-status').textContent = f.sent
-      ? '📨 Elküldve az adminnak. Köszönjük!'
-      : `${f.ids.size} / ${need} jelölés`;
+      ? '📨 Elküldve az adminnak (ezt már nem lehet visszavonni). Köszönjük!'
+      : (mine ? `Megjelölted · ${f.ids.size} / ${need} jelölés — még visszavonhatod` : `${f.ids.size} / ${need} jelölés`);
+    try{ renderRecapReportUi(); }catch(e){}
   }
   function setupReportFor(rk, word, tier){
     reportableRound = (word && tier !== 'sajat') ? { rk, word: String(word).slice(0,60), tier } : null;
@@ -13803,16 +13819,31 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(f.sent) return;
     if(on) f.ids.add(pid); else f.ids.delete(pid);
     if(reportableRound && reportableRound.rk === rk) renderReportUi();
+    try{ renderRecapReportUi(); }catch(e){}
     checkWordFlag(rk);
   }
-  document.getElementById('btn-report-word').addEventListener('click', ()=>{
-    if(!reportableRound) return;
-    const { rk, word } = reportableRound;
-    const on = !(wordFlags[rk] && wordFlags[rk].ids.has(selfId));
+  function toggleWordFlag(rr){
+    if(!rr) return;
+    const { rk, word } = rr;
+    if(!wordFlags[rk]) wordFlags[rk] = { word, tier: rr.tier, ids:new Set(), sent:false };
+    if(wordFlags[rk].sent){ renderReportUi(); renderRecapReportUi(); return; }
+    const on = !wordFlags[rk].ids.has(selfId);
     sndClick();
     if(wflagAction){ try{ wflagAction.send({ r: rk, w: word, on }); }catch(e){} }
     applyWordFlag(rk, word, on, selfId);
-  });
+    renderRecapReportUi();
+  }
+  function renderRecapReportUi(){
+    const btn = document.getElementById('btn-report-word-recap');
+    if(!btn || !lastRoundRecap || !lastRoundRecap.report) return;
+    const f = wordFlags[lastRoundRecap.report.rk] || { ids:new Set(), sent:false };
+    const mine = f.ids.has(selfId);
+    btn.setAttribute('aria-pressed', mine ? 'true' : 'false');
+    btn.textContent = f.sent ? '🚩 Elküldve' : (mine ? '↩️ Jelölés visszavonása' : '🚩 Hibás vagy értelmetlen szó');
+    btn.disabled = !!f.sent;
+    document.getElementById('report-status-recap').textContent = f.sent ? 'Már elküldve az adminnak — ezt nem lehet visszavonni.' : `${f.ids.size} / ${flagThreshold()} jelölés`;
+  }
+  document.getElementById('btn-report-word').addEventListener('click', ()=>toggleWordFlag(reportableRound));
   function handleWflagMessage(data, peerId){
     if(!isPlainObject(data) || !meta || !meta.playerNames[peerId]) return;
     const rk = cleanText(data.r, 40), w = cleanText(data.w, 60);
