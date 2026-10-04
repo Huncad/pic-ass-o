@@ -4218,11 +4218,27 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   refreshHeldWords();
   setInterval(refreshHeldWords, 5*60*1000);
+  const RECENT_WORDS_KEY = 'picasso-recent-words';
+  function recentWordSet(){
+    try{ const v = JSON.parse(localStorage.getItem(RECENT_WORDS_KEY) || '[]'); return new Set(Array.isArray(v) ? v : []); }catch(e){ return new Set(); }
+  }
+  function rememberRecentWord(w){
+    const k = squash(w); if(!k) return;
+    try{
+      let v = JSON.parse(localStorage.getItem(RECENT_WORDS_KEY) || '[]'); if(!Array.isArray(v)) v = [];
+      v = v.filter(x=>x !== k); v.push(k);
+      localStorage.setItem(RECENT_WORDS_KEY, JSON.stringify(v.slice(-600)));
+    }catch(e){}
+  }
   function pickWordAvoidingRepeats(difficulties, usedWords){
     const tiers = Array.isArray(difficulties) && difficulties.length ? difficulties : ['konnyu','kozepes'];
     const used = new Set((usedWords || []).map(squash));
     heldWordKeys.forEach(k=>used.add(k));   // v3.36: reported words are on hold everywhere
-    const fresh = list => list.filter(w=>w && w.w && !used.has(squash(w.w)));
+    // v3.56: words already drawn in recent games on this device are avoided
+    // too (not just in this game) — as long as enough other words are left
+    const recent = recentWordSet();
+    const freshAny = list => list.filter(w=>w && w.w && !used.has(squash(w.w)));
+    const fresh = list => { const a = freshAny(list); const b = a.filter(w=>!recent.has(squash(w.w))); return b.length ? b : a; };
     const custom = customWordItems();
     const levelTiers = tiers.filter(t=>t === 'konnyu' || t === 'kozepes' || t === 'nehez');
     const lv = levelTiers.length ? levelTiers : ((settings && settings.difficulties) || ['konnyu','kozepes']);
@@ -8783,6 +8799,25 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     clearReply();
   }
 
+  // v3.56: classic text smileys become emoji in chat — on every device the
+  // same way, whatever version the sender has. Only stand-alone smileys
+  // (space or start/end around them), so links like https:// stay intact.
+  const SMILEYS = [
+    [">:(", "😠"], [":'(", "😢"], [":-D", "😄"], [":D", "😄"], ["xD", "😆"], ["XD", "😆"],
+    [":-)", "🙂"], [":)", "🙂"], ["(:", "🙂"], [":-(", "🙁"], [":(", "🙁"], [";-)", "😉"], [";)", "😉"],
+    [":-P", "😛"], [":P", "😛"], [":p", "😛"], [";P", "😜"], [";p", "😜"], [":-O", "😮"], [":O", "😮"], [":o", "😮"],
+    [":*", "😘"], [":-*", "😘"], ["<3", "❤️"], ["</3", "💔"], ["B)", "😎"], ["8)", "😎"], [":/", "😕"], [":-/", "😕"],
+    [":|", "😐"], ["^^", "😊"], ["^_^", "😊"], ["o_O", "🤨"], ["O_o", "🤨"], ["-_-", "😑"], [":3", "😺"], ["T_T", "😭"]
+  ].sort((a,b)=>b[0].length - a[0].length);
+  const SMILEY_RE = new RegExp('(^|\\s)(' + SMILEYS.map(([k])=>k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?=$|\\s|[.,!?])', 'g');
+  const SMILEY_MAP = new Map(SMILEYS);
+  // the unmistakable ones work glued to a word too ("ok:)", ":P:P")
+  const GLUED = [":-D", ":D", ":-)", ":)", ":-(", ":(", ";-)", ";)", ":-P", ":P", ";P", ":-O", ":O", ":'(", "<3", ">:("];
+  const GLUED_RE = new RegExp('(' + GLUED.sort((a,b)=>b.length-a.length).map(k=>k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![A-Za-z0-9])', 'g');
+  function smileysToEmoji(t){
+    const out = String(t == null ? '' : t).replace(SMILEY_RE, (m, pre, k)=> pre + (SMILEY_MAP.get(k) || k));
+    return /https?:\/\//i.test(out) ? out : out.replace(GLUED_RE, k=> SMILEY_MAP.get(k) || k);
+  }
   function addChatMessage(data, mine, peerId){
     const el = document.createElement('div');
     el.className = 'chat-msg' + (mine ? ' mine' : '');
@@ -8794,7 +8829,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(rt){
       html += `<div class="chat-quote" data-ref="${escapeHtml(cleanMsgId(rt.id))}"><b>${escapeHtml(String(rt.name || '').slice(0,16))}</b> ${escapeHtml(String(rt.snippet || '').slice(0,80))}</div>`;
     }
-    if(data.type !== 'voice') html += `<div class="chat-body">${escapeHtml(data.text)}</div>`;
+    if(data.type !== 'voice') html += `<div class="chat-body">${escapeHtml(smileysToEmoji(data.text))}</div>`;
     el.innerHTML = html;
     if(data.type === 'voice'){
       const audioEl = document.createElement('audio');
@@ -11955,6 +11990,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     }
     renderScoreTable('roundend-scores', scoreRows());
     try{ recordRoundStats(result); }catch(e){}
+    try{ if(shownWord) rememberRecentWord(shownWord); }catch(e){}
     try{ setupReportFor(roundKey(currentRound), shownWord, currentRound.tier); }catch(e){}
     rememberRoundRecap(idx);
 
@@ -12447,9 +12483,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // meantime must not come back as a "ghost" player.
     const playerNames = {}; ids.forEach(id=>{ playerNames[id] = meta.playerNames[id]; });
     // v3.25: the words of those who stay (authors keep their own ids)
+    // v3.56: …but not the ones already drawn in the game that just ended —
+    // those used to come back in every rematch (and were always offered,
+    // since an own word is always among the choices)
+    const drawnKeys = new Set((revealedWords || []).map(squash));
     settings.customWords = (Array.isArray(settings.customWords) ? settings.customWords : [])
       .map(e=>isPlainObject(e) ? { w:e.w, by:(e.by || []).filter(id=>ids.includes(id)) } : null)
-      .filter(e=>e && e.by.length);
+      .filter(e=>e && e.by.length && !drawnKeys.has(squash(e.w)));
     const payload = { settings, started:true, turnOrder, playerNames };
     settingsAction.send(payload);
     applyMeta(payload);
@@ -12653,6 +12693,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.56', changes:[
+      'Javítva: egy saját szóként beküldött szó (pl. „vonalkód”) minden visszavágóban újra előkerült, és mivel saját szó mindig van a felkínáltak között, újra és újra felajánlotta a játék. Visszavágóban most már csak a még nem rajzolt saját szavak maradnak meg.',
+      'Az eszköz megjegyzi az elmúlt játékokban rajzolt szavakat (kb. 600-at), és ezeket is kerüli, amíg van elég más szó — így a beépített szavak sem ismétlődnek játékok között.',
+      'Chat: a szöveges smiley-k automatikusan emojivá alakulnak, pl. :D → 😄, :) → 🙂, :P → 😛, :O → 😮, ;) → 😉, <3 → ❤️, XD → 😆.'
+    ]},
     { version:'3.55', changes:[
       'Javítva: aki lemaradt egy rajz indulásáról, annál „X most nézi a szavát” maradt kint, miközben a többiek már látták a rajzot. Az egyeztetés most a rajz állapotát is figyeli (szóválasztás / rajzolás / vége), és pár másodpercen belül beállítja a lemaradt eszközt.'
     ]},
