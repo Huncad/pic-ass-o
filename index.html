@@ -3239,6 +3239,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     return String(n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
   }
   let renameAction = null, pendingRename = null;
+  let resyncAction = null, behindBeacons = 0, resyncAskedAt = 0, resyncPending = false;
+  const resyncSentAt = new Map();
+  function requestResync(why){
+    if(isHost || !resyncAction || !meta || gameEnded) return;
+    if(Date.now() - resyncAskedAt < 8000) return;
+    resyncAskedAt = Date.now(); behindBeacons = 0; resyncPending = true;
+    clog('K15', 'újraszinkron kérése: ' + why);
+    try{ resyncAction.send({}, { target: hostPeerId }); }catch(e){}
+  }
   const SAFE_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
   // Network payload ceilings (a hostile or buggy peer must not be able to
   // freeze the page with one giant message).
@@ -5725,12 +5734,30 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const gid = clampNum(data.gid, 1, 1e6, 0);
       if(gid) applyCloseMark(gid);
     };
-    turnSyncAction = room.makeAction('turnsync');      // host -> everybody: the one true turn order (v2.52)
+    turnSyncAction = room.makeAction('turnsync');
+    // v3.54: "I'm behind, send me the whole game again" (guest -> host)
+    resyncAction = room.makeAction('resync');
+    resyncAction.onMessage = (_, {peerId})=>{
+      if(!isHost || !meta || gameEnded || room !== thisRoom) return;
+      if(!activePlayerIds.has(peerId) && !spectators[peerId]) return;
+      const last = resyncSentAt.get(peerId) || 0;
+      if(Date.now() - last < 5000) return;
+      resyncSentAt.set(peerId, Date.now());
+      clog('K14', `újraszinkron küldése: ${String(peerId).slice(0,5)}`);
+      try{ lateSyncAction.send(buildLateSnapshot(), { target: peerId }); }catch(e){}
+    };      // host -> everybody: the one true turn order (v2.52)
     // v2.63: game heartbeat. A dropped phone could stay in Trystero's peer
     // list as a "zombie" (connection neither closed nor working), so the
     // leave logic never ran: the game waited forever for a drawer who was
     // long gone. Every device now says "alive" every 4 s; someone silent
     // for 20 s counts as disconnected (with the usual grace period).
+    // v3.54: the room owner repeats the turn order + where the game is,
+    // every few seconds while a game runs (tiny message)
+    const beaconTimer = setInterval(()=>{
+      if(room !== thisRoom){ clearInterval(beaconTimer); return; }
+      if(!isHost || !meta || gameEnded || !currentRound) return;
+      try{ turnSyncAction.send({ turnOrder: meta.turnOrder, at: currentRound.idx }); }catch(e){}
+    }, 5000);
     const aliveAction = room.makeAction('alive');
     aliveAction.onMessage = (_, {peerId})=>{
       if(room !== thisRoom) return;
@@ -5791,8 +5818,19 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(!meta || !isPlainObject(data) || peerId !== hostPeerId || isHost) return;
       if(!Array.isArray(data.turnOrder)) return;
       const order = data.turnOrder.slice(0,200).map(cleanPeerId);
-      if(!order.length || !order.every(x=>meta.playerNames[x])) return;
+      // v3.54: a turn order with a player I don't know = I'm out of date
+      if(!order.length || !order.every(x=>meta.playerNames[x])){ requestResync('ismeretlen játékos a sorrendben'); return; }
       meta.turnOrder = order;
+      // v3.54: the room owner also tells which drawing the game is at. If I
+      // am still on an earlier one (I missed a round start — typical right
+      // after joining a running game), I ask for the whole state again,
+      // instead of waiting forever for someone who already drew.
+      if(Number.isFinite(data.at)){
+        const mine = currentRound ? currentRound.idx : -1;
+        const iDraw = currentRound && currentRound.drawerId === selfId;
+        if(data.at > mine && !iDraw){ behindBeacons++; if(behindBeacons >= 2) requestResync(`le vagyok maradva (${mine} < ${data.at})`); }
+        else behindBeacons = 0;
+      }
       if(showingRoundEnd && currentRound && processedResultRounds.has(roundKey(currentRound))){
         setupNextRoundControls(currentRound.idx);
       }
@@ -6127,7 +6165,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         return;
       }
       if(peerId !== hostPeerId) return;
+      if(resyncPending){ resyncPending = false; lateJoinApplied = false; quietLateSnapshot = true; }
       applyLateSnapshot(snap);
+      quietLateSnapshot = false;
     };
     kickAction.onMessage = (data, {peerId})=>{
       // this fires only on the device the kick was targeted at
@@ -6808,7 +6848,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   function rebuildFutureTurns(){
     const order = meta.turnOrder;
-    const start = (currentRound ? currentRound.idx : 0) + 2;
+    // v3.54: the next TWO drawings stay as they are — the next drawer may
+    // already be choosing a word on their own device
+    const start = (currentRound ? currentRound.idx : 0) + 3;
     if(start >= order.length) return;
     const cand = [...activePlayerIds];
     if(cand.length === 0) return;
@@ -7048,6 +7090,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const order = info.turnOrder.slice(0,200).map(cleanPeerId);
       if(order.length && order.every(x=>meta.playerNames[x])) meta.turnOrder = order;
     }
+    if(showingRoundEnd && currentRound && processedResultRounds.has(roundKey(currentRound))){
+      try{ setupNextRoundControls(currentRound.idx); }catch(e){}
+    }
     // the same announcement can legitimately arrive twice (host re-send):
     // only say it out loud the first time
     if(id !== selfId && isNewToGame) addSystemChatMessage(`🟢 ${name} csatlakozott a játékhoz.`);
@@ -7082,6 +7127,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
 
   // NEWCOMER: take over the game state the host sent, and step into the game.
+  let quietLateSnapshot = false;
   function applyLateSnapshot(snap){
     // Idempotent on purpose: a snapshot that arrives twice (resend, or a
     // buffered one applied after the host's hello) must not wipe the state
@@ -7114,7 +7160,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     showingRoundEnd = false;
     hintRevealedCount = 0;
     lastHintMask = null;
-    addSystemChatMessage(amSpectator ? '👀 Nézőként csatlakoztál a futó játékhoz.' : '🎮 Menet közben csatlakoztál a játékhoz.');
+    if(!quietLateSnapshot) addSystemChatMessage(amSpectator ? '👀 Nézőként csatlakoztál a futó játékhoz.' : '🎮 Menet közben csatlakoztál a játékhoz.');
 
     if(gameEnded){
       renderGameEnd(scoreRows(), true);
@@ -7151,6 +7197,19 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     currentRound = rd;
     if(snap.resolved){
       processedResultRounds.add(roundKey(rd));
+      // v3.54: if the next drawing is mine, I get the "Én jövök" button —
+      // otherwise everybody would wait for me while I wait for them
+      if(meta.turnOrder[rd.idx + 1] === selfId){
+        showOnly(['screen-roundend']);
+        showingRoundEnd = true;
+        const banner = document.getElementById('roundend-banner');
+        banner.textContent = '🎨 Te jössz a következő rajzzal!';
+        banner.className = 'result-banner win';
+        document.getElementById('roundend-word').innerHTML = '';
+        renderScoreTable('roundend-scores', scoreRows());
+        setupNextRoundControls(rd.idx);
+        return;
+      }
       showLateWaiting('Ez a kör éppen véget ért — mindjárt jön a következő!');
       return;
     }
@@ -12588,6 +12647,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.54', changes:[
+      'Javítva: aki menet közben lépett be, lemaradhatott egy kör indulásáról, és utána rossz játékosra várt („Évire vár”), miközben a többiek már rá vártak. Mostantól a szobanyitó pár másodpercenként jelzi, hol tart a játék, és aki lemaradt, automatikusan újraszinkronizál. Ha a következő rajz az övé, megkapja az „Én jövök” gombot. A belépő a következő két rajz sorrendjét sem változtatja már meg.'
+    ]},
     { version:'3.53', changes:[
       'Javítva: instabil kapcsolat a v3.50 óta. Aki telefonon háttérbe tette a játékot (pl. a szobanyitó, miközben elküldte a meghívót), azt 30 másodperc után kiléptette a játék — a szobanyitónál ez a szoba gazdájának cseréjét is okozta, és az újonnan belépők nem tudtak csatlakozni. Mostantól a háttérbe tétel csak jelzés („💤 háttérben”), senkit nem léptet ki. A „kilépek” jelzést is csak a ténylegesen bezáruló oldal küldi, és ha utána mégis jelentkezik, bent marad.'
     ]},
