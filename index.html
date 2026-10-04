@@ -1927,7 +1927,8 @@
   html.dark-mode .rav{ color:#0d0d0d; }
   /* ===== v3.66: statistics at a proper size on big screens ===== */
   .stats-since{ font-size:.85rem; color:var(--chalk-dim); font-weight:700; margin-top:2px; }
-  body.fit-frame .stats-box{ zoom:min(var(--ui-z, 1), 1.25); max-width:1040px; }
+  body.fit-frame .stats-box{ max-width:none; }
+  body.fit-frame .stat-grid{ grid-template-columns:repeat(6, minmax(0,1fr)); }
   body.fit-frame #stats-overlay{ align-items:center; }
   @media (min-width:1100px){
     .stat-grid{ grid-template-columns:repeat(auto-fill, minmax(175px, 1fr)); gap:12px; }
@@ -12386,10 +12387,29 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       ) +
       (mates.length ? sec('👯 Akikkel a legtöbbet játszol', mates.map(([n, c], i)=>card(['🥇','🥈','🥉'][i], escapeHtml(n), `${c} közös játék`, '')).join('')) : '');
   }
+  // v3.67: on a big screen the window is as wide as it needs to be and
+  // scaled so the whole page fits — no scrolling
+  function fitStatsBox(){
+    const box = document.querySelector('#stats-overlay .stats-box');
+    if(!box) return;
+    box.style.zoom = ''; box.style.width = ''; box.style.maxWidth = '';
+    if(!document.body.classList.contains('fit-frame')) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    let z = Math.min(1.25, parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-z')) || 1);
+    for(let k = 0; k < 4; k++){
+      box.style.zoom = z.toFixed(3);
+      box.style.width = Math.floor(Math.min(1400, (W - 60) / z)) + 'px';
+      const h = box.getBoundingClientRect().height;
+      if(h <= H - 40) break;
+      z = Math.max(0.6, z * (H - 40) / h);
+    }
+  }
+  window.addEventListener('resize', ()=>{ if(!document.getElementById('stats-overlay').classList.contains('hidden')) fitStatsBox(); });
   function openStats(){
     flushPlayTime();
     renderStatsPage();
     document.getElementById('stats-overlay').classList.remove('hidden');
+    fitStatsBox();
     document.getElementById('stats-close-btn').focus();
   }
   document.getElementById('btn-open-stats').addEventListener('click', ()=>{ sndClick(); openStats(); });
@@ -12402,7 +12422,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!confirm('Biztosan nullázod a statisztikádat ezen az eszközön? Ez nem vonható vissza.')) return;
     try{ localStorage.removeItem(STATS_KEY); }catch(e){}
     savePersonalStats(loadPersonalStats());   // a fresh start date
-    renderStatsPage(); renderHomeStats();
+    renderStatsPage(); renderHomeStats(); fitStatsBox();
   });
   function renderHomeStats(){
     const el = document.getElementById('home-stats');
@@ -12916,6 +12936,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.67', changes:[
+      'A „📊 Statisztikáim” ablak nagy képernyőn kiszélesedik, és úgy méreteződik, hogy görgetés nélkül, egyben látszódjon.'
+    ]},
     { version:'3.66', changes:[
       'A „📊 Statisztikáim” ablak nagy képernyőn a játék többi részével arányosan nagyobb lett, és a címe alatt látszik, mióta gyűjti az eszköz a statisztikát.'
     ]},
