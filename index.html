@@ -12051,10 +12051,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const gs = award.guessers;
       const many = gs.length > 1;
       const iGuessed = gs.some(g=>g.pid === selfId);
-      banner.textContent = iGuessed ? '🎉 Eltaláltad!'
+      // v3.59: whose drawing it was is part of the headline, not small print
+      const dn = currentRound.drawerName || 'a rajzoló';
+      banner.textContent = iGuessed ? (many ? `🎉 Eltaláltad ${dn} rajzát (és még ${gs.length - 1} játékos)!` : `🎉 Eltaláltad ${dn} rajzát!`)
         : (currentRound.drawerId === selfId
             ? (many ? `🎨 ${gs.length} játékos kitalálta a rajzodat!` : `🎨 ${result.correctPlayerName} kitalálta a rajzodat!`)
-            : (many ? `🎉 ${gs.length} játékos kitalálta!` : `🎉 ${result.correctPlayerName} kitalálta!`));
+            : (many ? `🎉 ${gs.length} játékos kitalálta ${dn} rajzát!` : `🎉 ${result.correctPlayerName} kitalálta ${dn} rajzát!`));
       banner.className = 'result-banner win';
       const drawSecs = Number.isFinite(award.drawMs) ? ` — ${Math.max(1, Math.round(award.drawMs/1000))} mp alatt rajzolta meg` : '';
       const drawerPart = `+${award.drawerPts} a rajzolónak (${escapeHtml(currentRound.drawerName)}${drawSecs})`;
@@ -12062,7 +12064,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         ? `A szó: <span class="word-reveal-final">${escapeHtml(shownWord)}</span> — ${gs.map(g=>`${escapeHtml(displayNameFor(g.pid, ''))} +${g.pts}`).join(', ')}; ${drawerPart}`
         : `A szó: <span class="word-reveal-final">${escapeHtml(shownWord)}</span> — +${gs.length ? gs[0].pts : 0} pont a tippelőnek, ${drawerPart}`;
     } else {
-      banner.textContent = result.type === 'pass' ? '⏭️ A rajzoló passzolt!' : '⌛ Lejárt az idő!';
+      const dn2 = currentRound.drawerId === selfId ? null : (currentRound.drawerName || 'A rajzoló');
+      banner.textContent = result.type === 'pass'
+        ? (dn2 ? `⏭️ ${dn2} passzolt!` : '⏭️ Passzoltál!')
+        : (dn2 ? `⌛ Lejárt az idő — senki nem találta ki ${dn2} rajzát!` : '⌛ Lejárt az idő — senki nem találta ki a rajzodat!');
       banner.className = 'result-banner lose';
       wordEl.innerHTML = shownWord
         ? `A szó ez volt: <span class="word-reveal-final">${escapeHtml(shownWord)}</span> — senki sem kapott pontot.`
@@ -12773,6 +12778,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.59', changes:[
+      'A kör végén a fő feliratban az is látszik, kinek a rajzáról volt szó, pl. „🎉 Kitti kitalálta Marci rajzát!”, „🎉 Eltaláltad Évi rajzát!”, „⌛ Lejárt az idő — senki nem találta ki Adam rajzát!”.'
+    ]},
     { version:'3.58', changes:[
       'Javítva: ha az utolsó pillanatban választottál szót, a lejáró automatikus választás „lecsaphatott” egy másik szóra ugyanabban a pillanatban — te az egyiket rajzoltad, a játék a másikat várta. Mostantól ha az ujjad / egered már egy szón van, az automatikus választás nem lép közbe.',
       'A választás után 2 másodpercre nagy felirat mutatja: „✏️ Ezt rajzolod: …”, és a szó a rajzlap fölött is felvillan — így azonnal látszik, ha nem az lett, amire gondoltál.'
