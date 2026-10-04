@@ -1939,6 +1939,28 @@
     .stat-sub{ font-size:.8rem; }
     .stat-sec{ font-size:1.5rem; }
   }
+
+  /* ===== v3.68: docked chat column ===== */
+  #chat-panel.docked{ top:0 !important; bottom:0 !important; height:100vh !important; height:100dvh !important; max-height:none !important;
+    width:var(--dock-w) !important; border-radius:0 !important; box-shadow:0 0 30px rgba(0,0,0,.35) !important; z-index:950;
+    border-top:none; border-bottom:none; }
+  body.chat-dock-right #chat-panel.docked{ right:0 !important; left:auto !important; border-right:none; }
+  body.chat-dock-left #chat-panel.docked{ left:0 !important; right:auto !important; border-left:none; }
+  #chat-panel.docked #chat-resize, #chat-panel.docked #chat-new-below{ }
+  #chat-panel.docked #chat-resize{ display:none !important; }
+  #chat-panel.docked #chat-header{ cursor:default; }
+  #chat-dock-resize{ display:none; position:absolute; top:0; bottom:0; width:8px; cursor:ew-resize; z-index:4; }
+  #chat-panel.docked #chat-dock-resize{ display:block; }
+  body.chat-dock-right #chat-dock-resize{ left:-2px; }
+  body.chat-dock-left #chat-dock-resize{ right:-2px; }
+  #chat-dock-resize:hover, body.dock-resizing #chat-dock-resize{ background:color-mix(in srgb, var(--yellow) 45%, transparent); }
+  body.dock-resizing{ cursor:ew-resize; user-select:none; }
+  body.chat-dock-right{ padding-right:calc(var(--dock-w) + 24px) !important; }
+  body.chat-dock-left{ padding-left:calc(var(--dock-w) + 24px) !important; }
+  body.chat-dock-right #screen-fulldraw, body.chat-dock-right #fd-prepare, body.chat-dock-right #urgency-overlay{ right:var(--dock-w) !important; }
+  body.chat-dock-left #screen-fulldraw, body.chat-dock-left #fd-prepare, body.chat-dock-left #urgency-overlay{ left:var(--dock-w) !important; }
+  body.chat-dock-right #chat-toggle-btn, body.chat-dock-right #reaction-toggle-btn, body.chat-dock-right #reaction-picker, body.chat-dock-right #settings-fab{ right:calc(var(--dock-w) + 16px) !important; left:auto !important; }
+  body.chat-dock-left #chat-new-below{ }
 </style>
 </head>
 <body>
@@ -2553,6 +2575,7 @@
   <div id="chat-header">
     <span>💬 Chat</span>
     <div style="display:flex;gap:6px;">
+      <button class="ghost small" id="chat-dock-btn" aria-label="Chat rögzítése oldalra" title="Rögzítés a képernyő szélére (oldalsáv)">📌</button>
       <button class="ghost small" id="chat-close-btn" aria-label="Chat bezárása">✕</button>
     </div>
   </div>
@@ -5430,8 +5453,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function fitMainBoard(){
     const b = document.getElementById('main-board');
     if(!b || fitBoardBusy) return;
-    const W = window.innerWidth, H = window.innerHeight;
-    const big = W >= 1200 && H >= 680;
+    // v3.68: a docked chat takes its column away from the game
+    const dockW = document.body.classList.contains('chat-docked') ? (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dock-w')) || 0) : 0;
+    const W = window.innerWidth - dockW, H = window.innerHeight;
+    const big = W >= (dockW ? 900 : 1200) && H >= 680;
     document.body.classList.toggle('fit-frame', big);
     const z = big ? Math.max(1, Math.min(1.8, W / 1500, H / 900)) : 1;
     document.documentElement.style.setProperty('--ui-z', z.toFixed(3));
@@ -9194,6 +9219,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     head.style.touchAction = 'none';
     head.addEventListener('pointerdown', e=>{
       if(e.target.closest('button') || e.button > 0) return;
+      if(panel.classList.contains('docked')) return;   // v3.68: a docked chat stays put (🪟 to float it again)
       const r = panel.getBoundingClientRect();
       sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top; pid = e.pointerId;
       const start = ()=>{
@@ -9226,12 +9252,74 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       panel.classList.remove('chat-dragging');
       const r = panel.getBoundingClientRect();
       try{ localStorage.setItem(KEY, JSON.stringify({ fx: r.left / window.innerWidth, fy: r.top / window.innerHeight })); }catch(e){}
+      // v3.68: let go against the left/right edge = pin it there as a side column
+      try{
+        if(window.innerWidth >= 1000 && window.matchMedia('(pointer:fine)').matches){
+          if(r.left <= 12) setDock('left'); else if(r.right >= window.innerWidth - 12) setDock('right');
+        }
+      }catch(e){}
     };
     head.addEventListener('pointerup', end); head.addEventListener('pointercancel', end);
     head.addEventListener('dblclick', e=>{ if(!e.target.closest('button')) reset(); });
     head.title = 'Tartsd lenyomva és húzd az áthelyezéshez · dupla kattintás: alaphelyzet';
     window.addEventListener('resize', ()=>{ if(panel.dataset.userPos === '1') restore(); });
     restore();
+  })();
+  // ===== v3.68: dockable chat (desktop) =====
+  // Pinned, the chat becomes a full-height side column and the game uses
+  // the rest of the screen — nothing is covered. The drawing keeps its
+  // proportions (it is stored in relative coordinates), it is only shown
+  // smaller. Phones keep the floating chat.
+  const DOCK_KEY = 'picasso-chat-dock';
+  let chatDock = null;   // { side:'left'|'right', w }
+  try{ const v = JSON.parse(localStorage.getItem(DOCK_KEY) || 'null'); if(v && (v.side === 'left' || v.side === 'right')) chatDock = { side:v.side, w: Math.min(640, Math.max(260, Number(v.w) || 360)) }; }catch(e){}
+  const dockAllowed = ()=> window.innerWidth >= 1000 && window.matchMedia('(pointer:fine)').matches;
+  function saveDock(){ try{ chatDock ? localStorage.setItem(DOCK_KEY, JSON.stringify(chatDock)) : localStorage.removeItem(DOCK_KEY); }catch(e){} }
+  function applyDockLayout(){
+    const panel = document.getElementById('chat-panel');
+    const on = !!chatDock && dockAllowed() && !panel.classList.contains('hidden');
+    const was = document.body.classList.contains('chat-docked') + ':' + (document.body.classList.contains('chat-dock-left') ? 'l' : 'r') + ':' + document.documentElement.style.getPropertyValue('--dock-w');
+    document.body.classList.toggle('chat-docked', on);
+    document.body.classList.toggle('chat-dock-left', on && chatDock.side === 'left');
+    document.body.classList.toggle('chat-dock-right', on && chatDock.side === 'right');
+    panel.classList.toggle('docked', on);
+    if(on) document.documentElement.style.setProperty('--dock-w', Math.round(chatDock.w) + 'px');
+    else document.documentElement.style.removeProperty('--dock-w');
+    const btn = document.getElementById('chat-dock-btn');
+    if(btn){ btn.textContent = on ? '🪟' : '📌'; btn.title = on ? 'Lebegő ablakká alakítás' : 'Rögzítés a képernyő szélére (oldalsáv)'; btn.classList.toggle('hidden', !dockAllowed()); }
+    const now = document.body.classList.contains('chat-docked') + ':' + (document.body.classList.contains('chat-dock-left') ? 'l' : 'r') + ':' + document.documentElement.style.getPropertyValue('--dock-w');
+    if(now !== was) requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')));
+  }
+  function setDock(side){
+    if(side){ chatDock = { side, w: (chatDock && chatDock.w) || 380 }; }
+    else chatDock = null;
+    saveDock(); applyDockLayout();
+    try{ chatToEnd(); }catch(e){}
+  }
+  document.getElementById('chat-dock-btn').addEventListener('click', e=>{
+    e.stopPropagation(); sndClick();
+    if(chatDock) setDock(null);
+    else { const r = document.getElementById('chat-panel').getBoundingClientRect(); setDock(r.left + r.width/2 < window.innerWidth/2 ? 'left' : 'right'); }
+  });
+  (function(){
+    const panel = document.getElementById('chat-panel');
+    new MutationObserver(()=>applyDockLayout()).observe(panel, { attributes:true, attributeFilter:['class'] });
+    window.addEventListener('resize', ()=>{ const was = document.body.classList.contains('chat-docked'); if(was !== (!!chatDock && dockAllowed() && !panel.classList.contains('hidden'))) applyDockLayout(); });
+    // the inner edge of the column can be dragged to make it wider/narrower
+    const edge = document.createElement('div');
+    edge.id = 'chat-dock-resize'; edge.title = 'Húzd a szélesség állításához';
+    panel.appendChild(edge);
+    let sx = 0, sw = 0, on = false;
+    edge.addEventListener('pointerdown', e=>{ if(!chatDock) return; e.preventDefault(); on = true; sx = e.clientX; sw = chatDock.w; edge.setPointerCapture(e.pointerId); document.body.classList.add('dock-resizing'); });
+    edge.addEventListener('pointermove', e=>{
+      if(!on) return;
+      const d = chatDock.side === 'right' ? sx - e.clientX : e.clientX - sx;
+      chatDock.w = Math.round(Math.min(Math.min(640, window.innerWidth * 0.45), Math.max(260, sw + d)));
+      document.documentElement.style.setProperty('--dock-w', chatDock.w + 'px');
+    });
+    const end = ()=>{ if(!on) return; on = false; document.body.classList.remove('dock-resizing'); saveDock(); window.dispatchEvent(new Event('resize')); };
+    edge.addEventListener('pointerup', end); edge.addEventListener('pointercancel', end);
+    applyDockLayout();
   })();
   function openChatPanel(opts){
     const panel = document.getElementById('chat-panel');
@@ -12936,6 +13024,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.68', changes:[
+      'Új (gépen): a chat rögzíthető a képernyő bal vagy jobb széléhez oldalsávként — a fejlécén lévő 📌 gombbal, vagy úgy, hogy az ablakot a képernyő széléhez húzod. Ilyenkor a játék (a rajzlap is) a maradék helyen rendeződik el, így a chat semmit nem takar ki. Az oldalsáv belső széle húzással szélesíthető, a 🪟 gombbal pedig visszaalakítható lebegő ablakká. A beállítást a gép megjegyzi.'
+    ]},
     { version:'3.67', changes:[
       'A „📊 Statisztikáim” ablak nagy képernyőn kiszélesedik, és úgy méreteződik, hogy görgetés nélkül, egyben látszódjon.'
     ]},
