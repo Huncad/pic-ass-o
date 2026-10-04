@@ -3256,8 +3256,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let renameAction = null, pendingRename = null;
   let resyncAction = null, behindBeacons = 0, resyncAskedAt = 0, resyncPending = false;
   const resyncSentAt = new Map();
+  let unknownBeacons = 0;
   function requestResync(why){
     if(isHost || !resyncAction || !meta || gameEnded) return;
+    // v3.62 (review): a resync replaces the whole state — never while I am
+    // drawing (it would throw my drawing away) or choosing my word
+    if(currentRound && currentRound.drawerId === selfId && !processedResultRounds.has(roundKey(currentRound))) return;
     if(Date.now() - resyncAskedAt < 8000) return;
     resyncAskedAt = Date.now(); behindBeacons = 0; resyncPending = true;
     clog('K15', 'újraszinkron kérése: ' + why);
@@ -5869,7 +5873,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(!Array.isArray(data.turnOrder)) return;
       const order = data.turnOrder.slice(0,200).map(cleanPeerId);
       // v3.54: a turn order with a player I don't know = I'm out of date
-      if(!order.length || !order.every(x=>meta.playerNames[x])){ requestResync('ismeretlen játékos a sorrendben'); return; }
+      if(!order.length || !order.every(x=>meta.playerNames[x])){
+        // v3.62 (review): usually the "X joined" message is just a moment
+        // behind — only ask again if it stays unknown for a while
+        unknownBeacons++;
+        if(unknownBeacons >= 3) requestResync('ismeretlen játékos a sorrendben');
+        return;
+      }
+      unknownBeacons = 0;
+      const nextBefore = currentRound ? meta.turnOrder[currentRound.idx + 1] : null;
       meta.turnOrder = order;
       if(Array.isArray(data.done)) noteUsedWords(data.done.slice(0, 80));
       // v3.54: the room owner also tells which drawing the game is at. If I
@@ -5886,7 +5898,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         if(behind && !iDraw){ behindBeacons++; if(behindBeacons >= 2) requestResync(`le vagyok maradva (${mine}/${myStage} < ${data.at}/${data.st})`); }
         else behindBeacons = 0;
       }
-      if(showingRoundEnd && currentRound && processedResultRounds.has(roundKey(currentRound))){
+      // v3.62 (review): only when the NEXT drawer really changed — the room
+      // owner repeats this every 5 s, and re-running it restarted the
+      // 10-second "Én jövök" countdown again and again
+      if(showingRoundEnd && currentRound && processedResultRounds.has(roundKey(currentRound)) &&
+         meta.turnOrder[currentRound.idx + 1] !== nextBefore){
         setupNextRoundControls(currentRound.idx);
       }
     };
@@ -6220,7 +6236,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         return;
       }
       if(peerId !== hostPeerId) return;
-      if(resyncPending){ resyncPending = false; lateJoinApplied = false; quietLateSnapshot = true; }
+      if(resyncPending){
+        resyncPending = false;
+        if(currentRound && currentRound.drawerId === selfId && !processedResultRounds.has(roundKey(currentRound))) return;   // started drawing meanwhile
+        lateJoinApplied = false; quietLateSnapshot = true;
+      }
       applyLateSnapshot(snap);
       quietLateSnapshot = false;
     };
@@ -6432,6 +6452,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       }
       // The drawer alone decides how a round ends (see guessAction below).
       if(!currentRound || !isPlainObject(data) || peerId !== currentRound.drawerId) return;
+      if(Number.isFinite(data.idx) && data.idx !== currentRound.idx) return;   // v3.62: a result of another drawing
       const type = data.type === 'correct' ? 'correct' : (data.type === 'pass' ? 'pass' : 'timeout');
       const clean = { type, word: cleanText(data.word, 60) };
       clean.offered = (Array.isArray(data.offered) ? data.offered : []).slice(0, 12).map(w=>cleanText(w, 60)).filter(Boolean);
@@ -7230,7 +7251,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     activePlayerIds = new Set((Array.isArray(snap.active) ? snap.active : []).map(cleanPeerId).filter(id=>names[id]));
     if(!amSpectator) activePlayerIds.add(selfId);
     gameEnded = !!snap.gameEnded;
-    revealedWords = (Array.isArray(snap.revealedWords) ? snap.revealedWords : []).slice(-700).map(w=>String(w).slice(0,60));
+    if(!quietLateSnapshot) revealedWords = [];
+    noteUsedWords((Array.isArray(snap.revealedWords) ? snap.revealedWords : []).slice(-700));   // v3.62: merged on a resync
     const gs = snap.gameStats || {};
     gameStats = { fastestGuess:null, drawerPoints:{} };
     if(gs.fastestGuess && typeof gs.fastestGuess === 'object' && names[cleanPeerId(gs.fastestGuess.playerId)]){
@@ -11671,6 +11693,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!currentRound || currentRound.drawerId !== selfId) return;
     if(processedResultRounds.has(roundKey(currentRound))) return;
     result.word = currentRound.word;
+    result.idx = currentRound.idx;   // v3.62: which drawing this result belongs to
     // v3.28: the other offered words, so no device offers them again (the round is over, nothing to give away)
     result.offered = (Array.isArray(currentRound.offeredWords) ? currentRound.offeredWords : (Array.isArray(currentRound.choices) ? currentRound.choices : []).map(c=>c && c.w)).filter(Boolean).slice(0, 12);
     if(result.type === 'correct' && currentRound.roundStartAt){
@@ -12810,6 +12833,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.62', changes:[
+      'Átnéztem a kör-, szó- és jelöléskezelést, és több rejtett hibát javítottam:',
+      '• A kör végén az „Én jövök” 10 másodperces visszaszámlálása a v3.54 óta 5 másodpercenként újraindult, így automatikusan sosem indult el a következő rajz.',
+      '• Ha valaki menet közben belépett, a rajzoló eszköze ritkán újraszinkronizált, és ez eldobta a folyamatban lévő rajzát. Rajzolás (és szóválasztás) közben most soha nincs újraszinkron.',
+      '• Újraszinkronnál az eszköz elfelejtette a már lerajzolt szavakat — most megtartja őket, így ebből sem lehet ismétlődés.',
+      '• A kör eredménye most azt is tartalmazza, melyik rajzhoz tartozik, így egy késve érkező eredmény nem zárhat le egy másik kört.'
+    ]},
     { version:'3.61', changes:[
       'Javítva: néha magától „Megjelölted” állt egy szón, amit nem jelöltél meg. Egy korábbi játék jelölése „ragadt át” arra a körre, amelyik ugyanannál a rajzolónál ugyanannyiadik volt. A jelölés most a szóhoz és az adott játékhoz tartozik.',
       'Javítva: egy szó (pl. „kamionajtó”) egy játékon belül többször is előjöhetett. A többi felkínált szót a játék eddig elfelejtette elküldeni a többieknek, és aki lemaradt egy kör végéről, annál a lerajzolt szó sem került be a „már volt” listába. Most minden eszköz megjegyzi az összes lerajzolt és felkínált szót, akkor is, ha épp nem azt a kört nézte, és a szobanyitó pár másodpercenként egyezteti a lerajzolt szavak listáját.'
