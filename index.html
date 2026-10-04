@@ -5213,6 +5213,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // it is never put on the network until the round is over (see publicRound()).
   let currentRound = null;
   let revealedWords = [];             // words already revealed at the end of earlier rounds (to avoid repeats)
+  let doneWords = [];                 // v3.61: words of FINISHED drawings in this game (safe to share)
+  function noteUsedWords(list){
+    (list || []).forEach(raw=>{
+      const w = cleanText(raw, 60); if(!w) return;
+      if(!revealedWords.some(x=>squash(x) === squash(w))) revealedWords.push(w);
+    });
+  }
   // What goes over the network for a round: everything except the secret word.
   function publicRound(rd){
     const pub = Object.assign({}, rd);
@@ -5799,7 +5806,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(!isHost || !meta || gameEnded || !currentRound) return;
       // v3.55: also which stage that drawing is in (0 choosing, 1 drawing, 2 over)
       const st = processedResultRounds.has(roundKey(currentRound)) ? 2 : (currentRound.phase === 'drawing' ? 1 : 0);
-      try{ turnSyncAction.send({ turnOrder: meta.turnOrder, at: currentRound.idx, st }); }catch(e){}
+      try{ turnSyncAction.send({ turnOrder: meta.turnOrder, at: currentRound.idx, st, done: doneWords.slice(-60) }); }catch(e){}
     }, 5000);
     const aliveAction = room.makeAction('alive');
     aliveAction.onMessage = (_, {peerId})=>{
@@ -5864,6 +5871,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       // v3.54: a turn order with a player I don't know = I'm out of date
       if(!order.length || !order.every(x=>meta.playerNames[x])){ requestResync('ismeretlen játékos a sorrendben'); return; }
       meta.turnOrder = order;
+      if(Array.isArray(data.done)) noteUsedWords(data.done.slice(0, 80));
       // v3.54: the room owner also tells which drawing the game is at. If I
       // am still on an earlier one (I missed a round start — typical right
       // after joining a running game), I ask for the whole state again,
@@ -6416,6 +6424,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       routeGuessEntry(pid, cleanText(data.name, 16), text, !!data.correct, gid);
     };
     resultAction.onMessage = (data, {peerId})=>{
+      // v3.61: whatever my screen shows, a finished drawing's word (and the
+      // other words that were offered with it) is never offered again in
+      // this game — a device that missed a round used to offer it once more
+      if(meta && isPlainObject(data) && meta.playerNames[peerId]){
+        noteUsedWords([data.word].concat(Array.isArray(data.offered) ? data.offered.slice(0, 12) : []));
+      }
       // The drawer alone decides how a round ends (see guessAction below).
       if(!currentRound || !isPlainObject(data) || peerId !== currentRound.drawerId) return;
       const type = data.type === 'correct' ? 'correct' : (data.type === 'pass' ? 'pass' : 'timeout');
@@ -9936,6 +9950,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     setTimeout(()=>{ try{ playTickAt = 0; flushPlayTime(); }catch(e){} }, 0);   // v3.52: start the play clock
     const clean = sanitizeMeta(m);
     if(!clean) return;
+    // v3.61: a new game starts with no word marks at all
+    try{ Object.keys(wordFlags).forEach(k=>delete wordFlags[k]); reportableRound = null; }catch(e){}
     stopTicker();
     meta = clean;
     settings = clean.settings;
@@ -9948,7 +9964,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     gameEnded = false; statsRecordedThisGame = false;
     rematchYesVotes = new Set(); rematchDeadline = 0;
     processedResultRounds = new Set();
-    revealedWords = [];
+    revealedWords = []; doneWords = [];
     gameStats = { fastestGuess:null, drawerPoints:{} };
     galleryItems = [];
     // A new game (or a rematch) starts from a clean slate — leftovers from
@@ -10314,6 +10330,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       word: choice.w, tier: TIER_INFO[choice.tier] ? choice.tier : 'konnyu',
       phase:'drawing', roundStartAt: Date.now()
     });
+    // v3.61: the other offered words are kept (sent with the result) — they
+    // used to be deleted here, so the other devices never learned them
+    currentRound.offeredWords = (Array.isArray(currentRound.choices) ? currentRound.choices : []).map(c=>c && c.w).filter(Boolean).slice(0, 12);
     delete currentRound.choices;
     // enterDrawingMine measures the *actual* drawing area on this device and
     // stamps its real aspect ratio onto currentRound, so every watcher can
@@ -11653,7 +11672,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(processedResultRounds.has(roundKey(currentRound))) return;
     result.word = currentRound.word;
     // v3.28: the other offered words, so no device offers them again (the round is over, nothing to give away)
-    result.offered = (Array.isArray(currentRound.choices) ? currentRound.choices : []).map(c=>c && c.w).filter(Boolean).slice(0, 12);
+    result.offered = (Array.isArray(currentRound.offeredWords) ? currentRound.offeredWords : (Array.isArray(currentRound.choices) ? currentRound.choices : []).map(c=>c && c.w)).filter(Boolean).slice(0, 12);
     if(result.type === 'correct' && currentRound.roundStartAt){
       // nothing drawn at all: the drawing "took" as long as the first guess
       result.drawMs = fdLastModAt ? Math.max(0, fdLastModAt - currentRound.roundStartAt) : (Number(result.elapsedMs) || 0);
@@ -11754,7 +11773,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ captureGalleryItem(result); }catch(e){}
     if(result.word){
       result.word = String(result.word).slice(0,60);
-      revealedWords.push(result.word);
+      noteUsedWords([result.word]);
+      if(!doneWords.includes(result.word)) doneWords.push(result.word);   // finished, public words
     }
     if(Array.isArray(result.offered)){
       result.offered.forEach(w=>{ if(w && !revealedWords.includes(w)) revealedWords.push(w); });
@@ -12524,7 +12544,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     activePlayerIds = new Set();
     processedResultRounds = new Set();
     showingRoundEnd = false;
-    revealedWords = [];
+    revealedWords = []; doneWords = [];
     gameStats = { fastestGuess:null, drawerPoints:{} };
     galleryItems = [];
     hintRevealedCount = 0;
@@ -12790,6 +12810,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.61', changes:[
+      'Javítva: néha magától „Megjelölted” állt egy szón, amit nem jelöltél meg. Egy korábbi játék jelölése „ragadt át” arra a körre, amelyik ugyanannál a rajzolónál ugyanannyiadik volt. A jelölés most a szóhoz és az adott játékhoz tartozik.',
+      'Javítva: egy szó (pl. „kamionajtó”) egy játékon belül többször is előjöhetett. A többi felkínált szót a játék eddig elfelejtette elküldeni a többieknek, és aki lemaradt egy kör végéről, annál a lerajzolt szó sem került be a „már volt” listába. Most minden eszköz megjegyzi az összes lerajzolt és felkínált szót, akkor is, ha épp nem azt a kört nézte, és a szobanyitó pár másodpercenként egyezteti a lerajzolt szavak listáját.'
+    ]},
     { version:'3.60', changes:[
       'A hibás szó megjelölése visszavonható akkor is, ha a kör végi képernyő már továbblépett: az „📋 Előző kör” ablakban is ott van a jelölés gombja. A gomb felirata egyértelműbb lett („↩️ Jelölés visszavonása”). Ha a jelölések száma elérte a küszöböt, a bejelentés azonnal elmegy az adminnak — ezt már nem lehet visszavonni, és a játék ezt ki is írja.'
     ]},
@@ -13756,7 +13780,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // =====================================================================
   const WORDREPORT_FORM = 'picasso-wordreport';
   let wflagAction = null;
-  const wordFlags = {};          // roundKey -> { word, tier, ids:Set, sent:bool }
+  const wordFlags = {};          // roundKey|word -> { word, tier, ids:Set, sent:bool } — this game only
   let reportableRound = null;    // { rk, word, tier } of the result on screen
   // v3.36: at least 2 marks (so with 2 players both have to mark it), and with
   // more players at least half of them
@@ -13777,8 +13801,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ renderRecapReportUi(); }catch(e){}
   }
   function setupReportFor(rk, word, tier){
+    // v3.61: the key also contains the word, and the marks are cleared at
+    // every new game — "0:<same drawer>" repeats in every game, and an old
+    // mark showed up as "Megjelölted" on a word you never marked
+    if(word) rk = rk + '|' + squash(word);
     reportableRound = (word && tier !== 'sajat') ? { rk, word: String(word).slice(0,60), tier } : null;
-    if(reportableRound && !wordFlags[rk]) wordFlags[rk] = { word: reportableRound.word, tier, ids:new Set(), sent:false };
+    if(reportableRound && (!wordFlags[rk] || squash(wordFlags[rk].word) !== squash(reportableRound.word))) wordFlags[rk] = { word: reportableRound.word, tier, ids:new Set(), sent:false };
     renderReportUi();
   }
   async function submitWordReport(f){
