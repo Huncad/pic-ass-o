@@ -1925,6 +1925,19 @@
   html.dark-mode #chat-toggle-btn, html.dark-mode .chat-reacts > *, html.dark-mode .urgency-badge{ filter:brightness(.78) saturate(.85); }
   html.dark-mode #fx-canvas{ filter:brightness(.75) saturate(.85); }
   html.dark-mode .rav{ color:#0d0d0d; }
+  /* ===== v3.66: statistics at a proper size on big screens ===== */
+  .stats-since{ font-size:.85rem; color:var(--chalk-dim); font-weight:700; margin-top:2px; }
+  body.fit-frame .stats-box{ zoom:min(var(--ui-z, 1), 1.25); max-width:1040px; }
+  body.fit-frame #stats-overlay{ align-items:center; }
+  @media (min-width:1100px){
+    .stat-grid{ grid-template-columns:repeat(auto-fill, minmax(175px, 1fr)); gap:12px; }
+    .stat-card{ padding:16px 14px 14px; }
+    .stat-ico{ font-size:1.7rem; }
+    .stat-val{ font-size:1.6rem; }
+    .stat-lbl{ font-size:.9rem; }
+    .stat-sub{ font-size:.8rem; }
+    .stat-sec{ font-size:1.5rem; }
+  }
 </style>
 </head>
 <body>
@@ -2349,7 +2362,7 @@
 <div id="stats-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="stats-title">
   <div class="admin-box stats-box">
     <div class="admin-panel-header">
-      <h2 id="stats-title">📊 Statisztikáim</h2>
+      <div><h2 id="stats-title">📊 Statisztikáim</h2><div class="stats-since" id="stats-since"></div></div>
       <button class="ghost small" id="stats-close-btn" aria-label="Bezárás">Bezárás ✕</button>
     </div>
     <div id="stats-body"></div>
@@ -12243,7 +12256,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ const v = JSON.parse(localStorage.getItem(STATS_KEY) || 'null'); if(isPlainObject(v)) return v; }catch(e){}
     return { games:0, wins:0, points:0, best:0 };
   }
-  function savePersonalStats(st){ try{ localStorage.setItem(STATS_KEY, JSON.stringify(st)); }catch(e){} }
+  function savePersonalStats(st){
+    // v3.66: remember when this device started collecting statistics
+    if(!st.since){ const known = [st.bestAt, st.lastPlayed].map(Number).filter(x=>x > 0); st.since = known.length ? Math.min(...known) : Date.now(); }
+    try{ localStorage.setItem(STATS_KEY, JSON.stringify(st)); }catch(e){}
+  }
   const N = v=>Number(v)||0;
   function recordPersonalStats(rows){
     if(statsRecordedThisGame || !rows.some(r=>r.id === selfId)) return;
@@ -12329,6 +12346,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   const pct = (a, b)=> b ? Math.round(100 * a / b) + '%' : '—';
   function renderStatsPage(){
     const st = loadPersonalStats();
+    if(!st.since && (N(st.games) || N(st.drawn) || N(st.playMs))) savePersonalStats(st);
+    const sinceEl = document.getElementById('stats-since');
+    if(sinceEl) sinceEl.textContent = st.since ? `Gyűjtés kezdete: ${new Date(st.since).toLocaleDateString('hu-HU', { year:'numeric', month:'long', day:'numeric' })}` : '';
     const body = document.getElementById('stats-body');
     if(!N(st.games) && !N(st.drawn) && !N(st.guessRounds) && !N(st.playMs)){
       body.innerHTML = '<p class="center-note">Még nincs statisztikád ezen az eszközön. Játssz egy kört, és itt látod majd az eredményeidet! 🎨</p>';
@@ -12381,6 +12401,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   document.getElementById('stats-reset-btn').addEventListener('click', ()=>{
     if(!confirm('Biztosan nullázod a statisztikádat ezen az eszközön? Ez nem vonható vissza.')) return;
     try{ localStorage.removeItem(STATS_KEY); }catch(e){}
+    savePersonalStats(loadPersonalStats());   // a fresh start date
     renderStatsPage(); renderHomeStats();
   });
   function renderHomeStats(){
@@ -12895,6 +12916,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.66', changes:[
+      'A „📊 Statisztikáim” ablak nagy képernyőn a játék többi részével arányosan nagyobb lett, és a címe alatt látszik, mióta gyűjti az eszköz a statisztikát.'
+    ]},
     { version:'3.65', changes:[
       'Ami egyszer már feladvány volt bármelyik játékban (bármelyik eszközön), az többet nem kerül elő — csak akkor, ha az adott szint összes szava elfogyott. A lerajzolt szavak listáját egy közös tárhely őrzi; az admin felületen látszik, hány szó fogyott el, és ott nullázható is.'
     ]},
