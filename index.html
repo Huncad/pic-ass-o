@@ -13176,6 +13176,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.75', changes:[
+      'Javítva: egyszemélyes módban a gép nem tippelt. A rajzot most más módon adjuk át a felismerőnek, a gép pár másodpercenként kimondja, mire hasonlít a rajzod, és ha hiba van, azt kiírja. Az egyszemélyes játék alatt nem szól a menüzene.'
+    ]},
     { version:'3.74', changes:[
       'Egyszemélyes mód: a gép mostantól VALÓBAN a rajzodat nézi — egy ingyenes, a böngészőben futó rajzfelismerő modellel (a Google Quick, Draw! játék 50 millió rajzán tanítva, 345 tárgyat ismer). Félkész vagy félreérthető rajzból nem találja ki, és a rossz tippjei is arra vonatkoznak, aminek a rajzod tényleg látszik. A szavak, amiket rajzolsz, a felismerő által ismert dolgokból jönnek. Kezdő szinten csak egészen biztos felismerésnél szól és lassabban, Profi szinten már bizonytalanabb rajzból is rájön. Az első indításkor a felismerő néhány MB-ot letölt; a rajzod nem hagyja el az eszközt. A korábbi szimulált tippelés megszűnt.'
     ]},
@@ -14598,9 +14601,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function qdName(label){ const m = QD_HU[label] || QD_LOWER[String(label).replace(/_/g, ' ').trim().toLowerCase()]; return m ? m.h : String(label); }
   const BOT_COL = { k:'#222222', y:'#E0A800', r:'#D9342B', g:'#2E9E4A', b:'#2F7FC1', o:'#F08A1C', n:'#8B5A2B', p:'#E2569B', u:'#8A4FD0', s:'#666666' };
   const BOT_LEVELS = {
-    kezdo: { see:{ rank:1, p:0.5 },  say:0.35, react:[1800,3200], gap:3800, name:'Kezdő',   speed:70,  pause:[520,1150], jitter:1.5, wobble:2.6, offs:3.2, detail:0.25, width:1.25, never:0.30, rate:0.035, wrong:[4500,8000],  minInk:60 },
-    atlag: { see:{ rank:2, p:0.28 }, say:0.2,  react:[1000,2000], gap:2600, name:'Átlagos', speed:115, pause:[280,650],  jitter:0.7, wobble:1.2, offs:1.5, detail:0.65, width:1.0,  never:0.15, rate:0.07,  wrong:[6000,10000], minInk:45 },
-    profi: { see:{ rank:3, p:0.12 }, say:0.12, react:[500,1200],  gap:1800, name:'Profi',   speed:170, pause:[140,380],  jitter:0.25,wobble:0.4, offs:0.5, detail:1.0,  width:0.9,  never:0.05, rate:0.14,  wrong:[7000,12000], minInk:35 }
+    kezdo: { see:{ rank:1, p:0.22 }, say:0, react:[1800,3200], gap:5000, name:'Kezdő',   speed:70,  pause:[520,1150], jitter:1.5, wobble:2.6, offs:3.2, detail:0.25, width:1.25, never:0.30, rate:0.035, wrong:[4500,8000],  minInk:60 },
+    atlag: { see:{ rank:2, p:0.1 },  say:0, react:[1000,2000], gap:3500, name:'Átlagos', speed:115, pause:[280,650],  jitter:0.7, wobble:1.2, offs:1.5, detail:0.65, width:1.0,  never:0.15, rate:0.07,  wrong:[6000,10000], minInk:45 },
+    profi: { see:{ rank:3, p:0.04 }, say:0, react:[500,1200],  gap:2500, name:'Profi',   speed:170, pause:[140,380],  jitter:0.25,wobble:0.4, offs:0.5, detail:1.0,  width:0.9,  never:0.05, rate:0.14,  wrong:[7000,12000], minInk:35 }
   };
   const SOLO_INK = ['#222222','#D9342B','#F08A1C','#E0A800','#2E9E4A','#2F7FC1','#8A4FD0','#E2569B','#8B5A2B','#FFFFFF'];
   const solo = { on:false, level:'atlag', rounds:3, time:90, round:1, turn:'me', scores:{ me:0, bot:0 },
@@ -14753,6 +14756,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // ---------- flow ----------
   function soloSetup(){
     solo.on = true; solo.done = true;
+    // v3.75: no menu music during the single-player game
+    try{ musicWanted = false; musicSync(); }catch(e){}
     qdLoad().catch(()=>{});
     document.body.classList.add('solo-open');
     $s('solo-screen').classList.remove('hidden');
@@ -14824,7 +14829,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     solo.word = c.w; solo.label = c.label; solo.tier = c.tier; solo.used.add(squash(c.w));
     $s('solo-word').innerHTML = `Rajzold: <b>${escapeHtml(c.w)}</b>`;
     $s('solo-tools').classList.remove('hidden'); $s('solo-guess-row').classList.add('hidden');
-    solo.saidWrong = new Set(); solo.aiVer = 0; solo.aiSeen = -1; solo.aiBusy = false; solo.aiNextSay = 0; solo.aiHitPending = false;
+    solo.saidWrong = new Set(); solo.aiVer = 0; solo.aiSeen = -1; solo.aiErrShown = false; solo.aiLastRun = 0; solo.aiBusy = false; solo.aiNextSay = 0; solo.aiHitPending = false;
     if(qdPipe) soloFeed('🤖 A gép figyeli a rajzodat…', 'sys');
     else if(qdError) soloFeed('⚠️ A gép rajzfelismerője nem tudott betöltődni (nincs internet?) — ebben a körben nem tud tippelni. A „Passz” gombbal továbbléphetsz.', 'sys');
     else { soloFeed('🤖 A gép bemelegít (rajzfelismerő betöltése)… <span id="solo-load-pct"></span>', 'sys'); qdLoad().then(()=>{ if(!solo.done && solo.turn === 'me') soloFeed('🤖 Kész, figyelem a rajzodat!', 'sys'); }).catch(()=>{ if(!solo.done && solo.turn === 'me') soloFeed('⚠️ A rajzfelismerő nem tudott betöltődni (nincs internet?) — ebben a körben a gép nem tud tippelni.', 'sys'); }); }
@@ -14862,23 +14867,39 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   async function soloClassify(){
     const cvs = soloSketchCanvases(); if(!cvs) return null;
     const run = async cv=>{
-      const img = (qdRawImage && qdRawImage.fromCanvas) ? qdRawImage.fromCanvas(cv) : cv.toDataURL('image/png');
-      const out = await qdPipe(img, { top_k: 8 });
+      let img;
+      if(qdRawImage){
+        // plain RGB pixels (3 channels) — what the image processor expects
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+        const rgb = new Uint8ClampedArray(cv.width * cv.height * 3);
+        for(let i = 0, j = 0; i < d.length; i += 4, j += 3){ rgb[j] = d[i]; rgb[j+1] = d[i+1]; rgb[j+2] = d[i+2]; }
+        img = new qdRawImage(rgb, cv.width, cv.height, 3);
+      } else img = cv.toDataURL('image/png');
+      let out = await qdPipe(img, { top_k: 10 });
+      if(Array.isArray(out) && Array.isArray(out[0])) out = out[0];
       return Array.isArray(out) ? out : [];
     };
     const a = await run(cvs[0]), b = await run(cvs[1]);
     return ((a[0] && a[0].score) || 0) >= ((b[0] && b[0].score) || 0) ? a : b;
   }
+  const now0 = ()=>Date.now();
   // every second: if the drawing changed, look at it again
   async function soloAiTick(){
     if(solo.done || solo.turn !== 'me' || !qdPipe || solo.aiBusy || solo.aiHitPending) return;
-    if(solo.aiSeen === solo.aiVer) return;
+    if(solo.aiSeen === solo.aiVer && now0() - (solo.aiLastRun || 0) < 6000) return;
+    solo.aiLastRun = now0();
     const L = BOT_LEVELS[solo.level], now = Date.now();
     if((now - solo.startAt) < 2500) return;
     solo.aiBusy = true; const ver = solo.aiVer;
     let res = null;
-    try{ res = await soloClassify(); }catch(e){ console.warn('quickdraw', e); }
+    try{ res = await soloClassify(); }
+    catch(e){
+      console.warn('quickdraw', e);
+      if(!solo.aiErrShown){ solo.aiErrShown = true; soloFeed('⚠️ A rajzfelismerő hibát jelzett: ' + escapeHtml(String((e && e.message) || e).slice(0, 140)), 'sys'); }
+    }
     solo.aiBusy = false; solo.aiSeen = ver;
+    // what the recogniser saw — for checking how well it works (F12 → Console)
+    if(res && res.length) console.log('[quickdraw] ' + res.slice(0, 5).map(r=>`${r.label} ${(r.score*100).toFixed(1)}%`).join(' | '));
     if(!res || !res.length || solo.done || solo.turn !== 'me') return;
     const norm = l=>String(l).replace(/_/g, ' ').trim().toLowerCase();
     const target = norm(solo.label);
@@ -14891,11 +14912,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       soloLater(()=>{ if(solo.done) return; soloFeed(`🤖 <b>${escapeHtml(solo.word)}</b>!`, 'bot hit'); soloEndTurn(true, ms); }, rnd(L.react[0], L.react[1]));
       return;
     }
-    // otherwise it says what it really thinks it sees — now and then
-    const top = res[0];
-    if(top && norm(top.label) !== target && top.score >= L.say && now >= solo.aiNextSay){
-      const name = qdName(top.label);
-      if(!solo.saidWrong.has(squash(name))){
+    // otherwise it says what it really thinks it sees (its best guess it
+    // hasn't said yet) — every few seconds, like a person thinking aloud
+    if(now >= solo.aiNextSay){
+      const cand = res.find(r=>norm(r.label) !== target && !solo.saidWrong.has(squash(qdName(r.label))));
+      if(cand){
+        const name = qdName(cand.label);
         solo.saidWrong.add(squash(name)); solo.aiNextSay = now + L.gap;
         soloLater(()=>{ if(!solo.done) soloFeed(`🤖 ${escapeHtml(name)}?`, 'bot'); }, rnd(L.react[0], L.react[1]) * 0.6);
       }
@@ -15002,6 +15024,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     soloClearTimers(); solo.on = false; solo.done = true;
     $s('solo-screen').classList.add('hidden'); soloModalClose();
     document.body.classList.remove('solo-open');
+    try{ musicScreensChanged(['screen-home']); }catch(e){}   // back on the home screen: music as usual
   }
   // tools
   (function(){
