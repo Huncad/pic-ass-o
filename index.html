@@ -13176,6 +13176,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.77', changes:[
+      'Javítva: az egyszemélyes módban a rajzfelismerő hibát dobott („conv_stem… Non-zero status code”). A felismerő 28×28 pixeles, szürkeárnyalatos képet vár (a Quick, Draw! formátumát), a játék viszont nagy, színes képet adott át neki. Mostantól a rajzod pontosan abban a formában kerül a felismerőhöz, amit vár. Az előző verzióban beépített „nagyobb modellre váltás” téves diagnózison alapult, ezért megszűnt (az eszköz elfelejti).'
+    ]},
     { version:'3.76', changes:[
       'Javítva (iPhone): „ConvInteger… OrtRun()” hiba a rajzfelismerőben. Ha az eszköz nem tudja futtatni a kisebb modellt, a játék magától átvált a teljes pontosságú változatra, és ezt megjegyzi.',
       'Egyszemélyes mód: a gép szintjei rajzban is jobban különböznek. A Kezdő lassan, remegősen és ügyetlenül rajzol, és el is ront vonalakat, amiket aztán visszavonással (↶) vagy radírral javít. Az Átlagos valamivel gyorsabb és ritkán hibázik, a Profi gyors és pontos.'
@@ -14590,7 +14593,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // model ("ConvInteger" error) — then the full-precision one is used, and
   // the device remembers that
   let qdDtype = 'q8';
-  try{ if(localStorage.getItem('picasso-qd-dtype') === 'fp32') qdDtype = 'fp32'; }catch(e){}
+  // v3.77: the earlier "fp32" switch came from a misdiagnosis — forget it
+  try{ localStorage.removeItem('picasso-qd-dtype'); }catch(e){}
   function qdLoad(){
     if(qdPipe) return Promise.resolve(qdPipe);
     if(qdLoading) return qdLoading;
@@ -14860,44 +14864,48 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     setTimeout(soloFit, 30);
   }
   function soloLoadProgress(pct){ const el = document.getElementById('solo-load-pct'); if(el) el.textContent = Math.round(pct) + '%'; }
-  // your drawing, the way the recogniser expects it: cropped, square,
-  // black on white (and once more inverted — the better of the two counts)
+  // your drawing, the way the recogniser expects it: the Quick, Draw!
+  // bitmaps — 28×28 pixels, ONE grey channel, the drawing fitted to the
+  // frame. (v3.77: it used to get a 224×224 colour image, which the model
+  // rejects — that was the "conv_stem" error.) Drawn both ways round (white
+  // on black and black on white); the better answer counts.
   function soloSketchCanvases(){
     const pts = []; solo.strokes.forEach(st=>{ if(st.col !== '#FFFFFF') st.pts.forEach(q=>pts.push(q)); });
     if(pts.length < 4) return null;
     const c = soloCanvas(); const W = c.width, H = c.height;
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     pts.forEach(([u, v])=>{ const X = u * W, Y = v * H; x0 = Math.min(x0, X); y0 = Math.min(y0, Y); x1 = Math.max(x1, X); y1 = Math.max(y1, Y); });
-    const side = Math.max(x1 - x0, y1 - y0, 10) * 1.15, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-    const N = 224, k = N / side;
-    const make = invert=>{
-      const cv = document.createElement('canvas'); cv.width = N; cv.height = N;
-      const x = cv.getContext('2d');
-      x.fillStyle = invert ? '#000' : '#fff'; x.fillRect(0, 0, N, N);
-      x.strokeStyle = invert ? '#fff' : '#000'; x.lineCap = 'round'; x.lineJoin = 'round'; x.lineWidth = 5;
+    const side = Math.max(x1 - x0, y1 - y0, 12) * 1.1, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const B = 112, k = B / side;                       // draw big, shrink smoothly
+    const make = whiteOnBlack=>{
+      const big = document.createElement('canvas'); big.width = B; big.height = B;
+      const x = big.getContext('2d');
+      const bg = whiteOnBlack ? '#000' : '#fff', fg = whiteOnBlack ? '#fff' : '#000';
+      x.fillStyle = bg; x.fillRect(0, 0, B, B);
+      x.lineCap = 'round'; x.lineJoin = 'round';
       solo.strokes.forEach(st=>{
-        x.strokeStyle = st.col === '#FFFFFF' ? (invert ? '#000' : '#fff') : (invert ? '#fff' : '#000');
-        x.lineWidth = st.col === '#FFFFFF' ? 14 : 5;
+        const erase = st.col === '#FFFFFF';
+        x.strokeStyle = erase ? bg : fg; x.lineWidth = erase ? 30 : 8;
         x.beginPath();
-        st.pts.forEach(([u, v], i)=>{ const X = (u * W - cx) * k + N / 2, Y = (v * H - cy) * k + N / 2; i ? x.lineTo(X, Y) : x.moveTo(X, Y); });
-        if(st.pts.length === 1) x.lineTo((st.pts[0][0] * W - cx) * k + N / 2 + 0.1, (st.pts[0][1] * H - cy) * k + N / 2);
+        st.pts.forEach(([u, v], i)=>{ const X = (u * W - cx) * k + B / 2, Y = (v * H - cy) * k + B / 2; i ? x.lineTo(X, Y) : x.moveTo(X, Y); });
+        if(st.pts.length === 1) x.lineTo((st.pts[0][0] * W - cx) * k + B / 2 + 0.1, (st.pts[0][1] * H - cy) * k + B / 2);
         x.stroke();
       });
-      return cv;
+      const sm = document.createElement('canvas'); sm.width = 28; sm.height = 28;
+      const y = sm.getContext('2d'); y.imageSmoothingEnabled = true; y.imageSmoothingQuality = 'high';
+      y.drawImage(big, 0, 0, 28, 28);
+      return sm;
     };
-    return [make(false), make(true)];
+    return [make(true), make(false)];
   }
   async function soloClassify(){
     const cvs = soloSketchCanvases(); if(!cvs) return null;
     const run = async cv=>{
-      let img;
-      if(qdRawImage){
-        // plain RGB pixels (3 channels) — what the image processor expects
-        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
-        const rgb = new Uint8ClampedArray(cv.width * cv.height * 3);
-        for(let i = 0, j = 0; i < d.length; i += 4, j += 3){ rgb[j] = d[i]; rgb[j+1] = d[i+1]; rgb[j+2] = d[i+2]; }
-        img = new qdRawImage(rgb, cv.width, cv.height, 3);
-      } else img = cv.toDataURL('image/png');
+      // one grey channel, 28×28 (the model's own input format)
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+      const grey = new Uint8ClampedArray(cv.width * cv.height);
+      for(let i = 0, j = 0; i < d.length; i += 4, j++) grey[j] = d[i];
+      const img = new qdRawImage(grey, cv.width, cv.height, 1);
       let out = await qdPipe(img, { top_k: 10 });
       if(Array.isArray(out) && Array.isArray(out[0])) out = out[0];
       return Array.isArray(out) ? out : [];
@@ -14918,7 +14926,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ res = await soloClassify(); }
     catch(e){
       const msg = String((e && e.message) || e);
-      if(qdDtype === 'q8' && /ConvInteger|OrtRun|MatMulInteger|DynamicQuantize/i.test(msg)){
+      if(qdDtype === 'q8' && /ConvInteger|MatMulInteger|DynamicQuantize/i.test(msg)){
         // switch to the full-precision model once, quietly retry
         qdDtype = 'fp32'; try{ localStorage.setItem('picasso-qd-dtype', 'fp32'); }catch(_){}
         qdPipe = null; qdLoading = null; solo.aiBusy = false; solo.aiSeen = -1;
