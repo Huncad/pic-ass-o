@@ -13176,6 +13176,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.72', changes:[
+      'Egyszemélyes mód: amikor te rajzolsz, ugyanabból az egyszerű, hétköznapi képszótárból kapsz szavakat, amiből a gép is rajzol — így a gép nem „találhat ki” olyan részletet, ami egy rajzból nem derülhet ki (pl. „robotlány” egy robotból). A gép rossz tippjei is egyszerű tárgyak, nem ismétlődnek, és sosem árulják el a megoldást.'
+    ]},
     { version:'3.71', changes:[
       'Új: 🤖 Egyszemélyes játék (a kezdőképernyőn). Te és egy gépi játékos felváltva rajzoltok és tippeltek. A gép szintje Kezdő, Átlagos vagy Profi lehet. A gép egy saját, 139 szavas képszótárból rajzol vonalanként, emberi tempóban — így mindig pontosan a feladványt rajzolja; kezdő szinten remegősebben és kevesebb részlettel, profi szinten szépen és részletesen. A te rajzodra adott tippjei szimuláltak: tudja a szót, de a szintjétől és attól függően találja ki, mennyit rajzoltál már, közben hihető rossz tippekkel. Nem kell hozzá internetes MI vagy kulcs.'
     ]},
@@ -14753,10 +14756,16 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(solo.turn === 'me') soloOfferWords(); else soloBotTurn();
   }
   function soloOfferWords(){
-    const pool = t=> WORDS.filter(w=>w.tier === t && !solo.used.has(squash(w.w)) && !String(w.w).includes(' '));
+    // v3.72: you draw from the same picture vocabulary as the computer —
+    // simple, concrete things. With the full word list it could "guess"
+    // details no drawing shows (e.g. "robotlány" from a robot).
     const pick = (list, n)=>{ const out = []; const c = list.slice(); while(out.length < n && c.length) out.push(c.splice(Math.floor(Math.random() * c.length), 1)[0]); return out; };
-    let ch = pick(pool('konnyu'), 2).concat(pick(pool('kozepes'), 1));
-    if(ch.length < 3) ch = pick(WORDS, 3);
+    const recent = recentWordSet();
+    const keys = Object.keys(BOT_DICT);
+    let fresh = keys.filter(k=>!solo.used.has(squash(k)) && !recent.has(squash(k)));
+    if(fresh.length < 3) fresh = keys.filter(k=>!solo.used.has(squash(k)));
+    if(fresh.length < 3) fresh = keys;
+    const ch = pick(fresh, 3).map(k=>({ w:k, tier:'konnyu' }));
     $s('solo-word').textContent = '✏️ Te rajzolsz — válassz egy szót!';
     soloModal(`<h2>✏️ Te rajzolsz</h2><p class="solo-lead">Válassz egy szót — a gép próbálja kitalálni.</p>
       <div class="solo-choices">${ch.map((c, i)=>`<button type="button" class="solo-choice" data-i="${i}">${escapeHtml(c.w)}<small>${TIER_INFO[c.tier] ? TIER_INFO[c.tier].label : ''}</small></button>`).join('')}</div>
@@ -14785,18 +14794,22 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     $s('solo-tools').classList.remove('hidden'); $s('solo-guess-row').classList.add('hidden');
     const L = BOT_LEVELS[solo.level];
     solo.never = Math.random() < L.never;
+    solo.saidWrong = new Set();
     solo.nextWrong = Date.now() + rnd(L.wrong[0], L.wrong[1]);
     soloFeed('🤖 A gép figyeli a rajzodat…', 'sys');
     soloStartClock(()=>soloEndTurn(false));
     setTimeout(soloFit, 30);
   }
   function soloBotWrongWord(){
+    // wrong guesses are other everyday things, never anything that would
+    // reveal the answer (no alternate names, nothing containing the word)
     const w = squash(solo.word);
-    const near = WORDS.filter(x=>squash(x.w).slice(0, 2) === w.slice(0, 2) && squash(x.w) !== w);
-    const same = WORDS.filter(x=>x.tier === solo.tier && squash(x.w) !== w);
-    const pool = (near.length && Math.random() < 0.3) ? near : (Math.random() < 0.3 ? Object.keys(BOT_DICT).map(k=>({ w:k })) : same);
-    const g = pickOne(pool.length ? pool : WORDS);
-    return g ? g.w : 'ház';
+    const bad = new Set([w].concat((BOT_DICT[solo.word] && BOT_DICT[solo.word].a || []).map(squash)));
+    const pool = Object.keys(BOT_DICT).filter(k=>{ const q = squash(k); return !bad.has(q) && !q.includes(w) && !w.includes(q) && !solo.saidWrong.has(q); });
+    const near = pool.filter(k=>squash(k)[0] === w[0]);
+    const g = pickOne((near.length && Math.random() < 0.3) ? near : (pool.length ? pool : Object.keys(BOT_DICT)));
+    solo.saidWrong.add(squash(g));
+    return g;
   }
   function soloBotThink(){
     if(solo.done) return;
