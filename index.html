@@ -13176,6 +13176,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.76', changes:[
+      'Javítva (iPhone): „ConvInteger… OrtRun()” hiba a rajzfelismerőben. Ha az eszköz nem tudja futtatni a kisebb modellt, a játék magától átvált a teljes pontosságú változatra, és ezt megjegyzi.',
+      'Egyszemélyes mód: a gép szintjei rajzban is jobban különböznek. A Kezdő lassan, remegősen és ügyetlenül rajzol, és el is ront vonalakat, amiket aztán visszavonással (↶) vagy radírral javít. Az Átlagos valamivel gyorsabb és ritkán hibázik, a Profi gyors és pontos.'
+    ]},
     { version:'3.75', changes:[
       'Javítva: egyszemélyes módban a gép nem tippelt. A rajzot most más módon adjuk át a felismerőnek, a gép pár másodpercenként kimondja, mire hasonlít a rajzod, és ha hiba van, azt kiírja. Az egyszemélyes játék alatt nem szól a menüzene.'
     ]},
@@ -14582,6 +14586,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   const QD_MODEL = 'Xenova/quickdraw-mobilevit-small';
   const QD_LIB = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2';
   let qdPipe = null, qdLoading = null, qdError = '', qdRawImage = null;
+  // v3.76: some devices (e.g. iPhone Safari) can't run the small quantized
+  // model ("ConvInteger" error) — then the full-precision one is used, and
+  // the device remembers that
+  let qdDtype = 'q8';
+  try{ if(localStorage.getItem('picasso-qd-dtype') === 'fp32') qdDtype = 'fp32'; }catch(e){}
   function qdLoad(){
     if(qdPipe) return Promise.resolve(qdPipe);
     if(qdLoading) return qdLoading;
@@ -14590,7 +14599,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       T.env.allowLocalModels = false;
       qdRawImage = T.RawImage;
       qdPipe = await T.pipeline('image-classification', QD_MODEL, {
-        dtype: 'q8',
+        dtype: qdDtype,
         progress_callback: p=>{ if(p && p.status === 'progress' && Number.isFinite(p.progress)) soloLoadProgress(p.progress); }
       });
       return qdPipe;
@@ -14601,9 +14610,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function qdName(label){ const m = QD_HU[label] || QD_LOWER[String(label).replace(/_/g, ' ').trim().toLowerCase()]; return m ? m.h : String(label); }
   const BOT_COL = { k:'#222222', y:'#E0A800', r:'#D9342B', g:'#2E9E4A', b:'#2F7FC1', o:'#F08A1C', n:'#8B5A2B', p:'#E2569B', u:'#8A4FD0', s:'#666666' };
   const BOT_LEVELS = {
-    kezdo: { see:{ rank:1, p:0.22 }, say:0, react:[1800,3200], gap:5000, name:'Kezdő',   speed:70,  pause:[520,1150], jitter:1.5, wobble:2.6, offs:3.2, detail:0.25, width:1.25, never:0.30, rate:0.035, wrong:[4500,8000],  minInk:60 },
-    atlag: { see:{ rank:2, p:0.1 },  say:0, react:[1000,2000], gap:3500, name:'Átlagos', speed:115, pause:[280,650],  jitter:0.7, wobble:1.2, offs:1.5, detail:0.65, width:1.0,  never:0.15, rate:0.07,  wrong:[6000,10000], minInk:45 },
-    profi: { see:{ rank:3, p:0.04 }, say:0, react:[500,1200],  gap:2500, name:'Profi',   speed:170, pause:[140,380],  jitter:0.25,wobble:0.4, offs:0.5, detail:1.0,  width:0.9,  never:0.05, rate:0.14,  wrong:[7000,12000], minInk:35 }
+    kezdo: { see:{ rank:1, p:0.22 }, say:0, react:[1800,3200], gap:5000, name:'Kezdő',   speed:42,  pause:[750,1600], jitter:2.4, wobble:3.6, offs:4.6, detail:0.2,  width:1.35, mistake:0.38, never:0.30, rate:0.035, wrong:[4500,8000],  minInk:60 },
+    atlag: { see:{ rank:2, p:0.1 },  say:0, react:[1000,2000], gap:3500, name:'Átlagos', speed:95,  pause:[300,700],  jitter:0.8, wobble:1.3, offs:1.6, detail:0.65, width:1.0,  mistake:0.07, never:0.15, rate:0.07,  wrong:[6000,10000], minInk:45 },
+    profi: { see:{ rank:3, p:0.04 }, say:0, react:[500,1200],  gap:2500, name:'Profi',   speed:230, pause:[90,240],   jitter:0.25,wobble:0.4, offs:0.5, detail:1.0,  width:0.9,  mistake:0, never:0.05, rate:0.14,  wrong:[7000,12000], minInk:35 }
   };
   const SOLO_INK = ['#222222','#D9342B','#F08A1C','#E0A800','#2E9E4A','#2F7FC1','#8A4FD0','#E2569B','#8B5A2B','#FFFFFF'];
   const solo = { on:false, level:'atlag', rounds:3, time:90, round:1, turn:'me', scores:{ me:0, bot:0 },
@@ -14668,6 +14677,19 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         Y += g.dy + oy + (Math.cos(i * fr * 1.3 + ph) * L.wobble * 0.6 + rnd(-L.jitter, L.jitter) * 0.45) * f;
         return [X, Y];
       });
+      // v3.76: now and then a botched line first — taken back with ↶ or rubbed out
+      if(L.mistake && !pr.det && Math.random() < L.mistake){
+        const mx = rnd(-9, 9), my = rnd(-9, 9), ms = rnd(1.15, 1.35), cut = Math.max(4, Math.floor(pts.length * rnd(0.45, 1)));
+        const bad = pts.slice(0, cut).map(([x, y], i)=>[50 + (x - 50) * ms + mx + Math.sin(i * 0.3) * 2.5, 50 + (y - 50) * ms + my + Math.cos(i * 0.27) * 2.5]);
+        out.push({ pts: bad, col: pr.col, mistake: true });
+        if(Math.random() < 0.55) out.push({ undo: true });
+        else {
+          // eraser: zig-zag over the bad line with a wide "paper" stroke
+          const er = [];
+          bad.forEach(([x, y], i)=>{ if(i % 3 === 0) er.push([x + (i % 6 ? 1.6 : -1.6), y + (i % 6 ? -1.6 : 1.6)]); });
+          if(er.length > 1) out.push({ pts: er, col: 'ERASE' });
+        }
+      }
       out.push({ pts, col: pr.col });
     });
     return out;
@@ -14700,9 +14722,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // the computer's 0..100 square sits in the middle of the canvas
     const S = Math.min(W, H) * 0.9, ox = (W - S) / 2, oy = (H - S) / 2;
     const lw = W * 0.0065 * (BOT_LEVELS[solo.level] || BOT_LEVELS.atlag).width;
+    const paper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim() || '#FFFDF7';
     solo.botStrokes.forEach(s=>{
-      if(s.n < 2) return;
-      x.strokeStyle = s.col; x.lineWidth = lw;
+      if(s.n < 2 || s.gone) return;
+      x.strokeStyle = s.col === 'ERASE' ? paper : s.col; x.lineWidth = s.col === 'ERASE' ? lw * 4 : lw;
       x.beginPath();
       for(let i = 0; i < s.n; i++){ const [u, v] = s.pts[i]; i ? x.lineTo(ox + u / 100 * S, oy + v / 100 * S) : x.moveTo(ox + u / 100 * S, oy + v / 100 * S); }
       x.stroke();
@@ -14894,6 +14917,16 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     let res = null;
     try{ res = await soloClassify(); }
     catch(e){
+      const msg = String((e && e.message) || e);
+      if(qdDtype === 'q8' && /ConvInteger|OrtRun|MatMulInteger|DynamicQuantize/i.test(msg)){
+        // switch to the full-precision model once, quietly retry
+        qdDtype = 'fp32'; try{ localStorage.setItem('picasso-qd-dtype', 'fp32'); }catch(_){}
+        qdPipe = null; qdLoading = null; solo.aiBusy = false; solo.aiSeen = -1;
+        soloFeed('🤖 Átváltok a pontosabb felismerőre, egy pillanat… <span id="solo-load-pct"></span>', 'sys');
+        qdLoad().then(()=>{ if(!solo.done && solo.turn === 'me') soloFeed('🤖 Kész, figyelem a rajzodat!', 'sys'); })
+          .catch(err=>soloFeed('⚠️ A rajzfelismerő ezen az eszközön nem tud elindulni: ' + escapeHtml(String((err && err.message) || err).slice(0, 120)), 'sys'));
+        return;
+      }
       console.warn('quickdraw', e);
       if(!solo.aiErrShown){ solo.aiErrShown = true; soloFeed('⚠️ A rajzfelismerő hibát jelzett: ' + escapeHtml(String((e && e.message) || e).slice(0, 140)), 'sys'); }
     }
@@ -14934,16 +14967,26 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     soloFeed('🤖 Rajzolok valamit… találd ki!', 'sys');
     setTimeout(soloFit, 30);
     const plan = botPlan(word, solo.level), L = BOT_LEVELS[solo.level];
-    solo.botStrokes = plan.map(s=>({ pts: s.pts, col: s.col, n: 0 }));
+    solo.botStrokes = plan.map(s=>s.undo ? { undo:true, pts:[], n:0 } : ({ pts: s.pts, col: s.col, n: 0, mistake: !!s.mistake }));
     let si = 0, last = performance.now() + 900, carry = 0, pauseUntil = last;
     const step = now=>{
       if(!solo.on || solo.turn !== 'bot') return;
-      if(now >= pauseUntil && si < solo.botStrokes.length){
+      if(now >= pauseUntil && si < solo.botStrokes.length && solo.botStrokes[si].undo){
+        // ↶ take the last drawn line back
+        for(let k = si - 1; k >= 0; k--){ const b = solo.botStrokes[k]; if(!b.undo && !b.gone && b.col !== 'ERASE'){ b.gone = true; break; } }
+        solo.botStrokes[si].applied = true;
+        si++; pauseUntil = now + rnd(L.pause[0], L.pause[1]); soloRender();
+      }
+      if(now >= pauseUntil && si < solo.botStrokes.length && !solo.botStrokes[si].undo){
         const s = solo.botStrokes[si];
         carry += (now - last) / 1000 * L.speed / 1.4 * rnd(0.85, 1.15);
         const add = Math.floor(carry); carry -= add;
         s.n = Math.min(s.pts.length, s.n + add);
-        if(s.n >= s.pts.length){ si++; pauseUntil = now + rnd(L.pause[0], L.pause[1]); }
+        if(s.n >= s.pts.length){
+          si++;
+          // after a botched line the beginner stops, looks at it… then fixes it
+          pauseUntil = now + rnd(L.pause[0], L.pause[1]) * (s.mistake ? 1.6 : 1);
+        }
         soloRender();
       }
       last = now;
@@ -14987,7 +15030,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(solo.done) return;
     solo.done = true; clearInterval(solo.tick); solo.tick = 0;
     // let the computer finish its picture so you see what it was
-    if(solo.turn === 'bot'){ solo.botStrokes.forEach(s=>s.n = s.pts.length); soloRender(); cancelAnimationFrame(solo.raf); }
+    if(solo.turn === 'bot'){
+      let lastReal = -1;
+      solo.botStrokes.forEach((s, i)=>{ if(s.undo){ if(s.applied) return; s.applied = true; for(let k = i - 1; k >= 0; k--){ const b = solo.botStrokes[k]; if(!b.undo && !b.gone && b.col !== 'ERASE'){ b.gone = true; break; } } } else s.n = s.pts.length; });
+      soloRender(); cancelAnimationFrame(solo.raf);
+    }
     const frac = Math.max(0, 1 - (ms || 0) / (solo.time * 1000));
     const gPts = hit ? Math.round(40 + 60 * frac) : 0, dPts = hit ? Math.round(gPts * 0.8) : 0;
     const meDrew = solo.turn === 'me';
