@@ -1981,6 +1981,64 @@
   #chat-fs-val{ font-weight:900; color:var(--chalk); min-width:46px; text-align:center; }
   #chat-settings .cs-preview{ margin:10px 0 0; padding:6px 10px; border-radius:10px; background:rgba(0,0,0,.22); color:var(--chalk);
     font-size:calc(.95rem * var(--chat-fs)); }
+
+  /* ===== v3.71: single-player mode ===== */
+  .home-extra-row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:8px; }
+  .home-extra-row .stats-open-btn{ margin:0; }
+  body.solo-open{ overflow:hidden; }
+  #solo-screen{ position:fixed; inset:0; z-index:960; background:var(--bg); display:flex; flex-direction:column; gap:8px;
+    padding:calc(10px + env(safe-area-inset-top,0px)) 12px calc(10px + env(safe-area-inset-bottom,0px)); color:var(--chalk); }
+  #solo-screen.hidden{ display:none; }
+  .solo-top{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .solo-round{ font-family:'Kalam',cursive; font-size:1.3rem; color:var(--yellow); }
+  .solo-scores{ display:flex; gap:14px; font-weight:800; flex:1; justify-content:center; flex-wrap:wrap; }
+  .solo-scores b{ color:var(--yellow); }
+  .solo-timer{ font-weight:900; font-size:1.2rem; padding:4px 12px; border-radius:999px; background:rgba(0,0,0,.25); }
+  .solo-timer.urgent{ background:var(--red); color:#fff; animation:urgPop 1s ease-in-out infinite; }
+  .solo-word{ text-align:center; font-size:1.15rem; font-weight:800; min-height:1.6em; }
+  .solo-word b{ font-family:'Kalam',cursive; font-size:1.5rem; color:var(--yellow); }
+  .solo-mask{ font-family:'Kalam',cursive; font-size:1.5rem; letter-spacing:.12em; color:var(--yellow); white-space:pre-wrap; }
+  .solo-main{ flex:1; min-height:0; display:flex; gap:12px; }
+  .solo-canvas-wrap{ flex:1; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; }
+  #solo-canvas{ border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.35); touch-action:none; cursor:crosshair; background:var(--paper); }
+  .solo-side{ width:min(300px, 32vw); display:flex; flex-direction:column; gap:8px; min-height:0; }
+  .solo-feed{ flex:1; overflow-y:auto; background:rgba(0,0,0,.2); border-radius:12px; padding:8px 10px; display:flex; flex-direction:column; gap:6px; }
+  .solo-msg{ padding:5px 9px; border-radius:9px; background:rgba(var(--hi-rgb),.06); font-size:.95rem; overflow-wrap:anywhere; }
+  .solo-msg.sys{ color:var(--chalk-dim); background:none; font-style:italic; }
+  .solo-msg.hit{ background:color-mix(in srgb, var(--green) 30%, transparent); font-weight:800; }
+  .solo-close{ color:var(--orange, #F08A1C); font-weight:800; }
+  .solo-guess-row{ display:flex; gap:6px; }
+  .solo-guess-row form{ flex:1; display:flex; }
+  #solo-guess-input{ flex:1; min-width:0; padding:10px 12px; border-radius:10px; font-size:1rem; }
+  .solo-tools{ display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; padding:6px; background:rgba(0,0,0,.2); border-radius:14px; }
+  .solo-colors{ display:flex; gap:5px; flex-wrap:wrap; }
+  .solo-col{ width:30px; height:30px; min-height:0; padding:0; border-radius:50%; border:2px solid rgba(var(--line-rgb),.3); box-shadow:none; cursor:pointer; }
+  .solo-col.active{ outline:3px solid var(--yellow); outline-offset:2px; }
+  .solo-sizes{ display:flex; gap:4px; }
+  .solo-sizes .pill{ padding:4px 10px; }
+  .solo-modal{ position:absolute; inset:0; z-index:5; display:flex; align-items:center; justify-content:center; background:rgba(10,20,16,.6); backdrop-filter:blur(2px); padding:16px; }
+  .solo-modal.hidden{ display:none; }
+  .solo-modal.peek{ background:rgba(10,20,16,.25); backdrop-filter:none; align-items:flex-end; }
+  .solo-modal-card{ background:var(--panel); border:2px solid color-mix(in srgb, var(--green) 40%, transparent); border-radius:20px; padding:20px 22px;
+    max-width:520px; width:100%; text-align:center; box-shadow:0 30px 60px -20px rgba(0,0,0,.6); max-height:calc(100dvh - 32px); overflow:auto; }
+  .solo-modal-card h2{ font-family:'Kalam',cursive; color:var(--yellow); margin:0 0 8px; font-size:1.8rem; }
+  .solo-lead{ margin:0 0 12px; color:var(--chalk); }
+  .solo-note{ font-size:.8rem; color:var(--chalk-dim); margin:10px 0 0; }
+  .solo-opt{ margin:10px 0; } .solo-opt-l{ font-weight:800; font-size:.85rem; color:var(--chalk-dim); margin-bottom:6px; }
+  .solo-opt .pill-row{ justify-content:center; }
+  .solo-actions{ display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
+  .solo-choices{ display:flex; flex-direction:column; gap:10px; }
+  .solo-choice{ font-family:'Kalam',cursive; font-size:1.5rem; padding:12px; background:var(--yellow); color:#16302A; border-radius:14px; border:none; cursor:pointer; display:flex; flex-direction:column; align-items:center; }
+  .solo-choice small{ font-family:'Nunito',sans-serif; font-size:.7rem; font-weight:800; opacity:.7; }
+  .solo-choose-left{ font-size:.8rem; color:var(--chalk-dim); margin-top:10px; }
+  .solo-word-reveal{ font-size:1.2rem; margin:0 0 6px; } .solo-word-reveal b{ font-family:'Kalam',cursive; font-size:1.7rem; color:var(--yellow); }
+  .solo-final{ display:flex; gap:18px; justify-content:center; font-size:1.2rem; font-weight:800; flex-wrap:wrap; } .solo-final b{ color:var(--yellow); }
+  @media (max-width:760px){
+    .solo-main{ flex-direction:column; }
+    .solo-side{ width:100%; flex:0 0 auto; max-height:34vh; }
+    .solo-feed{ min-height:70px; }
+    .solo-col{ width:26px; height:26px; }
+  }
 </style>
 </head>
 <body>
@@ -2096,7 +2154,7 @@
       <button class="ghost" id="btn-open-privacy"><span class="ico" aria-hidden="true">🔒</span>Adatvédelem</button>
     </div>
     <p class="home-stats hidden" id="home-stats"></p>
-    <button class="ghost small stats-open-btn" id="btn-open-stats" type="button">📊 Statisztikáim</button>
+    <div class="home-extra-row"><button class="ghost small" id="btn-open-solo" type="button">🤖 Egyszemélyes játék</button><button class="ghost small stats-open-btn" id="btn-open-stats" type="button">📊 Statisztikáim</button></div>
     <p class="center-note" id="words-loading-note">Szavak betöltése…</p>
   </div>
 
@@ -2678,6 +2736,34 @@
 <div id="chosen-word-flash" class="hidden" aria-live="assertive">✏️ Ezt rajzolod: <b></b></div>
 
 <div id="urgency-overlay" class="hidden" aria-hidden="true"><div class="urgency-badge">⏰ <span id="urgency-num"></span> mp</div></div>
+
+<div id="solo-screen" class="hidden" role="dialog" aria-label="Egyszemélyes játék">
+  <div class="solo-top">
+    <button type="button" class="ghost small" id="solo-exit">✕ Kilépés</button>
+    <div class="solo-round" id="solo-round"></div>
+    <div class="solo-scores" id="solo-scores"></div>
+    <div class="solo-timer" id="solo-timer"></div>
+  </div>
+  <div class="solo-word" id="solo-word"></div>
+  <div class="solo-main">
+    <div class="solo-canvas-wrap" id="solo-canvas-wrap"><canvas id="solo-canvas"></canvas></div>
+    <div class="solo-side">
+      <div class="solo-feed" id="solo-feed" aria-live="polite"></div>
+      <div class="solo-guess-row hidden" id="solo-guess-row">
+        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="text" id="solo-guess-input" maxlength="40" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Mit rajzol a gép?"></form>
+        <button type="button" class="big" id="solo-guess-btn">Tipp</button>
+      </div>
+    </div>
+  </div>
+  <div class="solo-tools hidden" id="solo-tools">
+    <div class="solo-colors" id="solo-colors"></div>
+    <div class="solo-sizes" id="solo-sizes"><button type="button" class="pill" data-sz="0">•</button><button type="button" class="pill active" data-sz="1">●</button><button type="button" class="pill" data-sz="2">⬤</button><button type="button" class="pill" data-sz="3">⬛</button></div>
+    <button type="button" class="ghost small" id="solo-undo" title="Visszavonás">↶</button>
+    <button type="button" class="ghost small" id="solo-clear" title="Törlés">🗑️</button>
+    <button type="button" class="ghost small" id="solo-pass" title="Passz">⏭️ Passz</button>
+  </div>
+  <div class="solo-modal hidden" id="solo-modal"><div class="solo-modal-card" id="solo-modal-card"></div></div>
+</div>
 
 <div id="rename-overlay" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="rename-title" aria-describedby="rename-text">
   <div class="admin-box rename-box">
@@ -13090,6 +13176,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.71', changes:[
+      'Új: 🤖 Egyszemélyes játék (a kezdőképernyőn). Te és egy gépi játékos felváltva rajzoltok és tippeltek. A gép szintje Kezdő, Átlagos vagy Profi lehet. A gép egy saját, 139 szavas képszótárból rajzol vonalanként, emberi tempóban — így mindig pontosan a feladványt rajzolja; kezdő szinten remegősebben és kevesebb részlettel, profi szinten szépen és részletesen. A te rajzodra adott tippjei szimuláltak: tudja a szót, de a szintjétől és attól függően találja ki, mennyit rajzoltál már, közben hihető rossz tippekkel. Nem kell hozzá internetes MI vagy kulcs.'
+    ]},
     { version:'3.70', changes:[
       'A chat fejlécén új ⚙️ Beállítások gomb: itt állítható a chat betűmérete (Kicsi / Normál / Nagy / Óriás, vagy A− / A+ gombokkal 5%-onként, 70–180% között). A beállítást a gép megjegyzi.'
     ]},
@@ -14463,6 +14552,391 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   setInterval(placeGameFabs, 400);
   // Phones often fire only one of these two when the screen is rotated.
   window.addEventListener('orientationchange', ()=>{ setTimeout(handleViewportChange, 250); });
+
+  // =====================================================================
+  // v3.71: SINGLE-PLAYER MODE — you and one computer player draw in turns.
+  // The computer draws from its own picture dictionary (hand-made vector
+  // drawings, so it always draws exactly the puzzle), stroke by stroke at
+  // a human pace, clumsier on lower levels. Its guesses on your drawing are
+  // simulated: it knows the word, and guesses right sooner or later
+  // depending on its level and on how much you have drawn, with believable
+  // wrong guesses in between. No AI, no server, no key.
+  // =====================================================================
+  const BOT_DICT = {"ház":{"p":["r 28 50 44 38 n","l 22 52 50 26 78 52 r","r 44 66 12 22 n","!r 32 58 9 9 b","!r 59 58 9 9 b","!l 64 37 64 24 70 24 70 42 r"],"a":[]},"nap":{"p":["c 50 50 16 y","l 50 27 50 14 y","l 50 73 50 86 y","l 27 50 14 50 y","l 73 50 86 50 y","!l 34 34 25 25 y","!l 66 34 75 25 y","!l 34 66 25 75 y","!l 66 66 75 75 y"],"a":[]},"fa":{"p":["r 45 60 10 28 n","c 50 42 20 g","!c 36 48 10 g","!c 64 48 10 g"],"a":["fenyőfa","lombos fa"]},"autó":{"p":["z 14 62 14 50 30 49 39 38 62 38 72 49 86 52 86 62 r","c 30 64 8 k","c 70 64 8 k","!z 42 41 49 41 49 49 34 49 b","!z 53 41 61 41 68 49 53 49 b"],"a":["kocsi","személyautó"]},"hal":{"p":["e 46 50 26 14 o","z 70 50 88 38 88 62 o","c 30 46 3 k","!a 38 50 6 12 -60 60 o"],"a":[]},"macska":{"p":["c 50 54 22 s","l 32 41 34 22 45 33 s","l 55 33 66 22 68 41 s","c 42 50 3 k","c 58 50 3 k","z 48 58 52 58 50 61 p","!l 28 58 43 60 k","!l 28 64 43 62 k","!l 57 60 72 58 k","!l 57 62 72 64 k"],"a":["cica","macsek"]},"kutya":{"p":["c 50 52 20 n","e 30 50 6 14 n","e 70 50 6 14 n","c 43 48 2.5 k","c 57 48 2.5 k","c 50 57 4 k","!q 44 63 50 67 56 63 k","!e 50 69 3 4 r"],"a":["kutyus","eb"]},"virág":{"p":["l 50 48 50 90 g","q 50 76 62 64 68 74 g","q 50 76 60 82 68 74 g","c 50 38 7 y","c 50 25 7 p","c 62 33 7 p","c 58 47 7 p","c 42 47 7 p","c 38 33 7 p"],"a":["virágszál"]},"hold":{"p":["a 50 50 24 24 50 310 y","a 62 50 20 20 75 285 y"],"a":["holdsarló","félhold"]},"csillag":{"p":["z 50 16 58 39 82 39 63 53 70 77 50 63 30 77 37 53 18 39 42 39 y"],"a":[]},"felhő":{"p":["a 34 56 10 10 90 270 b","a 50 46 16 16 180 360 b","a 68 56 10 10 270 450 b","l 34 66 68 66 b"],"a":[]},"esernyő":{"p":["a 50 50 32 26 180 360 r","l 18 50 82 50 r","l 50 50 50 80 k","a 44 80 6 6 0 180 k","!l 34 50 50 24 66 50 r"],"a":["ernyő","esőernyő"]},"alma":{"p":["c 50 57 21 r","l 50 36 52 24 n","q 52 29 62 20 67 28 g","!q 52 29 60 35 67 28 g"],"a":[]},"körte":{"p":["z 50 24 57 28 60 38 66 50 70 62 66 76 56 84 44 84 34 76 30 62 34 50 40 38 43 28 g","l 50 24 51 15 n","!q 51 18 58 12 63 16 g"],"a":[]},"banán":{"p":["a 50 6 50 50 40 140 y","a 50 -6 52 52 48 132 y","l 88.3 38.1 84.8 32.6 y","l 11.7 38.1 15.2 32.6 y","l 85 33 90 26 n","!l 30 46 70 46 y"],"a":[]},"szív":{"p":["q 50 34 40 16 26 28 r","q 26 28 14 46 50 80 r","q 50 80 86 46 74 28 r","q 74 28 60 16 50 34 r"],"a":["szerelem"]},"kulcs":{"p":["c 30 50 12 y","l 42 50 84 50 y","l 72 50 72 60 y","l 80 50 80 58 y","!c 30 50 4 y"],"a":[]},"bögre":{"p":["l 30 30 30 76 66 76 66 30 b","e 48 30 18 4 b","a 66 53 10 12 -90 90 b","!q 42 22 38 16 44 10 s","!q 54 22 50 16 56 10 s"],"a":["csésze","pohár"]},"szemüveg":{"p":["c 32 52 13 k","c 68 52 13 k","q 45 50 50 46 55 50 k","l 19 50 8 44 k","l 81 50 92 44 k"],"a":[]},"labda":{"p":["c 50 50 26 r","l 24 50 76 50 r","!q 50 24 36 50 50 76 r","!q 50 24 64 50 50 76 r"],"a":["strandlabda","focilabda"]},"hóember":{"p":["c 50 70 18 s","c 50 40 13 s","c 46 37 1.5 k","c 54 37 1.5 k","z 50 41 59 43 50 45 o","l 38 28 62 28 k","r 43 17 14 11 k","!c 50 64 1.5 k","!c 50 72 1.5 k","!l 34 62 20 52 n","!l 66 62 80 52 n"],"a":[]},"kígyó":{"p":["q 12 60 22 42 32 60 g","q 32 60 42 78 52 60 g","q 52 60 62 42 72 60 g","q 12 68 22 50 32 68 g","q 32 68 42 86 52 68 g","q 52 68 62 50 72 68 g","c 78 63 7 g","!c 80 61 1.2 k","!l 85 63 92 61 94 64 r"],"a":[]},"csiga":{"p":["c 46 50 16 n","!c 46 50 9 n","!c 47 50 3 n","l 20 66 72 66 n","q 72 66 82 66 82 56 n","l 30 56 20 66 n","l 80 56 80 44 n","l 82 57 88 46 n"],"a":[]},"gomba":{"p":["a 50 50 26 22 180 360 r","l 24 50 76 50 r","l 42 50 42 76 58 76 58 50 s","!c 40 40 3 s","!c 56 36 3 s","!c 64 45 3 s"],"a":[]},"hajó":{"p":["z 18 62 82 62 72 76 28 76 n","l 50 62 50 18 n","z 53 20 53 58 78 58 b","!z 47 24 47 58 30 58 b","!q 10 84 20 80 30 84 b","!q 30 84 40 80 50 84 b","!q 50 84 60 80 70 84 b"],"a":["vitorlás","csónak","hajócska"]},"repülőgép":{"p":["e 50 50 34 6 s","z 44 48 58 48 48 20 s","z 44 52 58 52 48 80 s","z 18 48 25 48 15 38 s","z 18 52 25 52 15 62 s","!c 72 50 1.6 b","!c 64 50 1.6 b"],"a":["repülő","gép"]},"rakéta":{"p":["l 38 70 38 32 50 14 62 32 62 70 38 70 s","z 38 56 28 74 38 70 r","z 62 56 72 74 62 70 r","c 50 42 6 b","!z 44 72 50 88 56 72 o"],"a":["űrhajó"]},"bicikli":{"p":["c 28 64 14 k","c 72 64 14 k","l 28 64 44 64 58 44 40 44 28 64 r","l 58 44 72 64 r","l 40 44 37 36 r","l 33 36 44 36 k","l 58 44 56 34 64 32 k"],"a":["kerékpár","bringa"]},"kalap":{"p":["e 50 66 32 6 k","l 34 64 36 36 64 36 66 64 k","!l 35 56 65 56 r"],"a":[]},"korona":{"p":["l 22 70 22 34 36 52 50 26 64 52 78 34 78 70 22 70 y","!c 50 61 3 r","!c 34 61 2.5 b","!c 66 61 2.5 b"],"a":[]},"gyertya":{"p":["r 42 40 16 44 p","q 50 20 42 31 50 35 o","q 50 35 58 31 50 20 o","l 50 35 50 40 k","!l 36 86 64 86 s"],"a":[]},"villanykörte":{"p":["a 50 40 18 18 135 405 y","l 37.3 52.7 43 58 y","l 62.7 52.7 57 58 y","r 43 58 14 10 s","!l 43 62 57 62 s","!l 45 50 47 42 50 50 53 42 55 50 o"],"a":["körte izzó","izzó","égő","villanyégő"]},"óra":{"p":["c 50 50 26 b","l 50 50 50 32 k","l 50 50 62 56 k","!l 50 26 50 30 k","!l 76 50 72 50 k","!l 50 76 50 72 k","!l 24 50 28 50 k"],"a":["falióra","karóra"]},"telefon":{"p":["r 36 18 28 64 k","!r 40 25 20 44 b","c 50 76 2.5 k"],"a":["mobil","mobiltelefon","okostelefon"]},"tévé":{"p":["r 22 30 56 40 k","!r 27 35 46 30 b","l 44 30 36 16 k","l 56 30 64 16 k","l 30 70 28 78 k","l 70 70 72 78 k"],"a":["televízió","tv","tévékészülék"]},"ajtó":{"p":["r 34 16 32 70 n","c 60 52 2.5 y","!r 39 22 22 18 n","!r 39 46 22 34 n"],"a":[]},"ablak":{"p":["r 26 22 48 52 b","l 50 22 50 74 b","l 26 48 74 48 b","!q 26 22 34 40 26 60 r","!q 74 22 66 40 74 60 r"],"a":[]},"létra":{"p":["l 36 12 36 88 n","l 64 12 64 88 n","l 36 24 64 24 n","l 36 38 64 38 n","l 36 52 64 52 n","l 36 66 64 66 n","l 36 80 64 80 n"],"a":[]},"kard":{"p":["z 50 10 54 18 54 64 46 64 46 18 s","r 34 64 32 5 n","l 50 69 50 84 n","c 50 87 3 y"],"a":[]},"nyíl":{"p":["l 16 50 78 50 n","z 78 44 90 50 78 56 s","l 22 50 14 43 r","l 22 50 14 57 r","l 28 50 20 43 r","l 28 50 20 57 r"],"a":["nyílvessző"]},"pohár":{"p":["l 34 22 40 82 60 82 66 22 b","!l 37 42 63 42 b"],"a":[]},"üveg":{"p":["l 44 14 56 14 56 28 64 38 64 84 36 84 36 38 44 28 44 14 g","!r 39 52 22 16 y"],"a":["palack","flakon"]},"kanál":{"p":["e 50 26 9 13 s","l 50 39 50 86 s"],"a":[]},"villa":{"p":["l 50 44 50 86 s","l 42 14 42 34 s","l 47.3 14 47.3 34 s","l 52.6 14 52.6 34 s","l 58 14 58 34 s","q 42 34 42 44 50 44 s","q 50 44 58 44 58 34 s"],"a":[]},"olló":{"p":["c 36 72 9 r","c 64 72 9 r","l 40 64 60 16 s","l 60 64 40 16 s","!c 50 40 2 k"],"a":[]},"ceruza":{"p":["z 20 42 68 42 68 58 20 58 y","z 68 42 84 50 68 58 n","r 12 42 8 16 p","!z 79 47.5 84 50 79 52.5 k"],"a":[]},"könyv":{"p":["q 50 30 34 22 16 28 b","l 16 28 16 72 b","q 16 72 34 66 50 74 b","q 50 30 66 22 84 28 b","l 84 28 84 72 b","q 84 72 66 66 50 74 b","l 50 30 50 74 b","!l 24 38 42 40 k","!l 24 48 42 50 k","!l 58 40 76 38 k","!l 58 50 76 48 k"],"a":[]},"boríték":{"p":["r 20 30 60 40 b","l 20 30 50 54 80 30 b","!l 20 70 42 50 b","!l 80 70 58 50 b"],"a":["levélboríték"]},"ajándék":{"p":["r 28 46 44 38 r","r 24 37 52 10 r","l 50 37 50 84 y","q 50 37 36 24 40 37 y","q 50 37 64 24 60 37 y"],"a":["csomag","ajándékdoboz"]},"lufi":{"p":["e 50 38 18 22 r","z 48 60 52 60 50 63 r","q 50 63 44 74 52 88 k"],"a":["léggömb"]},"sátor":{"p":["z 50 20 84 76 16 76 o","!z 50 46 42 76 58 76 n","!l 50 20 50 12 n"],"a":[]},"hegy":{"p":["l 10 80 38 34 52 54 64 30 90 80 10 80 n","!l 31 45 38 34 45 45 s","!l 58 40 64 30 70 40 s"],"a":["hegység","hegycsúcs"]},"vulkán":{"p":["l 14 82 38 38 62 38 86 82 14 82 n","e 50 38 12 3 n","q 50 32 42 22 50 12 s","!q 44 38 40 48 42 58 r","!q 56 38 60 48 58 56 r"],"a":["tűzhányó"]},"sziget":{"p":["a 50 78 30 12 180 360 y","l 20 78 80 78 y","q 50 70 46 50 52 32 n","q 52 32 40 26 30 34 g","q 52 32 64 24 74 32 g","q 52 32 46 20 40 18 g","q 52 32 60 20 66 18 g","!q 10 86 20 82 30 86 b","!q 70 86 80 82 90 86 b"],"a":[]},"pálmafa":{"p":["q 48 88 42 60 50 34 n","q 56 88 50 60 56 34 n","q 53 34 40 28 28 36 g","q 53 34 66 26 78 34 g","q 53 34 46 20 38 16 g","q 53 34 62 20 70 16 g","!c 50 38 3 n","!c 57 38 3 n"],"a":["pálma"]},"kaktusz":{"p":["l 42 86 42 30 g","a 50 30 8 8 180 360 g","l 58 30 58 86 g","l 42 56 30 56 30 42 34 42 34 52 42 52 g","l 58 48 70 48 70 34 66 34 66 44 58 44 g","!z 34 86 66 86 62 96 38 96 n"],"a":[]},"tulipán":{"p":["l 50 50 50 90 g","q 36 30 36 52 50 52 r","q 50 52 64 52 64 30 r","l 36 30 43 38 50 28 57 38 64 30 r","q 50 80 36 72 34 60 g","!q 34 60 46 64 50 80 g"],"a":[]},"napraforgó":{"p":["c 50 36 9 n","l 60.0 36.0 68.4 40.9 58.7 41.0 63.4 49.4 55.0 44.7 54.9 54.4 50.0 46.0 45.1 54.4 45.0 44.7 36.6 49.4 41.3 41.0 31.6 40.9 40.0 36.0 31.6 31.1 41.3 31.0 36.6 22.6 45.0 27.3 45.1 17.6 50.0 26.0 54.9 17.6 55.0 27.3 63.4 22.6 58.7 31.0 68.4 31.1 60.0 36.0 y","l 50 55 50 92 g","q 50 74 64 64 70 72 g","!q 50 80 38 70 30 76 g"],"a":[]},"falevél":{"p":["q 50 14 80 40 50 86 g","q 50 86 20 40 50 14 g","l 50 20 50 92 g","!l 50 40 62 32 g","!l 50 52 64 44 g","!l 50 40 38 32 g","!l 50 52 36 44 g"],"a":["levél","lomb"]},"cseresznye":{"p":["c 38 66 10 r","c 62 70 10 r","q 38 56 44 36 56 24 g","q 62 60 58 40 56 24 g","!q 56 24 66 14 74 20 g"],"a":["meggy"]},"szőlő":{"p":["c 38 38 6 u","c 50 38 6 u","c 62 38 6 u","c 44 49 6 u","c 56 49 6 u","c 50 60 6 u","l 50 32 52 20 n","!q 52 24 62 16 68 22 g","!c 38 49 6 u","!c 62 49 6 u"],"a":["szőlőfürt"]},"répa":{"p":["z 38 34 62 34 50 88 o","l 50 34 44 18 g","l 50 34 50 14 g","l 50 34 56 18 g","!l 42 46 48 46 n","!l 52 58 57 58 n"],"a":["sárgarépa"]},"dinnye":{"p":["a 50 40 34 34 0 180 g","l 16 40 84 40 r","!a 50 40 28 28 0 180 r","c 40 52 1.8 k","c 50 58 1.8 k","c 60 52 1.8 k","!c 34 46 1.8 k","!c 66 46 1.8 k"],"a":["görögdinnye","dinnyeszelet"]},"fagylalt":{"p":["z 38 50 62 50 50 88 o","c 50 41 12 p","!c 50 25 10 b","!l 42 58 56 72 n","!l 58 58 44 72 n"],"a":["fagyi","jégkrém","fagyitölcsér"]},"torta":{"p":["r 26 52 48 28 p","r 34 36 32 16 p","l 44 36 44 26 r","l 56 36 56 26 b","c 44 23 2 o","c 56 23 2 o","!q 26 58 32 64 38 58 s","!q 38 58 44 64 50 58 s","!q 50 58 56 64 62 58 s","!q 62 58 68 64 74 58 s"],"a":["szülinapi torta","születésnapi torta"]},"pizza":{"p":["z 50 84 22 26 78 26 y","q 22 26 50 14 78 26 n","c 48 40 5 r","c 40 30 3.5 r","!c 55 56 4 r","!c 60 32 3.5 r"],"a":["pizzaszelet"]},"tojás":{"p":["e 50 52 18 24 s","!l 38 50 44 46 48 52 54 46 60 50 n"],"a":[]},"hamburger":{"p":["a 50 46 26 18 180 360 n","l 24 46 76 46 n","r 24 52 52 8 n","l 24 64 76 64 74 72 26 72 24 64 n","l 22 49 28 53 34 49 40 53 46 49 52 53 58 49 64 53 70 49 78 49 g","!c 40 36 1.2 y","!c 52 32 1.2 y","!c 62 38 1.2 y"],"a":["burger"]},"cukorka":{"p":["e 50 50 14 10 r","z 36 50 24 42 24 58 r","z 64 50 76 42 76 58 r","!l 44 41 52 59 p","!l 52 41 58 56 p"],"a":["cukor","bonbon"]},"nyalóka":{"p":["c 50 36 18 p","!c 50 36 11 p","!c 50 36 4 p","l 50 54 50 90 s"],"a":["nyali"]},"pillangó":{"p":["e 50 50 3 16 k","e 36 40 13 10 u","e 64 40 13 10 u","e 38 60 10 8 u","e 62 60 10 8 u","q 50 34 46 24 42 22 k","q 50 34 54 24 58 22 k","!c 36 40 3 y","!c 64 40 3 y"],"a":["lepke"]},"pók":{"p":["c 50 54 10 k","c 50 40 6 k","l 42 50 30 42 22 50 k","l 41 54 28 50 20 60 k","l 42 58 30 60 22 70 k","l 44 62 34 68 28 78 k","l 58 50 70 42 78 50 k","l 59 54 72 50 80 60 k","l 58 58 70 60 78 70 k","l 56 62 66 68 72 78 k","!c 48 39 1 r","!c 52 39 1 r"],"a":[]},"méh":{"p":["e 50 54 18 12 y","l 44 43 44 65 k","l 52 42 52 66 k","l 60 44 60 64 k","e 46 37 7 10 b","e 56 37 7 10 b","c 30 54 6 k","!z 68 52 77 54 68 57 k"],"a":["méhecske","darázs"]},"katica":{"p":["c 50 55 20 r","l 50 35 50 75 k","a 50 35 10 8 180 360 k","c 42 47 3 k","c 58 47 3 k","c 41 61 3 k","c 59 61 3 k","!l 46 28 42 20 k","!l 54 28 58 20 k"],"a":["katicabogár","bogár"]},"madár":{"p":["e 48 56 18 12 b","c 67 44 8 b","z 74 42 84 45 74 47 o","c 69 42 1.5 k","q 38 52 50 40 58 54 b","z 30 54 18 48 20 60 b","!l 46 68 44 78 o","!l 52 68 54 78 o"],"a":["madárka","veréb","cinege"]},"kacsa":{"p":["e 46 62 24 14 y","c 66 46 10 y","z 75 44 86 48 75 51 o","c 68 43 1.5 k","!q 34 60 46 50 58 62 y","!q 14 82 30 78 46 82 b"],"a":["kiskacsa","réce"]},"egér":{"p":["e 50 58 22 14 s","c 36 44 7 s","q 72 58 88 50 86 70 s","c 33 55 1.5 k","c 28 60 2 p","!l 28 60 18 56 k","!l 28 60 18 64 k"],"a":["kisegér"]},"nyúl":{"p":["c 50 58 16 s","e 43 30 5 16 s","e 57 30 5 16 s","c 44 56 1.8 k","c 56 56 1.8 k","z 48 63 52 63 50 65 p","!e 43 30 2 11 p","!e 57 30 2 11 p","!r 48 66 4 4 s"],"a":["nyuszi","nyuszika"]},"teknős":{"p":["a 50 60 24 20 180 360 g","l 26 60 74 60 g","c 82 58 6 g","e 34 64 5 4 g","e 66 64 5 4 g","l 26 60 20 62 g","!l 40 48 50 44 60 48 56 56 44 56 40 48 g"],"a":["teknősbéka"]},"bálna":{"p":["q 14 56 30 30 66 40 b","q 66 40 84 46 86 60 b","q 86 60 60 76 14 56 b","z 14 56 6 44 4 62 b","c 72 52 1.5 k","!q 50 37 46 26 40 23 b","!q 50 37 54 26 60 23 b"],"a":["cet"]},"polip":{"p":["a 50 42 18 18 180 360 u","l 32 42 32 52 68 52 68 42 u","q 34 52 28 66 34 78 u","q 42 52 40 68 46 80 u","q 50 52 50 70 54 80 u","q 58 52 60 68 62 80 u","q 66 52 72 66 66 78 u","c 44 42 2 k","c 56 42 2 k"],"a":["oktopusz"]},"medúza":{"p":["a 50 44 20 16 180 360 p","l 30 44 70 44 p","q 36 44 30 60 38 76 p","q 46 44 42 62 48 80 p","q 56 44 58 62 52 80 p","q 64 44 70 60 62 76 p"],"a":[]},"szellem":{"p":["l 30 78 30 40 s","a 50 40 20 20 180 360 s","l 70 40 70 78 s","l 70 78 63 70 57 78 50 70 43 78 37 70 30 78 s","e 43 42 3 4 k","e 57 42 3 4 k","!e 50 54 4 5 k"],"a":["kísértet"]},"robot":{"p":["r 36 16 28 22 s","l 50 16 50 8 s","c 50 6 2 r","c 44 26 3 b","c 56 26 3 b","r 30 42 40 32 s","l 30 50 18 64 s","l 70 50 82 64 s","l 40 74 40 90 s","l 60 74 60 90 s","!l 44 33 56 33 k","!r 42 50 16 10 r"],"a":[]},"papírsárkány":{"p":["z 50 12 70 38 50 72 30 38 r","l 50 12 50 72 k","l 30 38 70 38 k","q 50 72 40 82 50 88 k","!q 50 88 60 94 52 98 k","!z 46 80 54 84 54 78 46 82 r"],"a":["sárkány","eregetett sárkány"]},"vonat":{"p":["r 40 44 40 24 r","r 64 30 16 14 r","r 46 34 6 10 k","c 48 72 6 k","c 62 72 6 k","c 74 72 6 k","r 10 48 26 20 b","c 16 72 5 k","c 30 72 5 k","l 36 62 40 62 k","!c 50 26 4 s","!c 56 19 5 s"],"a":["mozdony","gőzmozdony"]},"busz":{"p":["r 14 36 72 32 y","r 20 42 10 10 b","r 34 42 10 10 b","!r 48 42 10 10 b","!r 62 42 10 10 b","!r 76 42 6 20 n","c 30 70 6 k","c 70 70 6 k"],"a":["autóbusz","iskolabusz"]},"teherautó":{"p":["r 12 34 46 30 b","l 58 64 58 42 72 42 82 52 82 64 58 64 r","c 26 68 7 k","c 70 68 7 k","!z 62 45 70 45 77 52 62 52 b"],"a":["kamion","teherkocsi"]},"kerék":{"p":["c 50 50 26 k","c 50 50 6 s","l 50 24 50 76 s","l 24 50 76 50 s","!l 32 32 68 68 s","!l 68 32 32 68 s","!c 50 50 20 s"],"a":[]},"horgony":{"p":["c 50 18 5 s","l 50 23 50 80 s","l 38 32 62 32 s","a 50 64 24 18 0 180 s","z 74 64 80 57 69 58 s","z 26 64 20 57 31 58 s"],"a":["vasmacska"]},"harang":{"p":["q 32 70 34 30 50 24 y","q 50 24 66 30 68 70 y","l 26 70 74 70 y","c 50 74 4 y","!c 50 20 3 y"],"a":["csengő"]},"dob":{"p":["e 50 36 24 8 r","l 26 36 26 70 r","l 74 36 74 70 r","a 50 70 24 8 0 180 r","l 34 24 18 10 n","l 66 24 82 10 n","!l 26 44 34 66 42 44 50 66 58 44 66 66 74 44 y"],"a":[]},"gitár":{"p":["c 42 66 16 n","c 54 47 11 n","c 46 61 4 k","z 58 38 84 12 88 16 62 42 n","!l 37 73 86 14 k"],"a":[]},"hangjegy":{"p":["e 34 72 7 5 k","e 66 64 7 5 k","l 41 72 41 26 k","l 73 64 73 18 k","z 41 26 73 18 73 26 41 34 k"],"a":["zenei hang","kotta"]},"dobókocka":{"p":["r 28 28 44 44 k","c 38 38 3 k","c 62 62 3 k","c 50 50 3 k","!c 62 38 3 k","!c 38 62 3 k"],"a":["kocka"]},"szivárvány":{"p":["a 50 76 40 40 180 360 r","a 50 76 34 34 180 360 o","a 50 76 28 28 180 360 y","!a 50 76 22 22 180 360 g","!a 50 76 16 16 180 360 b"],"a":[]},"villám":{"p":["z 56 10 30 54 48 54 40 90 72 42 54 42 66 10 y"],"a":["villámlás","mennykő"]},"eső":{"p":["a 34 46 10 10 90 270 s","a 50 36 16 16 180 360 s","a 68 46 10 10 270 450 s","l 34 56 68 56 s","l 36 64 32 76 b","l 50 64 46 76 b","l 64 64 60 76 b","!l 43 70 39 82 b","!l 57 70 53 82 b"],"a":["esőfelhő","zápor"]},"hópehely":{"p":["l 50 16 50 84 b","l 21 33 79 67 b","l 21 67 79 33 b","!l 50.0 28.0 45.4 34.6 b","!l 50.0 28.0 54.6 34.6 b","!l 50.0 72.0 54.6 65.4 b","!l 50.0 72.0 45.4 65.4 b","!l 69.1 39.0 61.1 38.3 b","!l 69.1 39.0 65.7 46.3 b","!l 30.9 61.0 38.9 61.7 b","!l 30.9 61.0 34.3 53.7 b","!l 30.9 39.0 34.3 46.3 b","!l 30.9 39.0 38.9 38.3 b","!l 69.1 61.0 65.7 53.7 b","!l 69.1 61.0 61.1 61.7 b"],"a":["hó","jégkristály"]},"tábortűz":{"p":["l 26 82 74 66 n","l 26 66 74 82 n","q 36 72 34 50 46 36 o","q 46 36 46 54 52 52 o","q 52 52 56 40 60 30 o","q 60 30 70 52 64 72 o","!q 44 70 46 58 52 62 y","!q 52 62 56 56 58 70 y"],"a":["tűz","máglya"]},"kalapács":{"p":["r 28 20 44 14 s","r 46 34 8 52 n"],"a":[]},"fogkefe":{"p":["r 14 52 60 8 b","r 74 50 14 10 s","l 76 50 76 42 s","l 80 50 80 42 s","l 84 50 84 42 s","!q 74 42 80 36 88 42 s"],"a":[]},"zokni":{"p":["l 40 14 60 14 60 56 76 68 72 82 52 82 40 68 40 14 r","!l 40 24 60 24 s","!l 40 30 60 30 s"],"a":[]},"póló":{"p":["z 36 20 44 20 50 26 56 20 64 20 82 34 74 44 66 38 66 82 34 82 34 38 26 44 18 34 b","!q 44 20 50 30 56 20 b"],"a":["trikó","pulóver"]},"nadrág":{"p":["z 32 18 68 18 72 86 56 86 50 44 44 86 28 86 b","!l 32 24 68 24 n"],"a":["farmer","farmernadrág"]},"cipő":{"p":["l 20 74 20 46 38 46 46 56 72 60 84 66 84 74 20 74 n","!l 38 50 44 46 k","!l 42 54 48 50 k"],"a":["bakancs","tornacipő"]},"kesztyű":{"p":["l 34 88 34 46 30 38 28 30 34 30 38 42 38 22 42 20 44 22 44 40 46 16 50 14 52 16 52 40 54 18 58 18 60 20 60 42 62 26 66 26 66 30 66 60 62 72 62 88 34 88 r","!l 34 80 62 80 s"],"a":[]},"sapka":{"p":["a 50 58 24 26 180 360 r","r 24 58 52 10 s","c 50 29 5 s","!l 30 46 70 46 s"],"a":["téli sapka","kötött sapka"]},"gyűrű":{"p":["e 50 60 20 16 y","!e 50 60 15 11 y","z 44 44 56 44 60 38 50 30 40 38 b"],"a":["jegygyűrű","eljegyzési gyűrű"]},"lakat":{"p":["r 30 46 40 36 y","a 50 46 14 18 180 360 s","c 50 60 3 k","l 50 63 50 70 k"],"a":[]},"zászló":{"p":["l 30 14 30 90 n","q 30 16 46 10 56 18 r","q 56 18 66 26 80 18 r","l 80 18 80 46 r","q 80 46 66 54 56 46 r","q 56 46 46 38 30 44 r"],"a":["lobogó"]},"földgömb":{"p":["c 50 46 24 b","a 50 46 30 30 30 150 n","l 50 76 50 84 n","l 40 84 60 84 n","!z 38 34 46 30 50 38 44 46 36 44 g","!z 54 50 62 46 66 56 58 62 g"],"a":["glóbusz","föld"]},"piramis":{"p":["z 50 18 86 78 14 78 y","!l 50 18 62 78 n","!l 33 48 67 48 n","!l 24 63 76 63 n"],"a":[]},"vár":{"p":["l 20 80 20 40 26 40 26 34 32 34 32 40 38 40 38 34 44 34 44 40 56 40 56 34 62 34 62 40 68 40 68 34 74 34 74 40 80 40 80 80 20 80 s","a 50 66 8 8 180 360 n","l 42 66 42 80 n","l 58 66 58 80 n","!l 50 40 50 24 n","!z 50 24 60 28 50 32 r","!r 28 50 6 8 n","!r 66 50 6 8 n"],"a":["kastély","várkastély"]},"híd":{"p":["l 10 46 90 46 n","l 10 52 90 52 n","a 50 80 30 28 180 360 n","l 20 52 20 80 n","l 80 52 80 80 n","!q 10 86 30 82 50 86 b","!q 50 86 70 82 90 86 b"],"a":[]},"kerítés":{"p":["l 12 46 90 46 n","l 12 66 90 66 n","z 16 82 16 34 21 26 26 34 26 82 n","z 31 82 31 34 36 26 41 34 41 82 n","z 46 82 46 34 51 26 56 34 56 82 n","z 61 82 61 34 66 26 71 34 71 82 n","z 76 82 76 34 81 26 86 34 86 82 n"],"a":[]},"lámpa":{"p":["z 36 22 64 22 72 46 28 46 y","l 50 46 50 78 s","e 50 80 14 4 s","!l 40 52 34 60 y","!l 60 52 66 60 y"],"a":["asztali lámpa","éjjeli lámpa"]},"szék":{"p":["r 34 14 32 30 n","r 30 44 40 8 n","l 32 52 32 86 n","l 68 52 68 86 n","!l 38 52 38 80 n","!l 62 52 62 80 n"],"a":[]},"asztal":{"p":["r 18 40 64 8 n","l 24 48 24 84 n","l 76 48 76 84 n","!l 32 48 32 76 n","!l 68 48 68 76 n"],"a":[]},"ágy":{"p":["r 14 56 72 12 s","r 12 36 8 40 n","r 80 48 6 28 n","e 30 52 10 5 b","!r 40 54 40 14 b","l 14 68 14 76 n","l 84 68 84 76 n"],"a":[]},"csavar":{"p":["r 40 20 20 8 s","l 44 28 44 76 50 86 56 76 56 28 s","!l 44 36 56 40 s","!l 44 46 56 50 s","!l 44 56 56 60 s","!l 44 66 56 70 s"],"a":["csavarhúzó"]},"seprű":{"p":["l 70 12 46 56 n","z 46 56 30 88 50 92 58 62 y","!l 40 72 50 74 n"],"a":["söprű","partvis"]},"vödör":{"p":["l 30 34 36 82 64 82 70 34 s","e 50 34 20 5 s","a 50 34 20 20 180 360 k"],"a":["veder"]},"bagoly":{"p":["e 50 56 22 26 n","c 42 46 7 s","c 58 46 7 s","c 42 46 2.5 k","c 58 46 2.5 k","z 48 54 52 54 50 60 o","l 30 36 34 26 40 32 n","l 60 32 66 26 70 36 n","!q 36 66 50 76 64 66 n"],"a":["uhu","fülesbagoly"]},"szamóca":{"p":["z 50 84 32 50 38 36 62 36 68 50 r","l 40 36 44 28 50 34 56 28 60 36 g","!c 44 50 1 y","!c 56 52 1 y","!c 50 64 1 y"],"a":["eper"]},"buborék":{"p":["c 40 50 16 b","c 66 36 10 b","!c 66 66 7 b","!a 40 50 11 11 200 250 b"],"a":["szappanbuborék"]},"fésű":{"p":["r 20 40 60 10 n","l 24 50 24 66 n","l 30 50 30 66 n","l 36 50 36 66 n","l 42 50 42 66 n","l 48 50 48 66 n","l 54 50 54 66 n","l 60 50 60 66 n","l 66 50 66 66 n","l 72 50 72 66 n","l 76 50 76 66 n"],"a":[]},"mágnes":{"p":["a 50 52 22 22 0 180 r","l 28 52 28 24 38 24 38 52 r","l 72 52 72 24 62 24 62 52 r","a 50 52 12 12 0 180 r","!l 28 30 38 30 s","!l 62 30 72 30 s"],"a":["patkómágnes"]},"patkó":{"p":["a 50 46 24 26 180 360 n","a 50 46 15 17 180 360 n","l 26 46 26 80 35 80 35 46 n","l 74 46 74 80 65 80 65 46 n","!c 30 60 1 k","!c 70 60 1 k"],"a":[]},"kosár":{"p":["l 24 44 32 82 68 82 76 44 24 44 n","a 50 44 22 26 180 360 n","!l 28 56 72 56 n","!l 30 68 70 68 n","!l 40 44 42 82 n","!l 60 44 58 82 n"],"a":["bevásárlókosár","piknikkosár"]},"hűtő":{"p":["r 30 12 40 76 s","l 30 40 70 40 s","l 36 22 36 32 k","l 36 48 36 62 k"],"a":["hűtőszekrény"]},"lábnyom":{"p":["e 50 60 12 18 n","c 40 34 4 n","c 48 30 4 n","c 56 30 4 n","c 63 35 3.5 n","!c 67 42 3 n"],"a":["talp"]},"kéz":{"p":["l 34 88 34 52 26 40 30 36 38 46 38 24 43 22 46 26 46 44 48 18 53 18 54 22 55 44 57 22 62 22 63 26 63 46 66 30 71 31 71 36 68 62 62 72 62 88 n"],"a":["tenyér"]},"szem":{"p":["q 18 50 50 22 82 50 k","q 18 50 50 78 82 50 k","c 50 50 12 b","c 50 50 5 k","!l 30 34 26 26 k","!l 50 30 50 22 k","!l 70 34 74 26 k"],"a":[]},"száj":{"p":["q 22 50 50 36 78 50 r","q 22 50 50 80 78 50 r","l 22 50 78 50 r","!r 40 50 20 5 s"],"a":["ajak","ajkak"]},"fül":{"p":["q 50 16 82 18 74 52 n","q 74 52 66 70 58 86 n","q 58 86 44 92 46 76 n","!q 52 34 66 36 62 52 n"],"a":[]},"csont":{"p":["l 30 44 70 44 s","l 30 56 70 56 s","c 26 40 7 s","c 26 60 7 s","c 74 40 7 s","c 74 60 7 s"],"a":["kutyacsont"]},"koponya":{"p":["a 50 46 22 22 160 380 s","l 33 60 33 70 67 70 67 60 s","c 42 48 5 k","c 58 48 5 k","z 48 58 52 58 50 54 k","!l 42 70 42 76 s","!l 50 70 50 76 s","!l 58 70 58 76 s"],"a":[]},"tök":{"p":["e 50 58 26 20 o","!q 50 38 38 58 50 78 o","!q 50 38 62 58 50 78 o","l 50 38 52 26 g","!z 40 52 46 52 43 47 k","!z 54 52 60 52 57 47 k"],"a":["sütőtök","töklámpás"]}};
+  const BOT_COL = { k:'#222222', y:'#E0A800', r:'#D9342B', g:'#2E9E4A', b:'#2F7FC1', o:'#F08A1C', n:'#8B5A2B', p:'#E2569B', u:'#8A4FD0', s:'#666666' };
+  const BOT_LEVELS = {
+    kezdo: { name:'Kezdő',   speed:70,  pause:[520,1150], jitter:1.5, wobble:2.6, offs:3.2, detail:0.25, width:1.25, never:0.30, rate:0.035, wrong:[4500,8000],  minInk:60 },
+    atlag: { name:'Átlagos', speed:115, pause:[280,650],  jitter:0.7, wobble:1.2, offs:1.5, detail:0.65, width:1.0,  never:0.15, rate:0.07,  wrong:[6000,10000], minInk:45 },
+    profi: { name:'Profi',   speed:170, pause:[140,380],  jitter:0.25,wobble:0.4, offs:0.5, detail:1.0,  width:0.9,  never:0.05, rate:0.14,  wrong:[7000,12000], minInk:35 }
+  };
+  const SOLO_INK = ['#222222','#D9342B','#F08A1C','#E0A800','#2E9E4A','#2F7FC1','#8A4FD0','#E2569B','#8B5A2B','#FFFFFF'];
+  const solo = { on:false, level:'atlag', rounds:3, time:90, round:1, turn:'me', scores:{ me:0, bot:0 },
+    word:'', alts:[], tier:'', strokes:[], botStrokes:[], cur:null, color:'#222222', size:1, timers:[], raf:0,
+    startAt:0, endAt:0, done:true, used:new Set(), hint:[], ink:0, never:false, nextWrong:0, botFinished:false, pickLeft:0 };
+  const $s = id=>document.getElementById(id);
+  const rnd = (a, b)=> a + Math.random() * (b - a);
+  const pickOne = arr=> arr[Math.floor(Math.random() * arr.length)];
+  function soloLater(fn, ms){ const t = setTimeout(fn, ms); solo.timers.push(t); return t; }
+  function soloClearTimers(){ solo.timers.forEach(clearTimeout); solo.timers = []; cancelAnimationFrame(solo.raf); solo.raf = 0; clearInterval(solo.tick); solo.tick = 0; }
+
+  // ---------- geometry of the computer's pictures ----------
+  function botPrimPoints(prim){
+    const t = prim.trim().split(/\s+/);
+    const det = t[0][0] === '!'; const k = t[0].replace('!','');
+    let col = 'k'; const n = [];
+    t.slice(1).forEach(x=>{ const v = parseFloat(x); if(Number.isFinite(v)) n.push(v); else col = x; });
+    let P = [];
+    if(k === 'l' || k === 'z'){ for(let i = 0; i + 1 < n.length; i += 2) P.push([n[i], n[i+1]]); if(k === 'z' && P.length) P.push(P[0].slice()); }
+    else if(k === 'r'){ const [x,y,w,h] = n; P = [[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]]; }
+    else if(k === 'c' || k === 'e' || k === 'a'){
+      let cx, cy, rx, ry, a0 = 0, a1 = 360;
+      if(k === 'c'){ [cx,cy,rx] = n; ry = rx; } else if(k === 'e'){ [cx,cy,rx,ry] = n; } else { [cx,cy,rx,ry,a0,a1] = n; }
+      const steps = Math.max(10, Math.round(Math.abs(a1 - a0) / 6));
+      for(let i = 0; i <= steps; i++){ const a = (a0 + (a1 - a0) * i / steps) * Math.PI / 180; P.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)]); }
+    } else if(k === 'q'){
+      const [x0,y0,cx,cy,x1,y1] = n;
+      for(let i = 0; i <= 20; i++){ const u = i / 20; P.push([(1-u)*(1-u)*x0 + 2*(1-u)*u*cx + u*u*x1, (1-u)*(1-u)*y0 + 2*(1-u)*u*cy + u*u*y1]); }
+    }
+    // resample to an even spacing, so the drawing speed is even
+    const R = [];
+    for(let i = 0; i < P.length; i++){
+      if(!i){ R.push(P[0]); continue; }
+      const [ax, ay] = P[i-1], [bx, by] = P[i];
+      const d = Math.hypot(bx - ax, by - ay), m = Math.max(1, Math.ceil(d / 1.4));
+      for(let j = 1; j <= m; j++) R.push([ax + (bx - ax) * j / m, ay + (by - ay) * j / m]);
+    }
+    return { pts: R, col: BOT_COL[col] || BOT_COL.k, det };
+  }
+  // the whole picture as the computer will draw it on this level
+  function botPlan(word, lvl){
+    const L = BOT_LEVELS[lvl];
+    const g = { dx: rnd(-L.offs, L.offs), dy: rnd(-L.offs, L.offs), s: 1 + rnd(-0.04, 0.04) * L.offs, rot: rnd(-0.04, 0.04) * L.offs };
+    const out = [];
+    BOT_DICT[word].p.forEach(prim=>{
+      const pr = botPrimPoints(prim);
+      if(pr.det && Math.random() > L.detail) return;
+      if(pr.pts.length < 2) return;
+      // small parts (eyes, toes, dots) tremble less — otherwise a clumsy
+      // hand turns them into blobs and the picture is no longer recognisable
+      const xs = pr.pts.map(q=>q[0]), ys = pr.pts.map(q=>q[1]);
+      const size = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+      const f = Math.min(1, Math.max(0.2, size / 24));
+      const ox = rnd(-L.offs, L.offs) * 0.5 * f, oy = rnd(-L.offs, L.offs) * 0.5 * f;
+      const ph = rnd(0, 6.28), fr = rnd(0.08, 0.16);
+      const pts = pr.pts.map(([x, y], i)=>{
+        // whole-picture placement, then hand wobble (slow) and tremble (fast)
+        let X = 50 + (x - 50) * g.s, Y = 50 + (y - 50) * g.s;
+        const cr = Math.cos(g.rot), sr = Math.sin(g.rot);
+        [X, Y] = [50 + (X - 50) * cr - (Y - 50) * sr, 50 + (X - 50) * sr + (Y - 50) * cr];
+        X += g.dx + ox + (Math.sin(i * fr + ph) * L.wobble * 0.6 + rnd(-L.jitter, L.jitter) * 0.45) * f;
+        Y += g.dy + oy + (Math.cos(i * fr * 1.3 + ph) * L.wobble * 0.6 + rnd(-L.jitter, L.jitter) * 0.45) * f;
+        return [X, Y];
+      });
+      out.push({ pts, col: pr.col });
+    });
+    return out;
+  }
+
+  // ---------- canvas ----------
+  function soloCanvas(){ return $s('solo-canvas'); }
+  function soloFit(){
+    const wrap = $s('solo-canvas-wrap'), c = soloCanvas();
+    if(!wrap || !c) return;
+    const W = wrap.clientWidth, H = wrap.clientHeight;
+    let w = W, h = W * 3 / 4; if(h > H){ h = H; w = H * 4 / 3; }
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    c.style.width = Math.floor(w) + 'px'; c.style.height = Math.floor(h) + 'px';
+    c.width = Math.floor(w * dpr); c.height = Math.floor(h * dpr);
+    soloRender();
+  }
+  function soloRender(){
+    const c = soloCanvas(); if(!c) return;
+    const x = c.getContext('2d'), W = c.width, H = c.height;
+    x.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim() || '#FFFDF7';
+    x.fillRect(0, 0, W, H);
+    x.lineCap = 'round'; x.lineJoin = 'round';
+    solo.strokes.forEach(s=>{
+      x.strokeStyle = s.col; x.lineWidth = s.w * W;
+      x.beginPath(); s.pts.forEach(([u, v], i)=> i ? x.lineTo(u * W, v * H) : x.moveTo(u * W, v * H));
+      if(s.pts.length === 1) x.lineTo(s.pts[0][0] * W + 0.1, s.pts[0][1] * H);
+      x.stroke();
+    });
+    // the computer's 0..100 square sits in the middle of the canvas
+    const S = Math.min(W, H) * 0.9, ox = (W - S) / 2, oy = (H - S) / 2;
+    const lw = W * 0.0065 * (BOT_LEVELS[solo.level] || BOT_LEVELS.atlag).width;
+    solo.botStrokes.forEach(s=>{
+      if(s.n < 2) return;
+      x.strokeStyle = s.col; x.lineWidth = lw;
+      x.beginPath();
+      for(let i = 0; i < s.n; i++){ const [u, v] = s.pts[i]; i ? x.lineTo(ox + u / 100 * S, oy + v / 100 * S) : x.moveTo(ox + u / 100 * S, oy + v / 100 * S); }
+      x.stroke();
+    });
+  }
+  (function(){
+    const c = soloCanvas();
+    const pos = e=>{ const r = c.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
+    c.addEventListener('pointerdown', e=>{
+      if(!solo.on || solo.done || solo.turn !== 'me') return;
+      e.preventDefault(); c.setPointerCapture(e.pointerId);
+      solo.cur = { col: solo.color, w: [0.004, 0.008, 0.016, 0.03][solo.size] * (solo.color === '#FFFFFF' ? 2 : 1), pts:[pos(e)] };
+      solo.strokes.push(solo.cur); soloRender();
+    });
+    c.addEventListener('pointermove', e=>{
+      if(!solo.cur) return;
+      const p = pos(e), last = solo.cur.pts[solo.cur.pts.length - 1];
+      const d = Math.hypot(p[0] - last[0], (p[1] - last[1]) * 0.75);
+      if(d < 0.002) return;
+      solo.cur.pts.push(p);
+      if(solo.cur.col !== '#FFFFFF') solo.ink += d * 100;
+      soloRender();
+    });
+    const up = ()=>{ solo.cur = null; };
+    c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
+    window.addEventListener('resize', ()=>{ if(solo.on) soloFit(); });
+  })();
+
+  // ---------- UI helpers ----------
+  function soloFeed(html, cls){
+    const f = $s('solo-feed'); const d = document.createElement('div');
+    d.className = 'solo-msg ' + (cls || ''); d.innerHTML = html; f.appendChild(d); f.scrollTop = f.scrollHeight;
+  }
+  function soloHeader(){
+    const L = BOT_LEVELS[solo.level];
+    $s('solo-round').textContent = `Kör ${solo.round} / ${solo.rounds}`;
+    $s('solo-scores').innerHTML = `<span>🧑 Te: <b>${solo.scores.me}</b></span><span>🤖 Gép (${L.name}): <b>${solo.scores.bot}</b></span>`;
+  }
+  function soloModal(html){ $s('solo-modal-card').innerHTML = html; $s('solo-modal').classList.remove('hidden'); }
+  function soloModalClose(){ $s('solo-modal').classList.add('hidden'); }
+  function soloTimer(){
+    const left = Math.max(0, Math.ceil((solo.endAt - Date.now()) / 1000));
+    const el = $s('solo-timer'); el.textContent = '⏱️ ' + left;
+    el.classList.toggle('urgent', left <= 10 && !solo.done);
+    return left;
+  }
+  function soloMask(){
+    return [...solo.word].map((ch, i)=> ch === ' ' || ch === '-' ? ch : (solo.hint.includes(i) ? ch : '_')).join(' ');
+  }
+
+  // ---------- flow ----------
+  function soloSetup(){
+    solo.on = true; solo.done = true;
+    document.body.classList.add('solo-open');
+    $s('solo-screen').classList.remove('hidden');
+    $s('solo-feed').innerHTML = ''; solo.strokes = []; solo.botStrokes = [];
+    $s('solo-word').textContent = '🤖 Egyszemélyes játék'; $s('solo-timer').textContent = '';
+    $s('solo-tools').classList.add('hidden'); $s('solo-guess-row').classList.add('hidden');
+    soloFit();
+    const lv = solo.level, r = solo.rounds, t = solo.time;
+    const pills = (name, opts, cur)=> opts.map(([v, l])=>`<button type="button" class="pill${v === cur ? ' active' : ''}" data-${name}="${v}">${l}</button>`).join('');
+    soloModal(`<h2>🤖 Egyszemélyes játék</h2>
+      <p class="solo-lead">Te és a gép felváltva rajzoltok és tippeltek.</p>
+      <div class="solo-opt"><div class="solo-opt-l">A gép szintje</div><div class="pill-row">${pills('lvl', [['kezdo','🐣 Kezdő'],['atlag','🙂 Átlagos'],['profi','🏆 Profi']], lv)}</div></div>
+      <div class="solo-opt"><div class="solo-opt-l">Körök száma</div><div class="pill-row">${pills('rnd', [[2,'2'],[3,'3'],[5,'5'],[8,'8']], r)}</div></div>
+      <div class="solo-opt"><div class="solo-opt-l">Idő egy rajzra</div><div class="pill-row">${pills('tm', [[60,'60 mp'],[90,'90 mp'],[120,'2 perc']], t)}</div></div>
+      <p class="solo-note">A gép tippjei szimuláltak: tudja a szót, de a szintjétől és attól függően találja ki, mennyit rajzoltál már.</p>
+      <div class="solo-actions"><button type="button" class="ghost" id="solo-cancel">Mégse</button><button type="button" class="big" id="solo-go">Indulás! 🚀</button></div>`);
+    const card = $s('solo-modal-card');
+    card.querySelectorAll('[data-lvl]').forEach(b=>b.onclick = ()=>{ sndClick(); solo.level = b.dataset.lvl; card.querySelectorAll('[data-lvl]').forEach(x=>x.classList.toggle('active', x === b)); });
+    card.querySelectorAll('[data-rnd]').forEach(b=>b.onclick = ()=>{ sndClick(); solo.rounds = +b.dataset.rnd; card.querySelectorAll('[data-rnd]').forEach(x=>x.classList.toggle('active', x === b)); });
+    card.querySelectorAll('[data-tm]').forEach(b=>b.onclick = ()=>{ sndClick(); solo.time = +b.dataset.tm; card.querySelectorAll('[data-tm]').forEach(x=>x.classList.toggle('active', x === b)); });
+    $s('solo-cancel').onclick = ()=>soloExit(true);
+    $s('solo-go').onclick = ()=>{ sndClick(); try{ localStorage.setItem('picasso-solo', JSON.stringify({ l: solo.level, r: solo.rounds, t: solo.time })); }catch(e){} soloStartGame(); };
+  }
+  function soloStartGame(){
+    solo.round = 1; solo.scores = { me:0, bot:0 }; solo.turn = Math.random() < 0.5 ? 'me' : 'bot'; solo.firstTurn = solo.turn;
+    soloHeader(); soloNextTurn();
+  }
+  function soloNextTurn(){
+    soloClearTimers(); soloModalClose();
+    solo.strokes = []; solo.botStrokes = []; solo.cur = null; solo.ink = 0; solo.hint = []; solo.botFinished = false;
+    $s('solo-feed').innerHTML = ''; soloRender(); soloHeader();
+    if(solo.turn === 'me') soloOfferWords(); else soloBotTurn();
+  }
+  function soloOfferWords(){
+    const pool = t=> WORDS.filter(w=>w.tier === t && !solo.used.has(squash(w.w)) && !String(w.w).includes(' '));
+    const pick = (list, n)=>{ const out = []; const c = list.slice(); while(out.length < n && c.length) out.push(c.splice(Math.floor(Math.random() * c.length), 1)[0]); return out; };
+    let ch = pick(pool('konnyu'), 2).concat(pick(pool('kozepes'), 1));
+    if(ch.length < 3) ch = pick(WORDS, 3);
+    $s('solo-word').textContent = '✏️ Te rajzolsz — válassz egy szót!';
+    soloModal(`<h2>✏️ Te rajzolsz</h2><p class="solo-lead">Válassz egy szót — a gép próbálja kitalálni.</p>
+      <div class="solo-choices">${ch.map((c, i)=>`<button type="button" class="solo-choice" data-i="${i}">${escapeHtml(c.w)}<small>${TIER_INFO[c.tier] ? TIER_INFO[c.tier].label : ''}</small></button>`).join('')}</div>
+      <div class="solo-choose-left" id="solo-choose-left"></div>`);
+    solo.pickLeft = 15;
+    const tickPick = ()=>{ const el = $s('solo-choose-left'); if(el) el.textContent = `Automatikus választás ${solo.pickLeft} mp múlva`; if(solo.pickLeft-- <= 0){ choose(ch[0]); return; } soloLater(tickPick, 1000); };
+    const choose = c=>{ soloClearTimers(); soloModalClose(); soloMeDraw(c); };
+    $s('solo-modal-card').querySelectorAll('.solo-choice').forEach(b=>b.onclick = ()=>{ sndClick(); choose(ch[+b.dataset.i]); });
+    tickPick();
+  }
+  function soloStartClock(onTimeout){
+    solo.startAt = Date.now(); solo.endAt = solo.startAt + solo.time * 1000; solo.done = false;
+    soloTimer();
+    solo.tick = setInterval(()=>{
+      const left = soloTimer();
+      if(left <= 5 && left > 0) try{ sndTick(true); }catch(e){}
+      if(solo.turn === 'me') soloBotThink();
+      else soloHintStep();
+      if(left <= 0 && !solo.done) onTimeout();
+    }, 1000);
+  }
+  // ----- you draw, the computer guesses -----
+  function soloMeDraw(c){
+    solo.word = c.w; solo.tier = c.tier; solo.used.add(squash(c.w));
+    $s('solo-word').innerHTML = `Rajzold: <b>${escapeHtml(c.w)}</b>`;
+    $s('solo-tools').classList.remove('hidden'); $s('solo-guess-row').classList.add('hidden');
+    const L = BOT_LEVELS[solo.level];
+    solo.never = Math.random() < L.never;
+    solo.nextWrong = Date.now() + rnd(L.wrong[0], L.wrong[1]);
+    soloFeed('🤖 A gép figyeli a rajzodat…', 'sys');
+    soloStartClock(()=>soloEndTurn(false));
+    setTimeout(soloFit, 30);
+  }
+  function soloBotWrongWord(){
+    const w = squash(solo.word);
+    const near = WORDS.filter(x=>squash(x.w).slice(0, 2) === w.slice(0, 2) && squash(x.w) !== w);
+    const same = WORDS.filter(x=>x.tier === solo.tier && squash(x.w) !== w);
+    const pool = (near.length && Math.random() < 0.3) ? near : (Math.random() < 0.3 ? Object.keys(BOT_DICT).map(k=>({ w:k })) : same);
+    const g = pickOne(pool.length ? pool : WORDS);
+    return g ? g.w : 'ház';
+  }
+  function soloBotThink(){
+    if(solo.done) return;
+    const L = BOT_LEVELS[solo.level], now = Date.now();
+    const el = (now - solo.startAt) / 1000, frac = el / solo.time;
+    const ready = Math.min(1, solo.ink / 220);
+    if(!solo.never && el >= 3 && solo.ink >= L.minInk){
+      const hazard = L.rate * Math.pow(ready, 1.3) * (1 + frac);
+      if(Math.random() < hazard){
+        const ms = now - solo.startAt;
+        soloLater(()=>{ if(solo.done) return; soloFeed(`🤖 <b>${escapeHtml(solo.word)}</b>!`, 'bot hit'); soloEndTurn(true, ms); }, rnd(400, 1200));
+        solo.never = true;   // one correct guess only
+        return;
+      }
+    }
+    if(now >= solo.nextWrong && solo.ink > 20){
+      solo.nextWrong = now + rnd(L.wrong[0], L.wrong[1]);
+      const g = soloBotWrongWord();
+      soloFeed(`🤖 ${escapeHtml(g)}?`, 'bot');
+    }
+  }
+  // ----- the computer draws, you guess -----
+  function soloBotTurn(){
+    const keys = Object.keys(BOT_DICT).filter(k=>!solo.used.has(squash(k)) && !recentWordSet().has(squash(k)));
+    const all = Object.keys(BOT_DICT).filter(k=>!solo.used.has(squash(k)));
+    const word = pickOne(keys.length ? keys : (all.length ? all : Object.keys(BOT_DICT)));
+    solo.word = word; solo.alts = BOT_DICT[word].a || []; solo.tier = 'bot'; solo.used.add(squash(word));
+    $s('solo-tools').classList.add('hidden'); $s('solo-guess-row').classList.remove('hidden');
+    $s('solo-word').innerHTML = `🤖 A gép rajzol — mit? <span class="solo-mask">${escapeHtml(soloMask())}</span>`;
+    soloFeed('🤖 Rajzolok valamit… találd ki!', 'sys');
+    setTimeout(soloFit, 30);
+    const plan = botPlan(word, solo.level), L = BOT_LEVELS[solo.level];
+    solo.botStrokes = plan.map(s=>({ pts: s.pts, col: s.col, n: 0 }));
+    let si = 0, last = performance.now() + 900, carry = 0, pauseUntil = last;
+    const step = now=>{
+      if(!solo.on || solo.turn !== 'bot') return;
+      if(now >= pauseUntil && si < solo.botStrokes.length){
+        const s = solo.botStrokes[si];
+        carry += (now - last) / 1000 * L.speed / 1.4 * rnd(0.85, 1.15);
+        const add = Math.floor(carry); carry -= add;
+        s.n = Math.min(s.pts.length, s.n + add);
+        if(s.n >= s.pts.length){ si++; pauseUntil = now + rnd(L.pause[0], L.pause[1]); }
+        soloRender();
+      }
+      last = now;
+      if(si < solo.botStrokes.length && !solo.done) solo.raf = requestAnimationFrame(step);
+      else solo.botFinished = true;
+    };
+    solo.raf = requestAnimationFrame(t=>{ last = t; pauseUntil = t + 700; step(t); });
+    soloStartClock(()=>soloEndTurn(false));
+    setTimeout(()=>{ try{ $s('solo-guess-input').focus(); }catch(e){} }, 60);
+  }
+  function soloHintStep(){
+    if(solo.done) return;
+    const frac = (Date.now() - solo.startAt) / (solo.time * 1000);
+    const letters = [...solo.word].map((ch, i)=>[ch, i]).filter(([ch])=>ch !== ' ' && ch !== '-');
+    const want = frac > 0.75 ? Math.ceil(letters.length * 0.4) : frac > 0.5 ? Math.ceil(letters.length * 0.2) : 0;
+    while(solo.hint.length < Math.min(want, letters.length - 1)){
+      const free = letters.filter(([, i])=>!solo.hint.includes(i));
+      solo.hint.push(pickOne(free)[1]);
+    }
+    const m = document.querySelector('#solo-word .solo-mask'); if(m) m.textContent = soloMask();
+  }
+  function soloSubmitGuess(){
+    const inp = $s('solo-guess-input');
+    const g = inp.value.trim(); inp.value = '';
+    if(!g || solo.done || solo.turn !== 'bot') return;
+    const sg = squash(g), targets = [solo.word].concat(solo.alts).map(squash);
+    if(targets.includes(sg)){
+      soloFeed(`🧑 <b>${escapeHtml(g)}</b> ✅`, 'me hit');
+      soloEndTurn(true, Date.now() - solo.startAt);
+      return;
+    }
+    const close = targets.some(t=>editDistance(sg, t, 2) <= (t.length > 6 ? 2 : 1));
+    soloFeed(`🧑 ${escapeHtml(g)}` + (close ? ' <span class="solo-close">— majdnem! 🔥</span>' : ''), 'me');
+    try{ close ? sndTick(false) : sndWrong(); }catch(e){}
+  }
+  $s('solo-guess-btn').addEventListener('click', soloSubmitGuess);
+  $s('solo-guess-input').addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); soloSubmitGuess(); } });
+
+  // ----- end of a drawing -----
+  function soloEndTurn(hit, ms){
+    if(solo.done) return;
+    solo.done = true; clearInterval(solo.tick); solo.tick = 0;
+    // let the computer finish its picture so you see what it was
+    if(solo.turn === 'bot'){ solo.botStrokes.forEach(s=>s.n = s.pts.length); soloRender(); cancelAnimationFrame(solo.raf); }
+    const frac = Math.max(0, 1 - (ms || 0) / (solo.time * 1000));
+    const gPts = hit ? Math.round(40 + 60 * frac) : 0, dPts = hit ? Math.round(gPts * 0.8) : 0;
+    const meDrew = solo.turn === 'me';
+    if(hit){ if(meDrew){ solo.scores.bot += gPts; solo.scores.me += dPts; } else { solo.scores.me += gPts; solo.scores.bot += dPts; } }
+    try{ rememberRecentWord(solo.word); }catch(e){}
+    try{ hit ? sndCorrect() : sndWrong(); }catch(e){}
+    soloHeader();
+    const lastTurn = solo.turn !== solo.firstTurn && solo.round >= solo.rounds;
+    const title = hit ? (meDrew ? '🤖 A gép kitalálta!' : '🎉 Eltaláltad!') : (meDrew ? '⌛ A gép nem találta ki' : '⌛ Lejárt az idő');
+    const pts = hit ? (meDrew ? `🧑 +${dPts} pont neked · 🤖 +${gPts} pont a gépnek` : `🧑 +${gPts} pont neked · 🤖 +${dPts} pont a gépnek`) : 'Ebben a rajzban senki nem kapott pontot.';
+    soloModal(`<h2>${title}</h2><p class="solo-word-reveal">A szó: <b>${escapeHtml(solo.word)}</b></p><p class="solo-lead">${pts}</p>
+      <div class="solo-actions"><button type="button" class="big" id="solo-next">${lastTurn ? 'Eredmény 🏆' : 'Tovább ▶'}</button></div>`);
+    $s('solo-modal').classList.add('peek');
+    $s('solo-next').onclick = ()=>{ sndClick(); $s('solo-modal').classList.remove('peek'); lastTurn ? soloGameOver() : soloAdvance(); };
+  }
+  function soloAdvance(){
+    if(solo.turn !== solo.firstTurn) solo.round++;
+    solo.turn = solo.turn === 'me' ? 'bot' : 'me';
+    soloNextTurn();
+  }
+  function soloGameOver(){
+    soloClearTimers();
+    const { me, bot } = solo.scores;
+    const title = me > bot ? '🏆 Nyertél!' : me < bot ? '🤖 A gép nyert' : '🤝 Döntetlen';
+    if(me > bot) try{ burstEmoji(['🎉','🏆','✨'], 14); }catch(e){}
+    soloModal(`<h2>${title}</h2><p class="solo-final"><span>🧑 Te: <b>${me}</b></span><span>🤖 Gép (${BOT_LEVELS[solo.level].name}): <b>${bot}</b></span></p>
+      <div class="solo-actions"><button type="button" class="ghost" id="solo-quit">Kilépés</button><button type="button" class="ghost" id="solo-settings">Beállítások</button><button type="button" class="big" id="solo-again">Újra 🔁</button></div>`);
+    $s('solo-quit').onclick = ()=>soloExit(true);
+    $s('solo-settings').onclick = ()=>{ sndClick(); soloSetup(); };
+    $s('solo-again').onclick = ()=>{ sndClick(); soloStartGame(); };
+  }
+  function soloExit(force){
+    if(!force && !solo.done && !confirm('Biztosan kilépsz az egyszemélyes játékból?')) return;
+    soloClearTimers(); solo.on = false; solo.done = true;
+    $s('solo-screen').classList.add('hidden'); soloModalClose();
+    document.body.classList.remove('solo-open');
+  }
+  // tools
+  (function(){
+    const box = $s('solo-colors');
+    box.innerHTML = SOLO_INK.map(c=>`<button type="button" class="solo-col${c === solo.color ? ' active' : ''}" data-c="${c}" style="background:${c}" aria-label="${c === '#FFFFFF' ? 'Radír' : 'Szín'}" title="${c === '#FFFFFF' ? 'Radír (fehér)' : ''}"></button>`).join('');
+    box.querySelectorAll('.solo-col').forEach(b=>b.onclick = ()=>{ solo.color = b.dataset.c; box.querySelectorAll('.solo-col').forEach(x=>x.classList.toggle('active', x === b)); });
+    document.querySelectorAll('#solo-sizes [data-sz]').forEach(b=>b.onclick = ()=>{ solo.size = +b.dataset.sz; document.querySelectorAll('#solo-sizes [data-sz]').forEach(x=>x.classList.toggle('active', x === b)); });
+    $s('solo-undo').onclick = ()=>{ const s = solo.strokes.pop(); if(s && s.col !== '#FFFFFF'){ for(let i = 1; i < s.pts.length; i++) solo.ink = Math.max(0, solo.ink - Math.hypot(s.pts[i][0]-s.pts[i-1][0], (s.pts[i][1]-s.pts[i-1][1]) * 0.75) * 100); } soloRender(); };
+    $s('solo-clear').onclick = ()=>{ if(!solo.strokes.length || !confirm('Törlöd az egész rajzot?')) return; solo.strokes = []; solo.ink = 0; soloRender(); };
+    $s('solo-pass').onclick = ()=>{ if(solo.done || !confirm('Passzolsz? Ezért a rajzért nem jár pont.')) return; soloEndTurn(false); };
+    $s('solo-exit').onclick = ()=>soloExit(false);
+    $s('btn-open-solo').onclick = ()=>{
+      sndClick();
+      try{ const v = JSON.parse(localStorage.getItem('picasso-solo') || 'null'); if(v){ if(BOT_LEVELS[v.l]) solo.level = v.l; if([2,3,5,8].includes(v.r)) solo.rounds = v.r; if([60,90,120].includes(v.t)) solo.time = v.t; } }catch(e){}
+      // don't wait for a slow word list for long — the built-in one works too
+      Promise.race([wordsLoadedPromise, new Promise(r=>setTimeout(r, 1500))]).then(soloSetup, soloSetup);
+    };
+  })();
 
 })();
 
