@@ -2039,6 +2039,7 @@
     .solo-feed{ min-height:70px; }
     .solo-col{ width:26px; height:26px; }
   }
+  .solo-see{ font-size:.78rem; color:var(--chalk-dim); padding:2px 6px; min-height:1.2em; overflow-wrap:anywhere; }
 </style>
 </head>
 <body>
@@ -2749,6 +2750,7 @@
     <div class="solo-canvas-wrap" id="solo-canvas-wrap"><canvas id="solo-canvas"></canvas></div>
     <div class="solo-side">
       <div class="solo-feed" id="solo-feed" aria-live="polite"></div>
+      <div class="solo-see" id="solo-see" aria-live="off"></div>
       <div class="solo-guess-row hidden" id="solo-guess-row">
         <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="text" id="solo-guess-input" maxlength="40" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Mit rajzol a gép?"></form>
         <button type="button" class="big" id="solo-guess-btn">Tipp</button>
@@ -13176,6 +13178,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // entry here. Click the version number in the footer to browse it.
   // =====================================================================
   const CHANGELOG = [
+    { version:'3.79', changes:[
+      'Egyszemélyes mód: a gép rugalmasabban ismeri fel a rajzod. Nem fix százalékot vár, hanem azt nézi, hogy a keresett tárgy az első néhány tippje között van-e, és nincs-e messze a vezetőtől — így akkor is felismeri, ha a valószínűség több hasonló dolog (autó, rendőrautó, mentő, kisbusz…) között oszlik meg. A kör második felében még engedékenyebb.',
+      'A gép tippjei alatt látszik egy halvány sor: „👁️ A gép így látja: …” (a három legvalószínűbb tárgy), a betöltés végén pedig az önellenőrzés eredménye. Ez segít megérteni és hangolni a gép működését.'
+    ]},
     { version:'3.78', changes:[
       'Egyszemélyes mód: a gép tippjei jóval ésszerűbbek. A felismerő betöltődésekor a játék egyszer kalibrálja magát: a gép saját, ismert tárgyakról készült tiszta rajzait mutatja a felismerőnek, és kiválasztja, hogy fehér vagy fekete vonallal, milyen vastagon ismeri fel őket a legjobban (az eredmény megmarad). A rajzodat több vastagsággal is megnézi, és az átlagot használja.',
       'A gép csak olyat mond ki, amiben ténylegesen elég biztos (szinttől függően), nem sorolja végig a gyenge 5–8. helyezett tippeket. A tippek mellől eltűnt a kérdőjel — sima szavak, mint a játékosok tippjei.'
@@ -14619,9 +14625,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function qdName(label){ const m = QD_HU[label] || QD_LOWER[String(label).replace(/_/g, ' ').trim().toLowerCase()]; return m ? m.h : String(label); }
   const BOT_COL = { k:'#222222', y:'#E0A800', r:'#D9342B', g:'#2E9E4A', b:'#2F7FC1', o:'#F08A1C', n:'#8B5A2B', p:'#E2569B', u:'#8A4FD0', s:'#666666' };
   const BOT_LEVELS = {
-    kezdo: { see:{ rank:1, p:0.22 }, sayMin:0.35, react:[1800,3200], gap:5000, name:'Kezdő',   speed:42,  pause:[750,1600], jitter:2.4, wobble:3.6, offs:4.6, detail:0.2,  width:1.35, mistake:0.38, never:0.30, rate:0.035, wrong:[4500,8000],  minInk:60 },
-    atlag: { see:{ rank:2, p:0.1 },  sayMin:0.25, react:[1000,2000], gap:3500, name:'Átlagos', speed:95,  pause:[300,700],  jitter:0.8, wobble:1.3, offs:1.6, detail:0.65, width:1.0,  mistake:0.07, never:0.15, rate:0.07,  wrong:[6000,10000], minInk:45 },
-    profi: { see:{ rank:3, p:0.04 }, sayMin:0.2, react:[500,1200],  gap:2500, name:'Profi',   speed:230, pause:[90,240],   jitter:0.25,wobble:0.4, offs:0.5, detail:1.0,  width:0.9,  mistake:0, never:0.05, rate:0.14,  wrong:[7000,12000], minInk:35 }
+    kezdo: { see:{ rank:2, p:0.15, ratio:0.9 }, sayMin:0.3, react:[1800,3200], gap:5000, name:'Kezdő',   speed:42,  pause:[750,1600], jitter:2.4, wobble:3.6, offs:4.6, detail:0.2,  width:1.35, mistake:0.38, never:0.30, rate:0.035, wrong:[4500,8000],  minInk:60 },
+    atlag: { see:{ rank:4, p:0.06, ratio:0.55 }, sayMin:0.15, react:[1000,2000], gap:3500, name:'Átlagos', speed:95,  pause:[300,700],  jitter:0.8, wobble:1.3, offs:1.6, detail:0.65, width:1.0,  mistake:0.07, never:0.15, rate:0.07,  wrong:[6000,10000], minInk:45 },
+    profi: { see:{ rank:6, p:0.03, ratio:0.3 }, sayMin:0.1, react:[500,1200],  gap:2500, name:'Profi',   speed:230, pause:[90,240],   jitter:0.25,wobble:0.4, offs:0.5, detail:1.0,  width:0.9,  mistake:0, never:0.05, rate:0.14,  wrong:[7000,12000], minInk:35 }
   };
   const SOLO_INK = ['#222222','#D9342B','#F08A1C','#E0A800','#2E9E4A','#2F7FC1','#8A4FD0','#E2569B','#8B5A2B','#FFFFFF'];
   const solo = { on:false, level:'atlag', rounds:3, time:90, round:1, turn:'me', scores:{ me:0, bot:0 },
@@ -14820,7 +14826,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function soloNextTurn(){
     soloClearTimers(); soloModalClose();
     solo.strokes = []; solo.botStrokes = []; solo.cur = null; solo.ink = 0; solo.hint = []; solo.botFinished = false;
-    $s('solo-feed').innerHTML = ''; soloRender(); soloHeader();
+    $s('solo-feed').innerHTML = ''; $s('solo-see').textContent = ''; soloRender(); soloHeader();
     if(solo.turn === 'me') soloOfferWords(); else soloBotTurn();
   }
   function soloOfferWords(){
@@ -14864,7 +14870,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     solo.saidWrong = new Set(); solo.aiVer = 0; solo.aiSeen = -1; solo.aiErrShown = false; solo.aiLastRun = 0; solo.aiBusy = false; solo.aiNextSay = 0; solo.aiHitPending = false;
     if(qdPipe) soloFeed('🤖 A gép figyeli a rajzodat…', 'sys');
     else if(qdError) soloFeed('⚠️ A gép rajzfelismerője nem tudott betöltődni (nincs internet?) — ebben a körben nem tud tippelni. A „Passz” gombbal továbbléphetsz.', 'sys');
-    else { soloFeed('🤖 A gép bemelegít (rajzfelismerő betöltése)… <span id="solo-load-pct"></span>', 'sys'); qdLoad().then(()=>{ if(!solo.done && solo.turn === 'me') soloFeed('🤖 Kész, figyelem a rajzodat!', 'sys'); }).catch(()=>{ if(!solo.done && solo.turn === 'me') soloFeed('⚠️ A rajzfelismerő nem tudott betöltődni (nincs internet?) — ebben a körben a gép nem tud tippelni.', 'sys'); }); }
+    else { soloFeed('🤖 A gép bemelegít (rajzfelismerő betöltése)… <span id="solo-load-pct"></span>', 'sys'); qdLoad().then(()=>{ if(!solo.done && solo.turn === 'me') soloFeed('🤖 Kész, figyelem a rajzodat!' + (qdCfg.n ? ` <small>(önellenőrzés: ${qdCfg.hit}/${qdCfg.n})</small>` : ''), 'sys'); }).catch(()=>{ if(!solo.done && solo.turn === 'me') soloFeed('⚠️ A rajzfelismerő nem tudott betöltődni (nincs internet?) — ebben a körben a gép nem tud tippelni.', 'sys'); }); }
     soloStartClock(()=>soloEndTurn(false));
     setTimeout(soloFit, 30);
   }
@@ -14920,7 +14926,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let qdCfg = { white:true, w:8, acc:-1 };
   const QD_CAL = [['ház','house'],['nap','sun'],['fa','tree'],['macska','cat'],['hal','fish'],['csillag','star'],['alma','apple'],['esernyő','umbrella'],['autó','car'],['banán','banana'],['gomba','mushroom'],['bicikli','bicycle'],['pók','spider'],['kulcs','key']];
   async function qdCalibrate(){
-    try{ const c = JSON.parse(localStorage.getItem('picasso-qd-cfg') || 'null'); if(c && c.v === 2){ qdCfg = c; return; } }catch(e){}
+    try{ const c = JSON.parse(localStorage.getItem('picasso-qd-cfg') || 'null'); if(c && c.v === 3){ qdCfg = c; return; } }catch(e){}
     const tests = QD_CAL.filter(([w, l])=>BOT_DICT[w] && QD_HU[l]).slice(0, 12).map(([w, l])=>({
       label: l,
       strokes: BOT_DICT[w].p.map(pr=>({ erase:false, pts: botPrimPoints(pr).pts }))
@@ -14941,7 +14947,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const white = A.score >= B.score, base = white ? A : B;
     let w = 8, bestS = base.score, bestR = base;
     for(const w2 of [5.5, 11]){ const r = await evalCfg(white, w2); if(r.score > bestS){ bestS = r.score; w = w2; bestR = r; } }
-    qdCfg = { v:2, white, w, acc: bestR.hit / tests.length };
+    qdCfg = { v:3, white, w, acc: bestR.hit / tests.length, hit: bestR.hit, n: tests.length };
     console.log(`[quickdraw] kalibráció: ${white ? 'fehér vonal fekete alapon' : 'fekete vonal fehér alapon'}, vastagság ${w}, felismerve ${bestR.hit}/${tests.length} (fehér ${A.hit}, fekete ${B.hit})`);
     try{ localStorage.setItem('picasso-qd-cfg', JSON.stringify(qdCfg)); }catch(e){}
   }
@@ -14983,6 +14989,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(!solo.aiErrShown){ solo.aiErrShown = true; soloFeed('⚠️ A rajzfelismerő hibát jelzett: ' + escapeHtml(String((e && e.message) || e).slice(0, 140)), 'sys'); }
     }
     solo.aiBusy = false; solo.aiSeen = ver;
+    // what the recogniser sees, on screen (top 3)
+    try{ const el = $s('solo-see'); if(el && res && res.length) el.textContent = '👁️ A gép így látja: ' + res.slice(0, 3).map(r=>`${qdName(r.label)} ${Math.round(r.score * 100)}%`).join(' · '); }catch(e){}
     // what the recogniser saw — for checking how well it works (F12 → Console)
     if(res && res.length) console.log('[quickdraw] ' + res.slice(0, 5).map(r=>`${r.label} ${(r.score*100).toFixed(1)}%`).join(' | '));
     if(!res || !res.length || solo.done || solo.turn !== 'me') return;
@@ -14990,8 +14998,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const target = norm(solo.label);
     const rank = res.findIndex(r=>norm(r.label) === target);
     const tScore = rank >= 0 ? res[rank].score : 0;
-    // recognised well enough for this level → it says it, after a "thinking" moment
-    if(rank >= 0 && rank < L.see.rank && tScore >= L.see.p){
+    // v3.79: recognised = the thing is among its first few guesses AND not
+    // far behind the leader. With 345 classes the probability often spreads
+    // over similar things (car / police car / van / truck…), so a fixed
+    // percentage was too strict. Later in the turn it is a bit more generous.
+    const frac = (now - solo.startAt) / (solo.time * 1000);
+    const topS = res[0].score;
+    if(rank >= 0 && rank < L.see.rank && tScore >= L.see.p * (frac > 0.6 ? 0.7 : 1) && tScore >= topS * L.see.ratio * (frac > 0.6 ? 0.8 : 1)){
       solo.aiHitPending = true;
       const ms = now - solo.startAt;
       soloLater(()=>{ if(solo.done) return; soloFeed(`🤖 <b>${escapeHtml(solo.word)}</b>!`, 'bot hit'); soloEndTurn(true, ms); }, rnd(L.react[0], L.react[1]));
