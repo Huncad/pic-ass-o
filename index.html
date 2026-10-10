@@ -4383,7 +4383,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // v3.56: words already drawn in recent games on this device are avoided
     // too (not just in this game) — as long as enough other words are left
     const recent = recentWordSet();
-    const freshAny = list => list.filter(w=>w && w.w && !used.has(squash(w.w)));
+    const freshAny = list => list.filter(w=>w && w.w && !used.has(squash(w.w)) && !offeredKeySet.has(wordFp(w.w)));
     // v3.65: first the words never drawn in any game; only when a level has
     // none left, the ones drawn before (and then also this device's recent ones)
     const fresh = list => {
@@ -5369,6 +5369,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // it is never put on the network until the round is over (see publicRound()).
   let currentRound = null;
   let revealedWords = [];             // words already revealed at the end of earlier rounds (to avoid repeats)
+  // v3.83: fingerprints of the words OFFERED in this game. The drawer announces
+  // them with the round (the word itself stays secret), so everybody — also
+  // after the drawer left before choosing — never offers them again in this game.
+  let offeredKeySet = new Set();
+  function wordFp(w){ const t = squash(w); let h = 5381; for(let i=0;i<t.length;i++) h = ((h*33) ^ t.charCodeAt(i)) >>> 0; return h.toString(36) + t.length; }
+  function noteOfferedKeys(list){
+    (Array.isArray(list) ? list : []).slice(0, 12).forEach(k=>{ if(typeof k === 'string' && /^[a-z0-9]{1,14}$/.test(k)) offeredKeySet.add(k); });
+  }
   let doneWords = [];                 // v3.61: words of FINISHED drawings in this game (safe to share)
   function noteUsedWords(list){
     (list || []).forEach(raw=>{
@@ -6449,6 +6457,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(cleanPeerId(rd.drawerId) !== peerId) return;      // you may only announce your OWN round
       const idx = clampNum(rd.idx, 0, 500, -1);
       if(idx < 0 || idx >= meta.turnOrder.length) return;
+      noteOfferedKeys(rd.offeredKeys);                    // v3.83
       // v3.57: I started a drawing too early (my copy of the game thought the
       // previous one was over), but its scheduled drawer is still on it —
       // I step back and follow theirs; my turn comes again after it
@@ -7154,6 +7163,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       elapsedMs: (drawing && fdRoundStartAt) ? Math.max(0, Date.now() - fdRoundStartAt) : 0,
       hintMask: currentHintMask(),
       revealedWords: revealedWords.slice(-700),
+      offeredKeys: [...offeredKeySet].slice(-300),
       gameStats,
       gameEnded
     };
@@ -7415,7 +7425,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     activePlayerIds = new Set((Array.isArray(snap.active) ? snap.active : []).map(cleanPeerId).filter(id=>names[id]));
     if(!amSpectator) activePlayerIds.add(selfId);
     gameEnded = !!snap.gameEnded;
-    if(!quietLateSnapshot) revealedWords = [];
+    if(!quietLateSnapshot){ revealedWords = []; offeredKeySet = new Set(); }
+    noteOfferedKeys((Array.isArray(snap.offeredKeys) ? snap.offeredKeys : []).slice(0, 300));
     noteUsedWords((Array.isArray(snap.revealedWords) ? snap.revealedWords : []).slice(-700));   // v3.62: merged on a resync
     const gs = snap.gameStats || {};
     gameStats = { fastestGuess:null, drawerPoints:{} };
@@ -10243,7 +10254,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     gameEnded = false; statsRecordedThisGame = false;
     rematchYesVotes = new Set(); rematchDeadline = 0;
     processedResultRounds = new Set();
-    revealedWords = []; doneWords = [];
+    revealedWords = []; doneWords = []; offeredKeySet = new Set();
     gameStats = { fastestGuess:null, drawerPoints:{} };
     galleryItems = [];
     // A new game (or a rematch) starts from a clean slate — leftovers from
@@ -10272,8 +10283,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(idx < 0 || idx >= meta.turnOrder.length) return;
     const choices = pickWordChoices(settings.difficulties, revealedWords, settings.wordChoices || 3);
     choices.forEach(c=>{ if(c && c.w && !revealedWords.includes(c.w)) revealedWords.push(c.w); });   // v3.28: never offered again
+    const offeredKeys = choices.map(c=>c && c.w ? wordFp(c.w) : '').filter(Boolean);
+    noteOfferedKeys(offeredKeys);
     const rd = {
-      idx, drawerId:selfId, drawerName:myName, word:null, tier:choices[0].tier, choices,
+      idx, drawerId:selfId, drawerName:myName, word:null, tier:choices[0].tier, choices, offeredKeys,
       phase:'prepare', roundStartAt:null
     };
     currentRound = rd;
@@ -12059,7 +12072,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(!doneWords.includes(result.word)) doneWords.push(result.word);   // finished, public words
     }
     if(Array.isArray(result.offered)){
-      result.offered.forEach(w=>{ if(w && !revealedWords.includes(w)) revealedWords.push(w); });
+      noteUsedWords(result.offered);
     }
     let myDelta = 0;
     if(result.type === 'correct'){
@@ -12853,7 +12866,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     activePlayerIds = new Set();
     processedResultRounds = new Set();
     showingRoundEnd = false;
-    revealedWords = []; doneWords = [];
+    revealedWords = []; doneWords = []; offeredKeySet = new Set();
     gameStats = { fastestGuess:null, drawerPoints:{} };
     galleryItems = [];
     hintRevealedCount = 0;
@@ -13120,6 +13133,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'3.83', changes:[
+      'Szavak ismétlődése: ami az adott játékban egyszer lehetőségként megjelent (a három választható szó), az abban a játékban többet nem jön elő, akkor sem, ha a rajzoló kilépett, mielőtt választott volna. Az, amit valaki csak felajánlásként kapott, de nem rajzolt le, egy későbbi játékban megjelenhet. Amit lerajzoltak, az továbbra sem ismétlődik (amíg a szintről el nem fogynak a többi szavak).'
+    ]},
     { version:'3.82', changes:[
       'Javítás: a hangerő-keverő (🎚️) és a témaválasztó (🎨) panelje átlátszó volt, átlátszott mögüle a háttér és a gombok. Most tömör hátterű, és a többi elem fölött jelenik meg.'
     ]},
