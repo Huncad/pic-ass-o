@@ -811,6 +811,10 @@
   .vol-mute{ padding:4px 8px; font-size:1rem; line-height:1; flex-shrink:0; }
   .vol-mute.muted{ border-color:var(--red); }
   .vol-block.is-muted input[type=range]{ opacity:.4; }
+  .music-step{ display:flex; align-items:center; gap:6px; margin-top:2px; }
+  .music-step.hidden{ display:none; }
+  .music-step .music-title{ flex:1; min-width:0; text-align:center; font-size:.78rem; font-weight:700; color:var(--chalk-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .music-step button{ padding:4px 10px; }
   .menu-list .vol-wrap{ background:rgba(0,0,0,0.18); border-radius:12px; padding:10px 12px 4px; text-align:left; }
   .admin-track-row{ display:flex; align-items:center; gap:8px; background:rgba(0,0,0,0.2); border-radius:8px; padding:6px 10px; margin-top:6px; }
   .admin-track-row .tname{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--chalk); }
@@ -2360,7 +2364,10 @@
           <input type="range" class="vol-sfx" min="0" max="100" step="1" aria-label="Játékhangok hangereje"></div></div>
         <div class="vol-block"><label>🎵 Zene <span class="vol-music-val"></span></label>
           <div class="vol-row"><button type="button" class="ghost small vol-mute vol-music-mute" aria-label="Zene némítása">🔊</button>
-          <input type="range" class="vol-music" min="0" max="100" step="1" aria-label="Zene hangereje"></div></div>
+          <input type="range" class="vol-music" min="0" max="100" step="1" aria-label="Zene hangereje"></div>
+          <div class="music-step hidden"><button type="button" class="ghost small music-prev" aria-label="Előző szám" title="Előző szám">⏮</button>
+          <span class="music-title"></span>
+          <button type="button" class="ghost small music-nextbtn" aria-label="Következő szám" title="Következő szám">⏭</button></div></div>
       </div>
       <button id="darkmode-toggle-btn" class="ghost small" title="Sötét mód be/ki" aria-label="Sötét mód be- vagy kikapcsolása">🌙</button>
       <button id="theme-toggle-btn" class="ghost small" title="Téma választása" aria-label="Megjelenési téma választása">🎨</button>
@@ -2721,7 +2728,10 @@
           <input type="range" class="vol-sfx" min="0" max="100" step="1" aria-label="Játékhangok hangereje"></div></div>
         <div class="vol-block"><label>🎵 Zene <span class="vol-music-val"></span></label>
           <div class="vol-row"><button type="button" class="ghost small vol-mute vol-music-mute" aria-label="Zene némítása">🔊</button>
-          <input type="range" class="vol-music" min="0" max="100" step="1" aria-label="Zene hangereje"></div></div>
+          <input type="range" class="vol-music" min="0" max="100" step="1" aria-label="Zene hangereje"></div>
+          <div class="music-step hidden"><button type="button" class="ghost small music-prev" aria-label="Előző szám" title="Előző szám">⏮</button>
+          <span class="music-title"></span>
+          <button type="button" class="ghost small music-nextbtn" aria-label="Következő szám" title="Következő szám">⏭</button></div></div>
       </div>
       <button class="ghost" id="menu-btn-connlog" style="width:100%;text-align:left;">📋 Kapcsolati napló másolása</button>
       <button class="ghost leave-game-link" id="menu-btn-leave" style="width:100%;text-align:left;color:var(--red);">🚪 Kilépés a szobából</button>
@@ -4665,7 +4675,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const keep = MUSIC_TRACKS.findIndex(t=>t.url === oldUrl);
     if(keep >= 0) musicIdx = keep;
     else { musicIdx = 0; musicNeedsSrc = true; if(musicEl && !musicEl.paused){ try{ musicEl.pause(); }catch(e){} } }
-    musicSync();
+    musicSync();    renderMusicStepper();
   }
   function ensureMusicEl(){
     if(musicEl) return musicEl;
@@ -4716,6 +4726,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     musicEl.src = tr.url;
     musicNeedsSrc = false;
     musicLastIdx = musicIdx;
+    renderMusicStepper();
     return true;
   }
   function musicStart(){
@@ -4759,15 +4770,30 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       musicNeedsSrc = true;
     }, MUSIC_FADE_MS + 100);
   }
-  function musicNext(){
-    if(!MUSIC_TRACKS.length) return;
-    musicIdx = (musicIdx + 1) % MUSIC_TRACKS.length;
+  // dir = +1 next, -1 previous (wraps around). Works from the stepper buttons
+  // and when a song ends / fails to load.
+  function musicStep(dir){
+    const n = MUSIC_TRACKS.length;
+    if(!n) return;
+    musicIdx = ((musicIdx + (dir < 0 ? -1 : 1)) % n + n) % n;
     musicNeedsSrc = true;
     if(musicWanted && musicTarget() > 0){
       musicLoadCurrent();
       const p = musicEl.play(); if(p && p.catch) p.catch(()=>{});
       musicSetLevel(musicTarget(), 300);
     }
+    renderMusicStepper();
+  }
+  function musicNext(){ musicStep(1); }
+  function renderMusicStepper(){
+    const show = musicWanted && MUSIC_TRACKS.length > 0;
+    const tr = MUSIC_TRACKS[musicIdx];
+    document.querySelectorAll('.music-step').forEach(el=>{
+      el.classList.toggle('hidden', !show);
+      const t = el.querySelector('.music-title');
+      if(t){ t.textContent = tr ? tr.name : ''; t.title = tr ? tr.name : ''; }
+      el.querySelectorAll('button').forEach(b=>{ b.disabled = MUSIC_TRACKS.length < 2; });
+    });
   }
   function musicSync(){
     if(!musicWanted){ musicFadeOutAndStop(); return; }
@@ -4784,6 +4810,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(menu === musicWanted) return;
     musicWanted = menu;
     musicSync();
+    renderMusicStepper();
   }
   // Volume sliders (the same pair lives in the home footer and in the menu)
   function renderVolumeControls(){
@@ -4839,6 +4866,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   document.querySelectorAll('.vol-sfx-mute').forEach(b=>b.addEventListener('click', toggleSfxMute));
   document.querySelectorAll('.vol-music-mute').forEach(b=>b.addEventListener('click', toggleMusicMute));
+  document.querySelectorAll('.music-prev').forEach(b=>b.addEventListener('click', ()=>{ onAudioGesture(); musicFailStreak = 0; musicStep(-1); }));
+  document.querySelectorAll('.music-nextbtn').forEach(b=>b.addEventListener('click', ()=>{ onAudioGesture(); musicFailStreak = 0; musicStep(1); }));
   document.querySelectorAll('.vol-sfx').forEach(el=>{
     el.addEventListener('input', ()=>setSfxVolume(Number(el.value)/100, false));
     el.addEventListener('change', ()=>{ setSfxVolume(Number(el.value)/100, true); sndClick(); });
@@ -13091,6 +13120,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'3.81', changes:[
+      'Zenelépető: a hangerő-keverőben (🎚️) ⏮ / ⏭ gombbal lehet az előző vagy a következő számra lépni, és látszik az aktuális szám címe. A zene csak a menükben és a váróban szól, ezért a lépető is csak ott jelenik meg.'
+    ]},
     { version:'3.80', changes:[
       'Az egyszemélyes mód megszűnt: a gépi játékos és a böngészős rajzfelismerő nem működött megbízhatóan. A játék visszaállt az egyszemélyes mód előtti állapotra (v3.70), minden más funkció — statisztika, chat, témák, szavak — változatlan.'
     ]},
