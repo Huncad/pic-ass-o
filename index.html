@@ -1473,7 +1473,7 @@
     #screen-home .feedback-cta button.ghost{ justify-content:flex-start; padding:13px 16px; } }
 
   /* footer */
-  footer.hint{ max-width:640px; margin:22px auto 0; color:var(--chalk-dim); opacity:.9; font-size:.85rem; line-height:1.5; }
+  footer.hint{ max-width:640px; margin:22px auto 0; color:var(--chalk-dim); font-size:.85rem; line-height:1.5; position:relative; z-index:60; }   /* v3.82: no opacity here — it made the volume/theme popups see-through */
   .footer-meta{ flex-wrap:wrap; gap:12px; margin-top:16px; }
   #app-version{ border:1.5px solid rgba(var(--line-rgb),.25) !important; border-radius:10px !important; padding:7px 18px !important; font-size:.95rem; color:var(--chalk-dim) !important; font-style:italic; }
   .footer-meta > button.ghost.small:not(#app-version){ width:46px; height:40px; padding:0; display:inline-flex; align-items:center; justify-content:center;
@@ -13120,6 +13120,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'3.82', changes:[
+      'Javítás: a hangerő-keverő (🎚️) és a témaválasztó (🎨) panelje átlátszó volt, átlátszott mögüle a háttér és a gombok. Most tömör hátterű, és a többi elem fölött jelenik meg.'
+    ]},
     { version:'3.81', changes:[
       'Zenelépető: a hangerő-keverőben (🎚️) ⏮ / ⏭ gombbal lehet az előző vagy a következő számra lépni, és látszik az aktuális szám címe. A zene csak a menükben és a váróban szól, ezért a lépető is csak ott jelenik meg.'
     ]},
