@@ -681,6 +681,13 @@
   /* v2.55: drawing tools (pen / fill / line / ellipse) */
   .fd-tool{ padding:6px 9px; font-size:1.05rem; line-height:1; }
   .fd-tool.active{ background:var(--yellow); color:#16302A; border-color:var(--yellow); }
+  /* v3.84: the player whose link is weak is told so, with what to try */
+  #weak-conn{ position:fixed; left:50%; top:10px; transform:translateX(-50%); z-index:1100; width:min(520px, calc(100vw - 24px));
+    background:var(--panel); border:2px solid #e8a33d; border-radius:14px; padding:12px 14px; box-shadow:0 10px 30px rgba(0,0,0,.5); color:var(--chalk); }
+  #weak-conn.hidden{ display:none; }
+  #weak-conn b{ display:block; margin-bottom:4px; }
+  #weak-conn p{ margin:0 0 8px; font-size:.85rem; line-height:1.4; color:var(--chalk-dim); }
+  #weak-conn .row{ display:flex; gap:8px; flex-wrap:wrap; }
   .fd-toast{
     position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:5; max-width:90%;
     background:rgba(20,20,20,0.88); color:#fff; font-weight:800; font-size:.88rem; text-align:center;
@@ -2023,6 +2030,12 @@
   </div>
   <div id="conn-status" class="conn-status hidden"><span class="dot"></span><span id="conn-status-text"></span> <button type="button" id="conn-diag-btn" class="conn-diag-btn" title="Hálózati részletek" aria-label="Hálózati részletek megjelenítése">ⓘ</button></div>
 
+  <div id="weak-conn" class="hidden" role="alert">
+    <b>⚠️ Gyenge a kapcsolatod, lemaradsz a játékból</b>
+    <p>Próbáld ezt: válts wifi és mobilnet között, kapcsold ki a VPN-t vagy az adatspórolót, és Chrome-ban vagy Safariban nyisd meg a játékot (ne Messenger vagy Facebook beépített böngészőjében). Ha nem javul, töltsd újra az oldalt: a pontjaid és a helyed megmaradnak.</p>
+    <div class="row"><button type="button" class="ghost small" id="weak-conn-reload">Oldal újratöltése</button><button type="button" class="ghost small" id="weak-conn-close">Bezár</button></div>
+  </div>
+
   <div id="screen-error" class="hidden">
     <div class="error-box">
       <strong>Nem sikerült elindítani a hálózati kapcsolatot.</strong><br><br>
@@ -3357,7 +3370,27 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   let roomNoCustom = false;   // v3.63: guest side — the owner switched own words off
   let resyncAction = null, behindBeacons = 0, resyncAskedAt = 0, resyncPending = false;
   const resyncSentAt = new Map();
+  const resyncHist = new Map(), weakNoteAt = new Map();
   let unknownBeacons = 0;
+  // v3.84: weak-link notice (guest side)
+  const resyncAsks = [];
+  let weakSince = 0, weakShownAt = 0;
+  function hideWeakConn(){ const el = document.getElementById('weak-conn'); if(el) el.classList.add('hidden'); }
+  function showWeakConn(){
+    const el = document.getElementById('weak-conn'); if(!el) return;
+    el.classList.remove('hidden'); weakShownAt = Date.now();
+    clog('K18', 'gyenge kapcsolat jelzése a játékosnak');
+  }
+  function weakLinkCheck(liveIds, hostSilent){
+    if(isHost || !meta || gameEnded || !hostPeerId){ weakSince = 0; hideWeakConn(); return; }
+    const now = Date.now();
+    const hostGone = !!(liveIds && !liveIds.has(hostPeerId));
+    const behind = resyncAsks.filter(t=>now - t < 45000).length >= 2;
+    const bad = hostGone || hostSilent || behind;
+    if(!bad){ if(weakSince){ weakSince = 0; setTimeout(()=>{ if(!weakSince) hideWeakConn(); }, 2500); } return; }
+    if(!weakSince) weakSince = now;
+    if(now - weakSince >= 8000 && now - weakShownAt > 180000) showWeakConn();
+  }
   function requestResync(why){
     if(isHost || !resyncAction || !meta || gameEnded) return;
     // v3.62 (review): a resync replaces the whole state — never while I am
@@ -3365,6 +3398,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(currentRound && currentRound.drawerId === selfId && !processedResultRounds.has(roundKey(currentRound))) return;
     if(Date.now() - resyncAskedAt < 8000) return;
     resyncAskedAt = Date.now(); behindBeacons = 0; resyncPending = true;
+    resyncAsks.push(Date.now()); if(resyncAsks.length > 12) resyncAsks.shift();
     clog('K15', 'újraszinkron kérése: ' + why);
     try{ resyncAction.send({}, { target: hostPeerId }); }catch(e){}
   }
@@ -5933,7 +5967,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const nn = cleanName(data.name);
       if(hostPeerId === null){ pendingRename = { peerId, name:nn }; return; }
       if(peerId !== hostPeerId) return;
-      applyHostRename(nn);
+      applyHostRename(nn, !!data.quiet);
     };
     lateJoinAction = room.makeAction('latejoin');     // host -> everybody: someone joined the running game
     lateSyncAction = room.makeAction('latesync');     // host -> the newcomer: the full state of the game
@@ -5955,6 +5989,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(Date.now() - last < 5000) return;
       resyncSentAt.set(peerId, Date.now());
       clog('K14', `újraszinkron küldése: ${String(peerId).slice(0,5)}`);
+      // v3.84: the same player keeps falling behind — tell the owner (once per 5 minutes) so it is no mystery
+      try{
+        const h = (resyncHist.get(peerId) || []).filter(t=>Date.now() - t < 60000); h.push(Date.now()); resyncHist.set(peerId, h);
+        if(h.length >= 3 && Date.now() - (weakNoteAt.get(peerId) || 0) > 300000){
+          weakNoteAt.set(peerId, Date.now());
+          addSystemChatMessage(`⚠️ ${meta.playerNames[peerId] || 'Egy játékos'} gyenge kapcsolattal játszik, ezért lemarad. Ő kap egy javaslatot, hogy mit próbáljon.`);
+        }
+      }catch(e){}
       try{ lateSyncAction.send(buildLateSnapshot(), { target: peerId }); }catch(e){}
     };      // host -> everybody: the one true turn order (v2.52)
     // v2.63: game heartbeat. A dropped phone could stay in Trystero's peer
@@ -6208,8 +6250,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(room === thisRoom && document.visibilityState === 'visible') reconcileWithLivePeers();
     });
     const reconcileTimer = setInterval(()=>{
-      if(room !== thisRoom){ clearInterval(reconcileTimer); return; }
+      if(room !== thisRoom){ clearInterval(reconcileTimer); hideWeakConn(); return; }
       reconcileWithLivePeers();
+      try{ weakLinkCheck(livePeerIdSet(), !!(hostPeerId && isSilent(hostPeerId))); }catch(e){}
     }, 5000);
 
     room.onPeerJoin = (peerId)=>{
@@ -6345,6 +6388,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         const unique = uniqueNameFor(peerId, incomingName);
         if(unique !== incomingName){
           clog('K13', `névütközés: „${incomingName}” már foglalt — az új játékos neve: „${unique}”`);
+          const holder = Object.keys(Object.assign({}, lobbyPlayers, (meta && meta.playerNames) || {})).find(id=>id !== peerId && id !== selfId && nameKey((meta && meta.playerNames[id]) || lobbyPlayers[id]) === nameKey(incomingName));
+          if(holder) nameClash.set(peerId, { holder, orig: incomingName });   // v3.84: if the holder drops, this was a reload
           incomingName = unique;
           try{ renameAction && renameAction.send({ name: unique }, { target: peerId }); }catch(e){}
         }
@@ -7174,6 +7219,17 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // name first keeps it; a newcomer with the same name becomes "Name 2"
   // (3, 4…). A player who only reloaded the page (same name, the old copy no
   // longer connected) is NOT a clash — that is them coming back.
+  // v3.84: an old copy that is still in the live list but clearly dead (said it
+  // was closing, silent, no connection) is NOT a second person — a reload
+  // used to get "Name 2" because the old link had not been noticed as dropped yet
+  function peerLooksGone(id){
+    const a = awayPeers.get(id);
+    if(a && (a.why === 'lost' || a.why === 'closing')) return true;
+    if(currentIsSilent && currentIsSilent(id)) return true;
+    return goneOnMqtt.has(id) && Date.now() - goneOnMqtt.get(id) < 120000;
+  }
+  // host: new peer id -> { holder, orig } when it had to be renamed because of a name clash
+  const nameClash = new Map();
   function uniqueNameFor(peerId, name){
     let livePeers = {};
     try{ livePeers = (room && room.getPeers && room.getPeers()) || {}; }catch(e){}
@@ -7187,7 +7243,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       if(!n) return;
       if(id !== selfId){
         const live = (id in livePeers) && (!meta || activePlayerIds.has(id) || !!spectators[id]) &&
-          !(goneOnMqtt.has(id) && Date.now() - goneOnMqtt.get(id) < 120000);
+          !(goneOnMqtt.has(id) && Date.now() - goneOnMqtt.get(id) < 120000) && !peerLooksGone(id);
         if(!live) return;
       }
       takenKeys.add(nameKey(n));
@@ -7254,6 +7310,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ sndClick(); }catch(e){}
     setTimeout(()=>{ try{ document.getElementById('btn-rename-ok').focus(); }catch(e){} }, 50);
   }
+  document.getElementById('weak-conn-close').addEventListener('click', hideWeakConn);
+  document.getElementById('weak-conn-reload').addEventListener('click', ()=>{ try{ location.reload(); }catch(e){} });
   document.getElementById('btn-rename-ok').addEventListener('click', ()=>{
     document.getElementById('rename-overlay').classList.add('hidden');
   });
@@ -7261,12 +7319,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(e.key === 'Enter' || e.key === 'Escape'){ e.preventDefault(); document.getElementById('rename-overlay').classList.add('hidden'); }
   });
   // v3.35: on the guest — the owner said my name was taken in this room
-  function applyHostRename(newName){
+  function applyHostRename(newName, quiet){
     if(!newName || newName === myName) return;
     const old = myName;
     myName = newName;              // only for this room; the saved name stays as typed
     try{ helloAction.send({ name: myName, isHost:false, avatar: myAvatarColor, spectator: amSpectator || undefined }); }catch(e){}
-    try{ showRenameNotice(old, myName); }catch(e){}
+    if(quiet){ try{ addSystemChatMessage(`🔄 Visszakaptad a neved: ${myName}.`); }catch(e){} }   // v3.84: no "name taken" popup when it was only a reload
+    else try{ showRenameNotice(old, myName); }catch(e){}
     try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){}
     try{ renderRosters(); }catch(e){}
   }
@@ -7286,7 +7345,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     try{ livePeers = (room && room.getPeers && room.getPeers()) || {}; }catch(e){}
     const replaces = Object.keys(meta.playerNames).find(id=>
       id !== peerId && id !== selfId && norm(meta.playerNames[id]) === norm(name) &&
-      (!activePlayerIds.has(id) || !(id in livePeers) || (goneOnMqtt.has(id) && Date.now() - goneOnMqtt.get(id) < 120000))) || null;
+      (!activePlayerIds.has(id) || !(id in livePeers) || peerLooksGone(id) || (goneOnMqtt.has(id) && Date.now() - goneOnMqtt.get(id) < 120000))) || null;
     if(replaces) clog('K12', `${name} visszatért új oldallal — a régi példánya (${String(replaces).slice(0,5)}) helyett`);
     if(replaces) mergeReturningPlayer(replaces, peerId);
     meta.playerNames[peerId] = name;
@@ -7334,10 +7393,17 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const norm = n => String(n||'').trim().toLowerCase();
     const name = meta.playerNames[oldId];
     const twin = Object.keys(meta.playerNames).find(id=>
-      id !== oldId && id !== selfId && activePlayerIds.has(id) && (id in live) && norm(meta.playerNames[id]) === norm(name));
+      id !== oldId && id !== selfId && activePlayerIds.has(id) && (id in live) &&
+      (norm(meta.playerNames[id]) === norm(name) || (nameClash.get(id) && nameClash.get(id).holder === oldId)));
     if(!twin) return false;
     clog('K12', `${name} visszatért új oldallal — a régi példánya (${String(oldId).slice(0,5)}) helyett`);
     mergeReturningPlayer(oldId, twin);
+    if(norm(meta.playerNames[twin]) !== norm(name)){            // v3.84: it had been renamed to "Name 2" — it gets its own name back
+      meta.playerNames[twin] = name;
+      if(lobbyPlayers[twin]) lobbyPlayers[twin] = name;
+      try{ renameAction && renameAction.send({ name, quiet:true }, { target: twin }); }catch(e){}
+    }
+    nameClash.delete(twin);
     if(!gameEnded) rebuildFutureTurns();
     const info = { peerId: twin, name, avatar: playerAvatars[twin] || '', turnOrder: meta.turnOrder.slice(), replaces: oldId };
     try{ lateJoinAction.send(info); }catch(e){}
@@ -13133,6 +13199,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'3.84', changes:[
+      'Újratöltés után nem lesz „Név 2”: ha valaki újratölti az oldalt, miközben a régi kapcsolata még nincs lezárva, visszakapja a nevét, a pontjait és a helyét a sorrendben. Ha mégis „Név 2” lett belőle, amint a régi példánya lemarad, az új megkapja a saját nevét, és a nevek rendben maradnak a többiek képernyőjén is.',
+      'Gyenge kapcsolat jelzése: ha valaki sorozatosan lemarad a játékból, vagy nem éri el a szobanyitót, megjelenik neki egy figyelmeztetés teendőkkel (wifi és mobilnet váltása, VPN kikapcsolása, nem beépített böngésző használata, újratöltés). A szobanyitó a chatben látja, ha valaki kapcsolata gyenge.'
+    ]},
     { version:'3.83', changes:[
       'Szavak ismétlődése: ami az adott játékban egyszer lehetőségként megjelent (a három választható szó), az abban a játékban többet nem jön elő, akkor sem, ha a rajzoló kilépett, mielőtt választott volna. Az, amit valaki csak felajánlásként kapott, de nem rajzolt le, egy későbbi játékban megjelenhet. Amit lerajzoltak, az továbbra sem ismétlődik (amíg a szintről el nem fogynak a többi szavak).'
     ]},
