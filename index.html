@@ -3342,6 +3342,63 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(g.length >= 4 && w.length >= 4 && (w.includes(g) || g.includes(w))) return 'close';
     return 'wrong';
   }
+  // v3.85: kitiltások (szerver: netlify/functions/ban.mjs). Az IP-t csak a szerver látja.
+  const BAN_URL = '/.netlify/functions/ban';
+  let myDeviceId = '';
+  function deviceId(){
+    if(myDeviceId) return myDeviceId;
+    try{ myDeviceId = localStorage.getItem('picasso-device') || ''; }catch(e){}
+    if(!/^[A-Za-z0-9]{16,40}$/.test(myDeviceId)){
+      const a = new Uint8Array(15); crypto.getRandomValues(a);
+      myDeviceId = Array.from(a, x=>x.toString(36).padStart(2,'0')).join('').slice(0,24);
+      try{ localStorage.setItem('picasso-device', myDeviceId); }catch(e){}
+    }
+    return myDeviceId;
+  }
+  // null = the server could not be reached (then nobody is blocked: better a missed ban than a stuck game)
+  async function banCall(body, ms){
+    try{
+      const ctrl = new AbortController(); const t = setTimeout(()=>ctrl.abort(), ms || 6000);
+      const r = await fetch(BAN_URL, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body), signal: ctrl.signal });
+      clearTimeout(t);
+      if(r.status >= 500) return null;
+      return await r.json();
+    }catch(e){ return null; }
+  }
+  function banText(res){
+    if(res && res.scope === 'global'){
+      const d = res.until ? new Date(res.until).toLocaleString('hu-HU', { month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+      return `Egy napon belül több szobából is kirúgtak, ezért ez az eszköz és hálózat egy hétre ki van tiltva a játékból${d ? ' (eddig: ' + d + ')' : ''}.`;
+    }
+    return 'Ebből a szobából kirúgtak, ezért nem léphetsz vissza ebbe a szobába.';
+  }
+  let banToken = '', banHostKey = '';
+  const peerDev = {};                       // host: peerId -> device id the guest sent
+  const verifiedPeers = new Set(), pendingVerify = new Set();
+  function reportKick(peerId){
+    const td = peerDev[peerId];
+    if(!isHost || !banHostKey || !td || !roomCode) return;
+    banCall({ action:'kick', room: roomCode, hostKey: banHostKey, targetDev: td });
+  }
+  function gateHello(data, peerId){
+    if(pendingVerify.has(peerId)) return;
+    pendingVerify.add(peerId);
+    const thisRoom = room;
+    const d = String((isPlainObject(data) && data.dev) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+    const tok = String((isPlainObject(data) && data.tok) || '').slice(0, 400);
+    banCall({ action:'verify', room: roomCode, dev: d, token: tok }, 7000).then(res=>{
+      pendingVerify.delete(peerId);
+      if(!isHost || room !== thisRoom || !kickAction || !helloAction) return;
+      if(res && res.ok === false){
+        try{ kickAction.send({ reason: res.reason === 'banned' ? 'banned' : 'update' }, { target: peerId }); }catch(e){}
+        clog('K19', `belépés megtagadva (${res.reason}): ${String(peerId).slice(0,5)}`);
+        return;
+      }
+      peerDev[peerId] = d; verifiedPeers.add(peerId);
+      helloAction.onMessage(data, { peerId });
+    });
+  }
+
   function genRoomCode(){
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let s = '';
@@ -6274,6 +6331,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       }
       helloAction.send({
         name: myName, isHost, avatar: myAvatarColor, spectator: amSpectator || undefined,
+        dev: isHost ? undefined : deviceId(), tok: isHost ? undefined : (banToken || undefined),
         roomName: isHost ? currentRoomName : undefined,
         isPublic: isHost ? roomIsPublic : undefined,
         noCustom: isHost ? !!settings.customOff : undefined
@@ -6359,6 +6417,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     };
     helloAction.onMessage = (data, {peerId})=>{
       if(!isPlainObject(data)) data = {};
+      if(isHost && peerId !== selfId && !verifiedPeers.has(peerId)){ gateHello(data, peerId); return; }   // v3.85: ban check first
       if(data.spectator === true && !data.isHost){ handleSpectatorHello(data, peerId); return; }
       if(spectators[peerId]){ delete spectators[peerId]; }
       const isNew = !lobbyPlayers[peerId];
@@ -6467,6 +6526,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const reason = isPlainObject(data) ? data.reason : '';
       const msg = reason === 'voted'
         ? 'A többi játékos megszavazta, hogy kikerülj ebből a szobából.'
+        : reason === 'banned'
+        ? 'Ebbe a szobába (vagy az egész játékba) ki vagy tiltva, ezért nem léphetsz be.'
+        : reason === 'update'
+        ? 'A belépéshez frissítsd az oldalt (új verzió érhető el), aztán próbáld újra.'
         : reason === 'full'
         ? 'Ez a szoba már megtelt.'
         : reason === 'started'
@@ -6799,6 +6862,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(isHost && votes >= need && target !== selfId){
       votedOutIds.add(target);
       try{ kickAction.send({ reason:'voted' }, { target }); }catch(e){}
+      reportKick(target);
       const name = roomNameOf(target);
       delete voteKicks[target];
       if(!meta){ delete lobbyPlayers[target]; renderLobbyPlayers(); announceMyRoom(); }
@@ -7323,7 +7387,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!newName || newName === myName) return;
     const old = myName;
     myName = newName;              // only for this room; the saved name stays as typed
-    try{ helloAction.send({ name: myName, isHost:false, avatar: myAvatarColor, spectator: amSpectator || undefined }); }catch(e){}
+    try{ helloAction.send({ name: myName, isHost:false, avatar: myAvatarColor, spectator: amSpectator || undefined, dev: deviceId(), tok: banToken || undefined }); }catch(e){}
     if(quiet){ try{ addSystemChatMessage(`🔄 Visszakaptad a neved: ${myName}.`); }catch(e){} }   // v3.84: no "name taken" popup when it was only a reload
     else try{ showRenameNotice(old, myName); }catch(e){}
     try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){}
@@ -9984,6 +10048,18 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     sndClick();
     await turnReady(9000);
     roomCode = genRoomCode();
+    banHostKey = ''; banToken = '';
+    {
+      let opened = await banCall({ action:'open', room: roomCode, dev: deviceId() });
+      if(opened && opened.error === 'taken'){ roomCode = genRoomCode(); opened = await banCall({ action:'open', room: roomCode, dev: deviceId() }); }
+      if(opened && opened.banned){
+        roomCode = '';
+        document.getElementById('home-warning').textContent = banText(opened);
+        roomActionInProgress = false; createBtn.disabled = false;
+        return;
+      }
+      if(opened && opened.hostKey){ banHostKey = opened.hostKey; banToken = opened.token || ''; }
+    }
     isHost = true;
     joinOrderIds = [selfId];
     lobbyPlayers = { [selfId]: myName };
@@ -10036,6 +10112,17 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       warn.textContent = 'Kapcsolat előkészítése…';
     }
     await turnReady(9000);
+    banToken = '';
+    {
+      const ent = await banCall({ action:'enter', room: code, dev: deviceId() });
+      if(ent && ent.banned){
+        warn.style.color = 'var(--red)';
+        warn.textContent = banText(ent);
+        roomActionInProgress = false; btn.disabled = false;
+        return;
+      }
+      if(ent && ent.token) banToken = ent.token;
+    }
     if(pendingPrivateRoom){
       // Closed room picked from the list: check the typed code against the
       // room's fingerprint before even trying to connect.
@@ -10245,6 +10332,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         if(!confirm(`Biztosan kirúgod ${name} játékost a szobából?`)) return;
         sndClick();
         kickAction.send({ reason:'kicked' }, { target:peerId });
+        reportKick(peerId);
         delete lobbyPlayers[peerId];
         renderLobbyPlayers();
         addSystemChatMessage(`🚫 ${name} eltávolítva a szobából.`);
@@ -10258,6 +10346,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         if(!confirm(`Biztosan eltávolítod ${nm} nézőt a szobából?`)) return;
         sndClick();
         kickAction.send({ reason:'kicked' }, { target:pid });
+        reportKick(pid);
         delete spectators[pid];
         renderLobbyPlayers();
       });
@@ -12897,6 +12986,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // invalidated in one go (delayed handoffs, a pending game-end screen, a
     // recorder that is still finishing, re-sends).
     roomGeneration++;
+    verifiedPeers.clear(); pendingVerify.clear(); banHostKey = ''; banToken = '';
+    for(const k of Object.keys(peerDev)) delete peerDev[k];
     // Tell the others we're leaving on purpose so they update right away
     // (otherwise they'd only notice after the disconnect grace period).
     // The actual leave is delayed a moment so the message gets out first.
@@ -13199,6 +13290,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'3.85', changes:[
+      'Kitiltás: akit a szobanyitó kirúgott (vagy a többiek megszavaztak), az az eszközéről és az IP-címéről sem tud többé visszalépni abba a szobába, hiába vált wifiről mobilnetre. Ha valakit egy napon belül legalább két különböző szobából kirúgnak, az eszköze és az IP-címe egy hétre az egész játékból ki van tiltva.',
+      'Ez egy új szerveroldali függvényre (ban) épül. Ha a szerver épp nem elérhető, a játék nem akad el, csak ilyenkor a kitiltás nem érvényesül. Aki új eszközzel és új hálózatról (pl. privát ablakban, más internetről) jön, azt a rendszer nem ismeri fel.'
+    ]},
     { version:'3.84', changes:[
       'Újratöltés után nem lesz „Név 2”: ha valaki újratölti az oldalt, miközben a régi kapcsolata még nincs lezárva, visszakapja a nevét, a pontjait és a helyét a sorrendben. Ha mégis „Név 2” lett belőle, amint a régi példánya lemarad, az új megkapja a saját nevét, és a nevek rendben maradnak a többiek képernyőjén is.',
       'Gyenge kapcsolat jelzése: ha valaki sorozatosan lemarad a játékból, vagy nem éri el a szobanyitót, megjelenik neki egy figyelmeztetés teendőkkel (wifi és mobilnet váltása, VPN kikapcsolása, nem beépített böngésző használata, újratöltés). A szobanyitó a chatben látja, ha valaki kapcsolata gyenge.'
