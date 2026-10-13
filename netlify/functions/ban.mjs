@@ -68,17 +68,22 @@ export default async (req) => {
 
   // titkos kulcs a belépési jegyekhez (egyszer jön létre)
   let secret = secretCache || (await rd('secret')) || null;
-  if (!secret || !secret.k) { secret = { k: randomBytes(32).toString('hex') }; await store.setJSON('secret', secret); }
+  if (!secret || !secret.k) {
+    // első indulás: ha két példány egyszerre hozná létre, a visszaolvasás után mindkettő ugyanazt használja
+    await store.setJSON('secret', { k: randomBytes(32).toString('hex') });
+    await new Promise(r => setTimeout(r, 150));
+    secret = (await rd('secret')) || secret;
+  }
   secretCache = secret;
   // az IP-cím nyers formában sehol nem tárolódik és a jegyben sem szerepel: csak egy kulcsos lenyomata
   const ipH = ip ? createHmac('sha256', secret.k).update('ip|' + ip).digest('hex').slice(0, 20) : '';
-  const sign = s => createHmac('sha256', secret.k).update(s).digest('hex').slice(0, 32);
+  const sign = (s, k) => createHmac('sha256', k || secret.k).update(s).digest('hex').slice(0, 32);
   const mkToken = (d, r, i, exp) => { const p = [d, r, i, exp].join('|'); return Buffer.from(p).toString('base64url') + '.' + sign(p); };
-  const readToken = t => {
+  const readToken = (t, k) => {
     try {
       const [p64, sig] = String(t || '').split('.');
       const p = Buffer.from(p64, 'base64url').toString();
-      const a = Buffer.from(sig || ''), c = Buffer.from(sign(p));
+      const a = Buffer.from(sig || ''), c = Buffer.from(sign(p, k));
       if (a.length !== c.length || !timingSafeEqual(a, c)) return null;
       const [d, r, i, exp] = p.split('|');
       return { d, r, i, exp: Number(exp) };
@@ -144,7 +149,11 @@ export default async (req) => {
   }
 
   if (b.action === 'verify') {
-    const t = readToken(b.token);
+    let t = readToken(b.token);
+    if (!t && b.token) {   // lehet, hogy ez a példány régi titkot tart a memóriában: friss olvasás
+      const fresh = await rd('secret');
+      if (fresh && fresh.k && fresh.k !== secret.k) { secretCache = fresh; t = readToken(b.token, fresh.k); }
+    }
     if (!t || t.exp < now || t.r !== room || (dev && t.d !== dev)) return json({ ok: false, reason: 'notoken' });
     const g = await getG();
     if (globalBanUntil(g, t.d, t.i) > now) return json({ ok: false, reason: 'banned' });

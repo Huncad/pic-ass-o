@@ -3374,7 +3374,23 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   let banToken = '', banHostKey = '';
   const peerDev = {};                       // host: peerId -> device id the guest sent
-  const verifiedPeers = new Set(), pendingVerify = new Set();
+  const verifiedPeers = new Set(), pendingVerify = new Set(), noTokenSince = new Map();
+  // guest: no pass yet (the check failed while joining) — fetch one now and say hello again with it
+  let banRetryBusy = false;
+  function ensureBanToken(){
+    if(banToken || banRetryBusy || isHost || !roomCode) return;
+    banRetryBusy = true;
+    const code = roomCode;
+    banCall({ action:'enter', room: code, dev: deviceId() }).then(ent=>{
+      banRetryBusy = false;
+      if(roomCode !== code || isHost || !helloAction) return;
+      if(ent && ent.banned){ leaveRoomAndGoHome(); document.getElementById('home-warning').textContent = banText(ent); return; }
+      if(ent && ent.token){
+        banToken = ent.token;
+        try{ helloAction.send({ name: myName, isHost:false, avatar: myAvatarColor, spectator: amSpectator || undefined, dev: deviceId(), tok: banToken }); }catch(e){}
+      }
+    });
+  }
   function reportKick(peerId){
     const td = peerDev[peerId];
     if(!isHost || !banHostKey || !td || !roomCode) return;
@@ -3389,6 +3405,11 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     banCall({ action:'verify', room: roomCode, dev: d, token: tok }, 7000).then(res=>{
       pendingVerify.delete(peerId);
       if(!isHost || room !== thisRoom || !kickAction || !helloAction) return;
+      if(res && res.ok === false && res.reason === 'notoken'){
+        // the guest's own check may just have failed (network blip): give it 20 s to send a valid pass
+        const first = noTokenSince.get(peerId);
+        if(!first || Date.now() - first < 20000){ if(!first){ noTokenSince.set(peerId, Date.now()); laterInRoom(()=>{ if(!verifiedPeers.has(peerId)) gateHello(data, peerId); }, 21000); } return; }
+      }
       if(res && res.ok === false){
         try{ kickAction.send({ reason: res.reason === 'banned' ? 'banned' : 'update' }, { target: peerId }); }catch(e){}
         clog('K19', `belépés megtagadva (${res.reason}): ${String(peerId).slice(0,5)}`);
@@ -6332,7 +6353,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       }
       helloAction.send({
         name: myName, isHost, avatar: myAvatarColor, spectator: amSpectator || undefined,
-        dev: isHost ? undefined : deviceId(), tok: isHost ? undefined : (banToken || undefined),
+        dev: isHost ? undefined : deviceId(), tok: isHost ? undefined : (banToken || (ensureBanToken(), undefined)),
         roomName: isHost ? currentRoomName : undefined,
         isPublic: isHost ? roomIsPublic : undefined,
         noCustom: isHost ? !!settings.customOff : undefined
@@ -12987,7 +13008,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // invalidated in one go (delayed handoffs, a pending game-end screen, a
     // recorder that is still finishing, re-sends).
     roomGeneration++;
-    verifiedPeers.clear(); pendingVerify.clear(); banHostKey = ''; banToken = '';
+    verifiedPeers.clear(); pendingVerify.clear(); noTokenSince.clear(); banHostKey = ''; banToken = '';
     for(const k of Object.keys(peerDev)) delete peerDev[k];
     // Tell the others we're leaving on purpose so they update right away
     // (otherwise they'd only notice after the disconnect grace period).
