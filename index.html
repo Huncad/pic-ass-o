@@ -5,7 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!-- v3.18: basic hardening that cannot break the P2P / CDN traffic: no plugins, no <base> hijack, forms only to this site -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
-<title>PIC-ASS-O — party rajzjáték (több eszközön, szerver nélkül)</title>
+<title>PIC-ASS-O — party rajzjáték (több eszközön)</title>
+<meta name="description" content="PIC-ASS-O: ingyenes, magyar rajzolós-kitalálós party játék. Rajzolj, találd ki a szavakat, nevess a barátaiddal — telefonon vagy gépen, regisztráció nélkül.">
+<meta property="og:title" content="PIC-ASS-O — party rajzjáték">
+<meta property="og:description" content="Ingyenes, magyar rajzolós-kitalálós party játék, regisztráció nélkül. Nyiss szobát, küldd el a kódot, és játsszatok!">
+<meta property="og:type" content="website">
 <meta name="theme-color" content="#16302A">
 <!-- "Add to Home Screen" as a full-screen app, no browser address bar. -->
 <meta name="mobile-web-app-capable" content="yes">
@@ -2438,10 +2442,11 @@
       <h2 id="privacy-title">🔒 Adatvédelem</h2>
       <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
     </div>
-    <p>A játéknak nincs saját szervere és nincs felhasználói fiókja. Röviden, mi hova kerül:</p>
+    <p>A játéknak nincs játékszervere és nincs felhasználói fiókja. Röviden, mi hova kerül:</p>
     <ul>
       <li><b>Rajz, tippek, chat, hangüzenet:</b> közvetlenül a játékosok eszközei között mennek, titkosított WebRTC-kapcsolaton. Ha ez nem jön létre, nyilvános MQTT-szervereken át mennek tovább, a szobakóddal titkosítva.</li>
-      <li><b>Kapcsolódáshoz:</b> nyilvános jelzőszerverek (Nostr / BitTorrent tracker / MQTT) és a Metered közvetítő (TURN) szolgáltatás látja az eszközöd IP-címét.</li>
+      <li><b>Kapcsolódáshoz:</b> nyilvános jelzőszerverek (Nostr / BitTorrent tracker / MQTT) és a közvetítő (TURN) szolgáltatás látja az eszközöd IP-címét.</li>
+      <li><b>Kitiltás:</b> ha a szobanyitó kirúgna, a játék egy véletlenszerű eszközazonosítót és az IP-címed egy visszafejthetetlen lenyomatát (nem magát a címet) tárolja a Netlify-on, hogy a kirúgott játékos ne tudjon visszalépni. A szobás tiltás legfeljebb 30 napig, az egész játékból való tiltás 7 napig marad meg, ezután az adat törlődik. Ha nem rúgnak ki, semmi sem marad meg rólad.</li>
       <li><b>Nyilvános szobák:</b> a szoba neve, a szobanyitó becenevét és a létszám bárki számára látható a szobalistán. Privát szobánál ez nem jelenik meg a listán.</li>
       <li><b>Visszajelzés-űrlap:</b> a Netlify Forms tárolja. A név és az elérhetőség önkéntes.</li>
       <li><b>Az eszközödön marad:</b> beceneved, beállításaid, saját statisztikád és egy kapcsolódási hibanapló (24 óra után törlődik). Ezek nem kerülnek máshová, kivéve ha a naplót te magad kimásolod és elküldöd.</li>
@@ -3183,15 +3188,10 @@ const STUN_SERVERS = [
 // list keeps a pool of 20 connections per network, and relaying all of them
 // would be heavy for phones and would burn the provider's quota.
 const TURN_SERVERS = [];
-// EASIEST WAY to get TURN, free (20 GB/month, enough for this game many times
-// over): register at metered.ca → "Open Relay" / TURN Server → create a TURN
-// credential → "Show API Key", and paste the full credentials URL here, e.g.
-//   'https://YOUR-APP-NAME.metered.live/api/v1/turn/credentials?apiKey=YOUR_KEY'
-// The page then fetches fresh relay servers on start-up by itself. This key
-// is designed to be used in a public web page, but anyone who reads the page
-// source can use your monthly quota — if that ever happens, just rotate it.
+// The relay (TURN) credentials come from our own Netlify function; the provider's key is kept
+// on the server only (environment variables), never in this page.
 const TURN_PROXY_URL = '/.netlify/functions/turn';   // v3.19: key kept server-side
-const TURN_CREDENTIALS_URL = 'https://picasso-rajzjatek.metered.live/api/v1/turn/credentials?apiKey=cab1a96b2e22a2033a9994571959724d5143';
+const TURN_CREDENTIALS_URL = '';   // v3.86: no key in the page any more
 // One shared ICE config object for the room list, the game room, and the
 // desktop-only secondary discovery network. All three read the SAME object,
 // so as soon as the relay list below finishes loading, EVERY new connection
@@ -3361,7 +3361,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       const ctrl = new AbortController(); const t = setTimeout(()=>ctrl.abort(), ms || 6000);
       const r = await fetch(BAN_URL, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body), signal: ctrl.signal });
       clearTimeout(t);
-      if(r.status >= 500) return null;
+      if(r.status >= 429) return null;
       return await r.json();
     }catch(e){ return null; }
   }
@@ -5320,7 +5320,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
   function loadTurnServers(){
     if(turnLoadPromise) return turnLoadPromise;
-    if(!TURN_CREDENTIALS_URL){ turnLoadPromise = Promise.resolve(turnIceServers); return turnLoadPromise; }
+    if(!TURN_PROXY_URL && !TURN_CREDENTIALS_URL){ turnLoadPromise = Promise.resolve(turnIceServers); return turnLoadPromise; }
     turnLoadState = 'loading';
     turnLoadPromise = (async ()=>{
       let timer = null;
@@ -5339,6 +5339,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
           clog('T10', list ? 'közvetítő-adatok a saját szerverfüggvényből' : `szerverfüggvény nem adott adatot (HTTP ${r2.status}), tartalék út`);
         }catch(e){ clog('T11', 'szerverfüggvény nem érhető el, tartalék út'); }
         if(!list){
+          if(!TURN_CREDENTIALS_URL) throw new Error('a szerverfüggvény nem adott közvetítő-adatot');
           const res = await fetch(TURN_CREDENTIALS_URL, ctrl ? { signal: ctrl.signal, cache:'no-store' } : { cache:'no-store' });
           if(!res.ok) throw new Error('HTTP ' + res.status);
           list = await res.json();
@@ -8690,7 +8691,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         out.push(`${label} semmilyen hálózati címet nem tud szerezni (se STUN, se közvetítő) — a hálózat vagy egy blokkoló (VPN-es reklámszűrő, céges/iskolai wifi, router-védelem) tiltja a kapcsolatot. ${tryIt}`);
       } else if(n && n.relay === 0){
         const why = d.turn === 'failed' ? 'nem töltődött be (tiltja valami, vagy nincs internet)'
-                  : d.turn === 'dead' ? 'betöltődött, de a szerver nem ad címet — valószínűleg elfogyott a Metered havi kerete'
+                  : d.turn === 'dead' ? 'betöltődött, de a szerver nem ad címet — valószínűleg elfogyott a közvetítő-szolgáltató havi kerete'
                   : d.turn === 'loading' ? 'még töltődik' : 'nem ad címet';
         out.push(`${label} eszközén nem működik a közvetítő (TURN ${why}); közvetlenül (STUN) tud kapcsolódni, de ha a másik oldal hálózata ezt nem engedi, nem jön létre a kapcsolat.`);
       }
@@ -8706,7 +8707,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // v3.16: the relay test is the strongest evidence there is
     const relayDead = [me.relayOk === false ? 'a te eszközödön' : '', other.relayOk === false ? `${who} eszközén` : ''].filter(Boolean);
     if(relayDead.length){
-      out.push(`A közvetítő (TURN) ${relayDead.join(' és ')} ad ugyan címet, de ADATOT NEM TOVÁBBÍT (a próbaüzenet nem ért át). Ilyenkor csak azok tudnak összekapcsolódni, akiknek közvetlenül is megy — mobilnetről vagy szigorú hálózatról senki. Leggyakoribb ok: elfogyott a Metered havi ingyenes kerete (a metered.ca fiókban látszik), vagy a hálózat tiltja a közvetítő forgalmát.`);
+      out.push(`A közvetítő (TURN) ${relayDead.join(' és ')} ad ugyan címet, de ADATOT NEM TOVÁBBÍT (a próbaüzenet nem ért át). Ilyenkor csak azok tudnak összekapcsolódni, akiknek közvetlenül is megy — mobilnetről vagy szigorú hálózatról senki. Leggyakoribb ok: elfogyott a közvetítő-szolgáltató havi ingyenes kerete, vagy a hálózat tiltja a közvetítő forgalmát.`);
     } else if(me.relayOk === true && other.relayOk === true){
       out.push(`A közvetítő mindkét eszközön bizonyítottan továbbítja az adatot.`);
     }
@@ -8987,7 +8988,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     lines.push('Közvetítő (TURN): ' + ({
       off:'nincs beállítva', loading:'betöltés…', failed:'a betöltés NEM sikerült (rossz API-kulcs, elfogyott a keret, vagy hálózati hiba lehet)',
       ok:`beállítva (${turnIceServers.length} szerver), minden kapcsolat ezt is felajánlja`,
-      dead:`a belépési adatok megjöttek (${deadTurnCount} szerver), de a szerver NEM ad közvetítő címet — elfogyott a Metered havi kerete, törölték a hozzáférést, vagy ez a hálózat blokkolja`
+      dead:`a belépési adatok megjöttek (${deadTurnCount} szerver), de a szerver NEM ad közvetítő címet — elfogyott a közvetítő-szolgáltató havi kerete, törölték a hozzáférést, vagy ez a hálózat blokkolja`
     }[turnLoadState] || turnLoadState));
     lines.push('Böngésző: ' + navigator.userAgent);
     lines.push('Hálózat ellenőrzése…');
@@ -13290,9 +13291,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'3.86', changes:[
+      'Nyilvános indulásra felkészítés: gyorsabb és stabilabb működés akkor is, ha egyszerre sokan játszanak. A közvetítő-kapcsolat adatait és a szólistákat a játék kevesebb kéréssel tölti be, és a közvetítő kulcsa már nincs benne az oldal kódjában.',
+      'Frissített adatvédelmi tájékoztató.'
+    ]},
     { version:'3.85', changes:[
-      'Kitiltás: akit a szobanyitó kirúgott (vagy a többiek megszavaztak), az az eszközéről és az IP-címéről sem tud többé visszalépni abba a szobába, hiába vált wifiről mobilnetre. Ha valakit egy napon belül legalább két különböző szobából kirúgnak, az eszköze és az IP-címe egy hétre az egész játékból ki van tiltva.',
-      'Ez egy új szerveroldali függvényre (ban) épül. Ha a szerver épp nem elérhető, a játék nem akad el, csak ilyenkor a kitiltás nem érvényesül. Aki új eszközzel és új hálózatról (pl. privát ablakban, más internetről) jön, azt a rendszer nem ismeri fel.'
+      'Kitiltás: akit a szobanyitó kirúgott (vagy a többiek megszavaztak), az az eszközéről és az IP-címéről sem tud többé visszalépni abba a szobába. Ha valakit egy napon belül legalább két különböző szobából kirúgnak, egy hétre az egész játékból ki lesz tiltva.'
     ]},
     { version:'3.84', changes:[
       'Újratöltés után nem lesz „Név 2”: ha valaki újratölti az oldalt, miközben a régi kapcsolata még nincs lezárva, visszakapja a nevét, a pontjait és a helyét a sorrendben. Ha mégis „Név 2” lett belőle, amint a régi példánya lemarad, az új megkapja a saját nevét, és a nevek rendben maradnak a többiek képernyőjén is.',
