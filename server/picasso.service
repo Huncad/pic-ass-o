@@ -1,0 +1,24 @@
+[Unit]
+Description=PIC-ASS-O játékszerver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=picasso
+WorkingDirectory=/opt/pic-ass-o/server
+ExecStart=/usr/bin/node server.js
+Environment=PORT=8787
+Environment=DATA_DIR=/var/lib/picasso
+# Melyik weboldalakról lehet csatlakozni (vesszővel). Alapból bármelyik *.netlify.app.
+# Ha saját domainre teszed a játékot, írd ide is, pl.:
+# Environment=ALLOWED_ORIGINS=*.netlify.app,https://picasso.example.hu
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/picasso
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

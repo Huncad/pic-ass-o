@@ -1,0 +1,9 @@
+{
+  "name": "picasso-server",
+  "private": true,
+  "type": "module",
+  "description": "PIC-ASS-O játékszerver: szoba-továbbító, szobalista, ranglista",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": { "ws": "^8.18.0" }
+}

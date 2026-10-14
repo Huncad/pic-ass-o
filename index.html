@@ -2117,6 +2117,7 @@
       <button class="ghost" id="btn-open-privacy"><span class="ico" aria-hidden="true">🔒</span>Adatvédelem</button>
     </div>
     <p class="home-stats hidden" id="home-stats"></p>
+    <p class="home-stats hidden" id="home-ranglista-wrap"><a id="home-ranglista" href="#" target="_blank" rel="noopener" style="color:var(--yellow);">🏆 Közös ranglista</a></p>
     <button class="ghost small stats-open-btn" id="btn-open-stats" type="button">📊 Statisztikáim</button>
     <p class="center-note" id="words-loading-note">Szavak betöltése…</p>
   </div>
@@ -2442,8 +2443,9 @@
       <h2 id="privacy-title">🔒 Adatvédelem</h2>
       <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
     </div>
-    <p>A játéknak nincs játékszervere és nincs felhasználói fiókja. Röviden, mi hova kerül:</p>
+    <p>A játéknak nincs felhasználói fiókja. Röviden, mi hova kerül:</p>
     <ul>
+      <li><b>Saját játékszerver (ha be van kapcsolva):</b> a szobák forgalma egy otthoni szerveren megy át, ami a beszélgetést nem tárolja, csak továbbítja (egy megszakadt kapcsolatnál legfeljebb egy percig tartja meg). A szobakódot sem látja, csak egy lenyomatát. A befejezett játékokból a beceneveket és a pontszámokat menti a közös ranglistához.</li>
       <li><b>Rajz, tippek, chat, hangüzenet:</b> közvetlenül a játékosok eszközei között mennek, titkosított WebRTC-kapcsolaton. Ha ez nem jön létre, nyilvános MQTT-szervereken át mennek tovább, a szobakóddal titkosítva.</li>
       <li><b>Kapcsolódáshoz:</b> nyilvános jelzőszerverek (Nostr / BitTorrent tracker / MQTT) és a közvetítő (TURN) szolgáltatás látja az eszközöd IP-címét.</li>
       <li><b>Kitiltás:</b> ha a szobanyitó kirúgna, a játék egy véletlenszerű eszközazonosítót és az IP-címed egy visszafejthetetlen lenyomatát (nem magát a címet) tárolja a Netlify-on, hogy a kirúgott játékos ne tudjon visszalépni. A szobás tiltás legfeljebb 30 napig, az egész játékból való tiltás 7 napig marad meg, ezután az adat törlődik. Ha nem rúgnak ki, semmi sem marad meg rólad.</li>
@@ -2590,11 +2592,13 @@
 
 <div id="gallery-lightbox" class="hidden" role="dialog" aria-label="Rajz megtekintése">
   <img id="glb-img" alt="">
+  <canvas id="glb-replay-canvas" class="hidden" style="max-width:100%;max-height:70vh;border-radius:10px;background:#FBF7EC;"></canvas>
   <div class="glb-word" id="glb-word"></div>
   <div class="glb-guesses" id="glb-guesses"></div>
   <div class="glb-hint" id="glb-hint"></div>
   <div class="glb-actions">
     <button class="pink" id="glb-share">📤 Mentés / megosztás</button>
+    <button class="secondary" id="glb-replay">▶️ Visszajátszás</button>
     <button class="secondary" id="glb-download">📥 Letöltés</button>
     <button class="ghost" id="glb-close">Bezárás ✕</button>
   </div>
@@ -3299,6 +3303,113 @@ const DIRECTORY_ROOM_ID = 'picasso-room-directory-v1';
 // once, then redeploy this one file. Leave empty to fall back to the local
 // szavak-konnyu.txt / szavak-kozepes.txt files shipped alongside this page.
 const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
+
+// =====================================================================
+// v4.00: SAJÁT JÁTÉKSZERVER (otthoni mini PC). Ha be van állítva és elérhető,
+// a játékszobák és a szobalista ezen az egy WebSocket-kapcsolaton mennek:
+// nincs WebRTC, nincs TURN, nincs iPhone-os mikrofon-trükk, és egy lezárt
+// telefon ugyanazzal az azonosítóval tér vissza (a szerver 60 mp-ig tartja
+// a helyét és félreteszi neki az üzeneteket). Ha a szerver nem érhető el,
+// minden a régi (P2P) úton megy, változatlanul.
+//   S01 kapcsolódva a szerverhez   S02 a szerverkapcsolat megszakadt
+//   S03 visszatérés a szobába (a szerver megtartotta a helyet)
+// Kipróbáláshoz felülírható: localStorage 'picasso-server-url'.
+// =====================================================================
+const PICASSO_SERVER_URL = '';   // pl. 'https://picasso.valami.ts.net' — üresen: nincs szerver
+const SRV = (function(){
+  let base = PICASSO_SERVER_URL;
+  try{ const o = localStorage.getItem('picasso-server-url'); if(o) base = o; }catch(e){}
+  base = String(base || '').trim().replace(/\/+$/, '');
+  const api = { enabled: /^https?:\/\//.test(base), base, up:false, everUp:false, onDir:null, onUp:null };
+  if(!api.enabled) { api.ready = ()=>Promise.resolve(false); api.send = ()=>false; api.attach = ()=>{}; api.detach = ()=>{}; return api; }
+  const rnd = new Uint8Array(24); crypto.getRandomValues(rnd);
+  const token = Array.from(rnd, b=>b.toString(16).padStart(2,'0')).join('');
+  let ws = null, backoff = 800, retryTimer = 0, cur = null, gone = false;
+  const waiters = [];
+  const pending = [];   // room traffic while the socket is down (short gaps)
+  function wsUrl(){ return base.replace(/^http/, 'ws') + '/ws'; }
+  function setUp(v){
+    api.up = v;
+    if(v){ api.everUp = true; waiters.splice(0).forEach(f=>f(true)); try{ api.onUp && api.onUp(); }catch(e){} }
+  }
+  function raw(obj){
+    if(ws && ws.readyState === 1){ try{ ws.send(JSON.stringify(obj)); return true; }catch(e){} }
+    return false;
+  }
+  function open(){
+    if(gone || ws) return;
+    clearTimeout(retryTimer);
+    let me;
+    try{ me = ws = new WebSocket(wsUrl()); }catch(e){ ws = null; schedule(); return; }
+    me.onopen = ()=>{ try{ me.send(JSON.stringify({ t:'hello', id:selfId, token, dir:true, room: cur && cur.rid })); }catch(e){} };
+    me.onmessage = (ev)=>{
+      if(me !== ws) return;
+      let m; try{ m = JSON.parse(ev.data); }catch(e){ return; }
+      if(!m || typeof m !== 'object') return;
+      switch(m.t){
+        case 'welcome':
+          backoff = 800;
+          api.online = Number(m.online) || api.online || 1;
+          setUp(true);
+          clog('S01', `kapcsolódva a játékszerverhez${m.resumed ? ' — a szobabeli hely megmaradt' : ''}`);
+          if(cur && cur.rid){
+            if(m.resumed){ clog('S03', `visszatérés a szobába, ${(m.peers||[]).length} társ`); cur._sync(m.peers || []); }
+            else raw({ t:'join', room: cur.rid });
+          }
+          pending.splice(0).forEach(raw);
+          return;
+        case 'joined':  if(cur && m.room === cur.rid) cur._sync(m.peers || []); return;
+        case 'pjoin':   if(cur) cur._join(m.id); return;
+        case 'pleave':  if(cur) cur._leave(m.id); return;
+        case 'msg':     if(cur) cur._msg(m.a, m.d, m.f); return;
+        case 'dir':     try{ api.onDir && api.onDir(m.d); }catch(e){} return;
+        case 'online':  api.online = Number(m.n) || 0; return;
+      }
+    };
+    me.onclose = (ev)=>{
+      if(me !== ws) return;
+      ws = null;
+      if(api.up) clog('S02', `a szerverkapcsolat megszakadt (${ev && ev.code})`);
+      api.up = false;
+      schedule();
+    };
+    me.onerror = ()=>{};
+  }
+  function schedule(){
+    if(gone) return;
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(open, backoff);
+    backoff = Math.min(15000, Math.round(backoff * 1.7));
+  }
+  function kick(){ if(!ws && !gone){ backoff = 800; open(); } }
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') kick(); });
+  window.addEventListener('online', kick);
+  window.addEventListener('pageshow', (ev)=>{ if(ev.persisted){ gone = false; kick(); } });
+  window.addEventListener('pagehide', (ev)=>{
+    if(ev.persisted) return;          // back/forward cache: the page may come back
+    gone = true; raw({ t:'bye' });
+  });
+  setInterval(()=>{ raw({ t:'ping' }); }, 25000);
+  api.ready = (ms)=> api.up ? Promise.resolve(true) : new Promise(res=>{
+    waiters.push(res);
+    setTimeout(()=>{ const i = waiters.indexOf(res); if(i >= 0){ waiters.splice(i,1); res(false); } }, ms || 3000);
+  });
+  api.send = (obj)=>{
+    if(raw(obj)) return true;
+    if(obj && (obj.t === 'send' || obj.t === 'join' || obj.t === 'leave')){
+      pending.push(obj);
+      if(pending.length > 400) pending.splice(0, pending.length - 400);
+    }
+    return false;
+  };
+  // tesztelés / hibakeresés: kapcsolat bontása, újracsatlakozás csak ms múlva
+  api._drop = (ms)=>{ const w = ws; ws = null; api.up = false; try{ w && w.close(); }catch(e){} clearTimeout(retryTimer); retryTimer = setTimeout(open, ms || 0); };
+  try{ window.__picassoSrv = api; }catch(e){}
+  api.attach = (r)=>{ cur = r; };
+  api.detach = (r)=>{ if(cur === r) cur = null; };
+  open();
+  return api;
+})();
 
 (function(){
   "use strict";
@@ -5459,6 +5570,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // v2.93: creating or joining a room waits longer (9 s): a room connection
   // started without the relay never gets it later.
   function turnReady(maxMs){
+    if(SRV.up) return Promise.resolve(turnIceServers);   // v4.00: szerver módban nincs WebRTC, nem kell közvetítő
     return Promise.race([ loadTurnServers(), new Promise(r=>setTimeout(r, maxMs || 4000)) ]);
   }
 
@@ -5730,7 +5842,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // later" step, and so no confusing back-and-forth status text.
     // (turnReady() never rejects — on any failure it still resolves with
     // whatever ice servers are available — so a plain .then is enough.)
-    turnReady().then(connectDirectory);
+    SRV.ready(2500).then(up=>{ if(up) connectDirectory(); else turnReady().then(connectDirectory); });   // v4.00
     wordsLoadedPromise.then(()=>{
       const note = document.getElementById('words-loading-note');
       if(note) note.remove();
@@ -7690,8 +7802,9 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
           joinOrderIds = [selfId];
         }
         setConnStatus('connecting', 'Kapcsolódás a hálózathoz…');
-        clog('J01', `szoba ${code}: ${expectPeer ? 'belépés vendégként' : (meta ? 'újrakapcsolódás játék közben' : 'szobanyitóként')} · hálózat: ${ROOM_NET} · TURN: ${turnIceServers.length ? 'van' : 'nincs'}`);
-        room = makeHybridRoom(roomJoin(ROOM_NET === 'mqtt' ? MQTT_CFG : TRYSTERO_CFG, code, {
+        const viaSrv = SRV.up;   // v4.00: saját szerver, ha elérhető
+        clog('J01', `szoba ${code}: ${expectPeer ? 'belépés vendégként' : (meta ? 'újrakapcsolódás játék közben' : 'szobanyitóként')} · hálózat: ${viaSrv ? 'saját szerver' : ROOM_NET} · TURN: ${turnIceServers.length ? 'van' : 'nincs'}`);
+        room = viaSrv ? makeServerRoom(code) : makeHybridRoom(roomJoin(ROOM_NET === 'mqtt' ? MQTT_CFG : TRYSTERO_CFG, code, {
           handshakeTimeoutMs: HANDSHAKE_TIMEOUT_MS,
           onJoinError: (d)=>{
             roomConnErrors++;
@@ -7802,6 +7915,13 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   }
 
   function directoryBroadcast(msg){
+    // v4.00: szerver módban a szoba csak a szerveren (és a többi fülön) jelenik meg,
+    // így régi, P2P-s eszközök nem próbálnak olyan szobába lépni, amit nem érnek el
+    if(SRV.up){
+      SRV.send({ t:'dir', d: msg });
+      try{ if(dirChannel) dirChannel.postMessage(Object.assign({}, msg, { srv:1 })); }catch(e){}
+      return;
+    }
     try{ dirqPublish({ t:'ann', d: msg }); }catch(e){}
     dirTransports.forEach(t=>{ try{ t.action.send(msg); }catch(e){} });
     try{ if(dirChannel) dirChannel.postMessage(msg); }catch(e){}
@@ -7835,6 +7955,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // joining it simply won't work.)
   function handleDirectoryMessage(data){
     if(!isPlainObject(data)) return;
+    // v4.00: a szerveres és a P2P-s szobák nem keverednek (egymást nem érnék el)
+    if(!data.removed && !!data.srv !== !!SRV.up) return;
     // public rooms are keyed by their code, closed rooms by the code's fingerprint
     const key = cleanText(data.code || data.id || '', 40);
     if(!key || /[<>]/.test(key)) return;
@@ -8066,6 +8188,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(btn){ btn.disabled = true; setTimeout(()=>{ btn.disabled = false; }, 5000); }
     try{ sndClick(); }catch(e){}
     if(room) return;
+    if(SRV.up){ SRV.send({ t:'dirsync' }); return; }   // v4.00
     // v2.68: a phone always refreshes back onto the most reliable network
     if(IS_MOBILE){ mobileDirNet = TrysteroMqtt ? 'mqtt' : 'nostr'; try{ localStorage.setItem('picasso-mobile-dir-net-v2', mobileDirNet); }catch(e){} }
     dirPaused = false;
@@ -8076,15 +8199,14 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   function connectDirectory(){
     // v2.94: a phone first gives the direct MQTT list up to 8 s; only if that
     // doesn't come up does it fall back to the WebRTC room list
-    const startWebrtcList = ()=>{ if(!dirPaused) startDirectoryTransports(); };
-    if(IS_MOBILE && !dirqConnectedOnce && dirqState !== 'failed'){
-      const t0 = Date.now();
-      const wait = ()=>{
-        if(dirqConnectedOnce || dirqState === 'failed' || Date.now() - t0 > 8000){ startWebrtcList(); return; }
-        setTimeout(wait, 250);
-      };
-      wait();
-    } else startWebrtcList();
+    const startWebrtcList = ()=>{ if(!dirPaused && !SRV.up) startDirectoryTransports(); };
+    // v4.00: a szerver adja a szobalistát — ha 3 mp alatt feláll, a WebRTC-s
+    // lista el sem indul (telefonon ez a legnagyobb erőforrás-zabáló)
+    SRV.onDir = (d)=>{ try{ handleDirectoryMessage(d); }catch(e){} };
+    SRV.onUp = ()=>{ try{ announceMyRoom(); updateDirectoryStatusUI(); renderRanglistaLink(); }catch(e){} };
+    if(SRV.enabled && !SRV.up){
+      SRV.ready(3000).then(ok=>{ if(!ok) connectDirectoryP2P(startWebrtcList); else updateDirectoryStatusUI(); });
+    } else if(!SRV.up) connectDirectoryP2P(startWebrtcList);
     try{
       if('BroadcastChannel' in window){
         dirChannel = new BroadcastChannel('picasso-room-directory-v1');
@@ -8099,6 +8221,16 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     setInterval(()=>{ announceMyRoom(); pruneKnownRooms(); }, DIR_HEARTBEAT_MS);
     setInterval(updateDirectoryStatusUI, 1500);
     updateDirectoryStatusUI();
+  }
+  function connectDirectoryP2P(startWebrtcList){
+    if(IS_MOBILE && !dirqConnectedOnce && dirqState !== 'failed'){
+      const t0 = Date.now();
+      const wait = ()=>{
+        if(dirqConnectedOnce || dirqState === 'failed' || Date.now() - t0 > 8000){ startWebrtcList(); return; }
+        setTimeout(wait, 250);
+      };
+      wait();
+    } else startWebrtcList();
   }
 
   // ---- iPhone / Safari: reveal the local network address to WebRTC -------
@@ -8141,7 +8273,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     // v2.66: offered even with a relay configured — an iPhone on a network
     // that blocks UDP still timed out through the relay, while the mic
     // trick lets it reach a PC on the same wifi directly.
-    const show = IS_APPLE_WEBKIT && !IS_STANDALONE && !appleNetUnlocked && !dirPaused &&
+    const show = !SRV.up && IS_APPLE_WEBKIT && !IS_STANDALONE && !appleNetUnlocked && !dirPaused &&
       dirConnErrors > 0 && directoryPeerCount() === 0;
     box.classList.toggle('hidden', !show);
     if(!show || appleFixBusy) return;
@@ -8216,6 +8348,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   })();
 
   function directoryPeerCount(){
+    if(SRV.up) return Math.max(0, (SRV.online || 1) - 1);   // v4.00: a szerver számolja
     return Math.max(dirTransports.reduce((m,t)=>Math.max(m, t.peers.size), 0), dirqPeerCount());
   }
 
@@ -8269,6 +8402,77 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(!from || from === selfId) return;
     ch.onRaw(from, m);
   }
+  // =====================================================================
+  // v4.00: a játékszoba a saját szerveren (lásd SRV fent). Ugyanaz a felület,
+  // mint a "hibrid szobáé" (makeAction / getPeers / onPeerJoin / onPeerLeave /
+  // leave), így a játék kódja nem tudja, és nem is kell tudnia, melyik úton megy.
+  // A szerver a szobakódot nem kapja meg, csak egy hash-t belőle.
+  // =====================================================================
+  function makeServerRoom(code){
+    const r = { rid:null, members:new Set(), actions:new Map(), closed:false };
+    let appJoin = null, appLeave = null;
+    const pendingJoins = [], pre = [];
+    const fireJoin = id => { if(appJoin){ try{ appJoin(id); }catch(e){ console.error(e); } } else pendingJoins.push(id); };
+    const fireLeave = id => { const i = pendingJoins.indexOf(id); if(i >= 0){ pendingJoins.splice(i,1); return; } if(appLeave){ try{ appLeave(id); }catch(e){ console.error(e); } } };
+    r._sync = (list)=>{
+      if(r.closed) return;
+      const now = new Set((list || []).filter(id=>typeof id === 'string' && id !== selfId));
+      Array.from(r.members).forEach(id=>{ if(!now.has(id)){ r.members.delete(id); fireLeave(id); } });
+      now.forEach(id=>{ if(!r.members.has(id)){ r.members.add(id); fireJoin(id); } });
+    };
+    r._join = (id)=>{ if(r.closed || !id || id === selfId || r.members.has(id)) return; r.members.add(id); clog('K01', `kapcsolat (szerver): ${String(id).slice(0,5)}`); fireJoin(id); };
+    r._leave = (id)=>{ if(r.closed || !r.members.delete(id)) return; clog('K02', `kilépett (szerver): ${String(id).slice(0,5)}`); fireLeave(id); };
+    r._msg = (a, d, from)=>{
+      if(r.closed || !from || from === selfId) return;
+      if(!r.members.has(from)){ r.members.add(from); fireJoin(from); }
+      const act = r.actions.get(a);
+      if(act) act.deliver(d, from);
+    };
+    function out(obj){ if(r.rid) SRV.send(obj); else pre.push(obj); }
+    (async ()=>{
+      const t = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('picasso-srv-room|' + APP_ID + '|' + code));
+      if(r.closed) return;
+      r.rid = Array.from(new Uint8Array(t)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      SRV.attach(r);
+      SRV.send({ t:'join', room: r.rid });
+      pre.splice(0).forEach(o=>SRV.send(o));
+    })().catch(e=>{ try{ console.warn('[PIC-ASS-O] server room failed:', e && e.message); }catch(err){} });
+    return {
+      makeAction(name){
+        let handler = null; const buffered = [];
+        const deliver = (d, peerId)=>{ if(handler){ try{ handler(d, { peerId }); }catch(e){ console.error(e); } } else buffered.push([d, peerId]); };
+        r.actions.set(name, { deliver });
+        return {
+          send(data, opts = {}){
+            if(r.closed) return Promise.resolve();
+            let to;
+            if(opts && opts.target != null) to = (Array.isArray(opts.target) ? opts.target : [opts.target]).filter(id=>typeof id === 'string');
+            if(to && !to.length) return Promise.resolve();
+            out(to ? { t:'send', a:name, d:data, to } : { t:'send', a:name, d:data });
+            return Promise.resolve();
+          },
+          get onMessage(){ return handler; },
+          set onMessage(h){ handler = h; buffered.splice(0).forEach(([d,p])=>deliver(d,p)); },
+          onReceiveProgress: null
+        };
+      },
+      getPeers(){ const o = {}; r.members.forEach(id=>{ o[id] = { server:true }; }); return o; },
+      fallbackPeerCount(){ return 0; },
+      viaServer: true,
+      get onPeerJoin(){ return appJoin; },
+      set onPeerJoin(h){ appJoin = h; if(h) pendingJoins.splice(0).forEach(fireJoin); },
+      get onPeerLeave(){ return appLeave; },
+      set onPeerLeave(h){ appLeave = h; },
+      leave(){
+        if(r.closed) return null;
+        if(r.rid) SRV.send({ t:'leave' });
+        r.closed = true;
+        SRV.detach(r);
+        return null;
+      }
+    };
+  }
+
   function makeHybridRoom(rtc, code){
     const ch = { topic:null, key:null, ready:null, seq:0, seen:new Map(), parts:new Map(),
                  heard:new Map(), firstHeard:new Map(), viaFb:new Set(), joined:new Set(),
@@ -8872,6 +9076,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     if(dirPaused){
       st.textContent = ' ⏸ a szobalista ki van kapcsolva, mert az előző betöltés összeomlott — koppints ide a bekapcsolásához';
       st.style.cursor = 'pointer';
+      return;
+    }
+    if(SRV.up){   // v4.00
+      st.textContent = ` 🟢 kapcsolódva a játékszerverhez · ${peers+1} online ⓘ`;
+      st.style.cursor = 'pointer';
+      st.title = 'A szobák és a játék a saját játékszerveren keresztül mennek.';
+      const emptyEl = document.getElementById('room-list-empty');
+      if(emptyEl) emptyEl.textContent = 'Még nincs nyitva szoba — hozz létre egyet! 👇';
+      updateAppleFixUI();
       return;
     }
     const { open, total } = relaySummary();
@@ -10246,8 +10459,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
         document.getElementById('chat-toggle-btn').classList.add('hidden');
         document.getElementById('reaction-toggle-btn').classList.add('hidden');
         warn.style.color = 'var(--red)';
-        const appleCase = IS_APPLE_WEBKIT && !IS_STANDALONE && !appleNetUnlocked && turnIceServers.length === 0;
-        warn.textContent = roomConnErrors > 0
+        const appleCase = !SRV.up && IS_APPLE_WEBKIT && !IS_STANDALONE && !appleNetUnlocked && turnIceServers.length === 0;
+        warn.textContent = SRV.up
+          ? 'Ez a szoba nem található a játékszerveren — lehet, hogy már megszűnt, vagy elírtad a kódot. Kérj új meghívót a szobanyitótól.'
+          : roomConnErrors > 0
           ? (appleCase
               ? 'Megtaláltam a szobát, de az iPhone nem tud kapcsolatot építeni a többiekkel. ' + APPLE_FIX_EXPLAIN
               : turnIceServers.length > 0
@@ -12324,7 +12539,8 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       word: String(result.word || (mine ? currentRound.word : '') || '?'),
       drawer: currentRound.drawerName || 'Valaki',
       guessedBy: result.type === 'correct' ? String(result.correctPlayerName || '') : '',
-      guesses: (roundGuessLog[roundKey(currentRound)] || []).map(g=>({ name:g.name, text:g.text, correct:g.correct, close:g.close }))
+      guesses: (roundGuessLog[roundKey(currentRound)] || []).map(g=>({ name:g.name, text:g.text, correct:g.correct, close:g.close })),
+      strokes   // v4.00: a visszajátszáshoz
     });
     if(galleryItems.length > 60) galleryItems.shift();
   }
@@ -12394,9 +12610,74 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     const file = new File([blob], name, { type: blob.type || 'image/png' });
     return navigator.share({ files:[file], title:'PIC-ASS-O', text }).catch(()=>{});
   }
+  // v4.00: rajz-visszajátszás — a vonalak abban a sorrendben rajzolódnak ki,
+  // ahogy a rajzoló húzta őket, kb. 7 másodperc alatt
+  let replayRun = 0;
+  function stopReplay(){
+    replayRun++;
+    const cv = document.getElementById('glb-replay-canvas');
+    if(cv){ cv.classList.add('hidden'); }
+    const img = document.getElementById('glb-img'); if(img) img.classList.remove('hidden');
+    const b = document.getElementById('glb-replay'); if(b) b.textContent = '▶️ Visszajátszás';
+  }
+  function startReplay(it){
+    const run = ++replayRun;
+    const cv = document.getElementById('glb-replay-canvas');
+    const img = document.getElementById('glb-img');
+    const W = it.w, H = it.h;
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    if(!ctx) return;
+    const base = document.createElement('canvas'); base.width = W; base.height = H;
+    const bctx = base.getContext('2d');
+    const prevDark = darkMode;
+    const paint = (fn)=>{ darkMode = false; try{ fn(); } finally { darkMode = prevDark; } };
+    paint(()=>{ bctx.fillStyle = paperColor(); bctx.fillRect(0,0,W,H); });
+    img.classList.add('hidden'); cv.classList.remove('hidden');
+    document.getElementById('glb-replay').textContent = '⏹ Állj';
+    const strokes = it.strokes || [];
+    const total = strokes.reduce((n,st)=>n + Math.max(1, (st && st.points && st.points.length) || 1), 0);
+    const perFrame = Math.max(1, Math.ceil(total / (60 * 7)));
+    let si = 0, pi = 0;
+    const frame = ()=>{
+      if(run !== replayRun) return;
+      let budget = perFrame;
+      while(budget > 0 && si < strokes.length){
+        const st = strokes[si];
+        const n = (st && st.points && st.points.length) || 0;
+        const whole = !n || st.t === 'fill' || st.t === 'line' || st.t === 'rect' || st.t === 'circle';
+        if(whole || pi + budget >= n){
+          budget -= whole ? 1 : (n - pi);
+          paint(()=>drawStrokeOn(bctx, st, W, H));
+          si++; pi = 0;
+        } else { pi += budget; budget = 0; }
+      }
+      ctx.drawImage(base, 0, 0);
+      if(si < strokes.length && pi > 0){
+        const st = strokes[si];
+        paint(()=>drawStrokeOn(ctx, Object.assign({}, st, { points: st.points.slice(0, pi + 1) }), W, H));
+      }
+      if(si >= strokes.length){
+        setTimeout(()=>{ if(run === replayRun){ releaseCanvas(base); stopReplay(); } }, 1200);
+        return;
+      }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+  document.getElementById('glb-replay').addEventListener('click', ()=>{
+    sndClick();
+    const it = galleryItems[galleryLbIndex];
+    if(!it) return;
+    const playing = !document.getElementById('glb-replay-canvas').classList.contains('hidden');
+    if(playing){ stopReplay(); return; }
+    startReplay(it);
+  });
   function openGalleryLightbox(i){
     const it = galleryItems[i];
     if(!it) return;
+    stopReplay();
+    document.getElementById('glb-replay').classList.toggle('hidden', !(it.strokes && it.strokes.length));
     galleryLbIndex = i;
     document.getElementById('glb-img').src = it.url;
     document.getElementById('glb-img').alt = it.word;
@@ -12413,6 +12694,7 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     document.getElementById('gallery-lightbox').classList.remove('hidden');
   }
   function closeGalleryLightbox(){
+    stopReplay();
     document.getElementById('gallery-lightbox').classList.add('hidden');
     galleryLbIndex = -1;
   }
@@ -12806,6 +13088,15 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
     el.classList.remove('hidden');
   }
   renderHomeStats();
+  // v4.00: közös ranglista a játékszerveren (csak ha a szerver elérhető)
+  function renderRanglistaLink(){
+    const wrap = document.getElementById('home-ranglista-wrap');
+    if(!wrap) return;
+    if(!SRV.everUp){ wrap.classList.add('hidden'); return; }
+    document.getElementById('home-ranglista').href = SRV.base + '/ranglista';
+    wrap.classList.remove('hidden');
+  }
+  renderRanglistaLink();
   (function setupPrivacyDialog(){
     const ov = document.getElementById('privacy-overlay');
     const close = ()=>ov.classList.add('hidden');
@@ -12836,6 +13127,10 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
       : 'Győztes: '+(winners[0]?winners[0].name:'—')+' 🏆';
     renderScoreTable('gameend-scores', rows);
     if(!quiet) recordPersonalStats(rows);
+    // v4.00: közös ranglista a szerveren — csak a szobanyitó küldi, egyszer
+    if(!quiet && isHost && SRV.up && room && room.viaServer && rows.length >= 2){
+      SRV.send({ t:'result', rows: rows.map(r=>({ name: String(r.name || '').slice(0,40), score: Math.round(Number(r.score) || 0) })) });
+    }
     renderGameStatsAwards();
     renderGallery();
     refreshRematchUI();
@@ -13312,6 +13607,12 @@ const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.00', changes:[
+      'Saját játékszerver: ha elérhető, a szobák és a játék egy otthoni szerveren keresztül mennek. Nincs többé WebRTC-s kapcsolatépítés, közvetítő (TURN) és iPhone-os mikrofon-trükk — mindenki ugyanúgy, gyorsan csatlakozik. Ha a szerver nem érhető el, minden a régi úton működik tovább.',
+      'Visszacsatlakozás: ha lezár a telefon vagy egy pillanatra elmegy a net, a szerver egy percig megtartja a helyedet, és a közben történteket visszatéréskor megkapod — a többiek észre sem veszik.',
+      'Közös ranglista: a befejezett játékok eredménye (becenév + pont) a szerverre kerül, a kezdőképernyő „🏆 Közös ranglista” linkje mutatja az összesítést.',
+      'Rajz-visszajátszás: a játék végi galériában egy rajzra koppintva a „▶️ Visszajátszás” gomb lejátssza, hogyan készült.'
+    ]},
     { version:'3.86', changes:[
       'Nyilvános indulásra felkészítés: gyorsabb és stabilabb működés akkor is, ha egyszerre sokan játszanak. A közvetítő-kapcsolat adatait és a szólistákat a játék kevesebb kéréssel tölti be, és a közvetítő kulcsa már nincs benne az oldal kódjában.',
       'Frissített adatvédelmi tájékoztató.'
