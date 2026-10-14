@@ -13628,8 +13628,8 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
-    { version:'3.87', changes:[
-      'Javítás: ha egy játékos kapcsolata menet közben megakadt, a tippek és a rajz fél percig is késhettek, aztán egyszerre jelentek meg. Most a játék ilyenkor néhány másodpercen belül átvált a tartalék kapcsolatra, így az üzenetek folyamatosan megérkeznek.'
+    { version:'4.01', changes:[
+      'Javítás: ha a játék nem a saját szerveren, hanem közvetlen kapcsolaton megy, és egy játékos kapcsolata menet közben megakad, a tippek és a rajz fél percig is késhettek, aztán egyszerre jelentek meg. Most a játék ilyenkor néhány másodpercen belül átvált a tartalék kapcsolatra.'
     ]},
     { version:'4.00', changes:[
       'Saját játékszerver: ha elérhető, a szobák és a játék egy otthoni szerveren keresztül mennek. Nincs többé WebRTC-s kapcsolatépítés, közvetítő (TURN) és iPhone-os mikrofon-trükk — mindenki ugyanúgy, gyorsan csatlakozik. Ha a szerver nem érhető el, minden a régi úton működik tovább.',
