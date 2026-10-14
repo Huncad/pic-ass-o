@@ -3326,7 +3326,15 @@ const SRV = (function(){
   const token = Array.from(rnd, b=>b.toString(16).padStart(2,'0')).join('');
   let ws = null, backoff = 800, retryTimer = 0, cur = null, gone = false;
   const waiters = [];
-  const pending = [];   // room traffic while the socket is down (short gaps)
+  const pending = [];   // join/leave while the socket is down (short gaps)
+  // v4.01: room messages are numbered both ways. The server keeps what it sent until we confirm it
+  // (r = last number we got), we keep what we sent until it confirms (s). After a reconnect the
+  // missing ones come again and the numbers drop the duplicates. A half-dead socket (open, but
+  // nothing gets through) is noticed within ~11 s by the missing pong, instead of minutes.
+  let recvQ = 0, outSeq = 0, srvV2 = false, lastRx = 0;
+  const unacked = [];
+  const DEAD_MS = 11000;
+  function ackOut(n){ if(typeof n !== 'number') return; while(unacked.length && unacked[0].s <= n) unacked.shift(); }
   function wsUrl(){ return base.replace(/^http/, 'ws') + '/ws'; }
   function setUp(v){
     api.up = v;
@@ -3341,14 +3349,27 @@ const SRV = (function(){
     clearTimeout(retryTimer);
     let me;
     try{ me = ws = new WebSocket(wsUrl()); }catch(e){ ws = null; schedule(); return; }
-    me.onopen = ()=>{ try{ me.send(JSON.stringify({ t:'hello', id:selfId, token, dir:true, room: cur && cur.rid })); }catch(e){} };
+    me.onopen = ()=>{ lastRx = Date.now(); try{ me.send(JSON.stringify({ t:'hello', v:2, r: recvQ, id:selfId, token, dir:true, room: cur && cur.rid })); }catch(e){} };
     me.onmessage = (ev)=>{
       if(me !== ws) return;
+      lastRx = Date.now();
       let m; try{ m = JSON.parse(ev.data); }catch(e){ return; }
       if(!m || typeof m !== 'object') return;
+      if(typeof m.q === 'number'){ if(m.q <= recvQ) return; recvQ = m.q; }   // already got this one
       switch(m.t){
+        case 'pong': ackOut(m.s); return;
         case 'welcome':
           backoff = 800;
+          srvV2 = m.v === 2;
+          if(m.fresh){
+            // the server did not know us any more: start the numbering over; what was never sent still goes
+            recvQ = 0;
+            const keep = unacked.filter(x=>!x._sent); unacked.length = 0; outSeq = 0;
+            keep.forEach(x=>{ x.s = ++outSeq; unacked.push(x); });
+          } else if(srvV2){
+            ackOut(m.s);
+            if(!m.resumed) unacked.length = 0;   // back in a different room: the old messages are stale
+          }
           api.online = Number(m.online) || api.online || 1;
           setUp(true);
           clog('S01', `kapcsolódva a játékszerverhez${m.resumed ? ' — a szobabeli hely megmaradt' : ''}`);
@@ -3357,6 +3378,8 @@ const SRV = (function(){
             else raw({ t:'join', room: cur.rid });
           }
           pending.splice(0).forEach(raw);
+          unacked.forEach(x=>{ if((srvV2 || !x._sent) && raw(x)) x._sent = true; });
+          if(!srvV2){ const left = unacked.filter(x=>!x._sent); unacked.length = 0; unacked.push(...left); }   // an older server does not confirm
           return;
         case 'joined':  if(cur && m.room === cur.rid) cur._sync(m.peers || []); return;
         case 'pjoin':   if(cur) cur._join(m.id); return;
@@ -3389,16 +3412,34 @@ const SRV = (function(){
     if(ev.persisted) return;          // back/forward cache: the page may come back
     gone = true; raw({ t:'bye' });
   });
-  setInterval(()=>{ raw({ t:'ping' }); }, 25000);
+  setInterval(()=>{
+    if(!ws || ws.readyState !== 1) return;
+    if(lastRx && Date.now() - lastRx > DEAD_MS){
+      // open but silent: drop it and connect again right away (the server keeps our place for 60 s)
+      clog('S04', `a szerverkapcsolat ${Math.round((Date.now() - lastRx)/1000)} mp óta néma — újracsatlakozás`);
+      const w = ws; ws = null; api.up = false;
+      try{ w.close(); }catch(e){}
+      backoff = 800; open();
+      return;
+    }
+    raw({ t:'ping', r: recvQ });
+  }, 4000);
   api.ready = (ms)=> api.up ? Promise.resolve(true) : new Promise(res=>{
     waiters.push(res);
     setTimeout(()=>{ const i = waiters.indexOf(res); if(i >= 0){ waiters.splice(i,1); res(false); } }, ms || 3000);
   });
   api.send = (obj)=>{
+    if(obj && obj.t === 'send'){
+      const x = Object.assign({}, obj, { s: ++outSeq });
+      unacked.push(x);
+      if(unacked.length > 400) unacked.splice(0, unacked.length - 400);
+      if(raw(x)){ x._sent = true; if(!srvV2) unacked.pop(); return true; }
+      return false;
+    }
     if(raw(obj)) return true;
-    if(obj && (obj.t === 'send' || obj.t === 'join' || obj.t === 'leave')){
+    if(obj && (obj.t === 'join' || obj.t === 'leave')){
       pending.push(obj);
-      if(pending.length > 400) pending.splice(0, pending.length - 400);
+      if(pending.length > 50) pending.splice(0, pending.length - 50);
     }
     return false;
   };
@@ -13629,7 +13670,7 @@ const SRV = (function(){
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
     { version:'4.01', changes:[
-      'Javítás: ha a játék nem a saját szerveren, hanem közvetlen kapcsolaton megy, és egy játékos kapcsolata menet közben megakad, a tippek és a rajz fél percig is késhettek, aztán egyszerre jelentek meg. Most a játék ilyenkor néhány másodpercen belül átvált a tartalék kapcsolatra.'
+      'Javítás: ha egy játékos kapcsolata menet közben megakadt, a tippek és a rajz fél percig is késhettek, aztán egyszerre jelentek meg. Most a játék néhány másodpercen belül észreveszi, ha a kapcsolat elakadt, újracsatlakozik, és minden közben elküldött üzenet megérkezik, duplázás nélkül.'
     ]},
     { version:'4.00', changes:[
       'Saját játékszerver: ha elérhető, a szobák és a játék egy otthoni szerveren keresztül mennek. Nincs többé WebRTC-s kapcsolatépítés, közvetítő (TURN) és iPhone-os mikrofon-trükk — mindenki ugyanúgy, gyorsan csatlakozik. Ha a szerver nem érhető el, minden a régi úton működik tovább.',

@@ -41,13 +41,15 @@ const MAX_ROOM_PEERS = 40;
 const MAX_ROOMS = 500;
 const DIR_TTL_MS = 30_000;           // ennyi ideig él egy szoba-hirdetés frissítés nélkül
 const RATE_PER_SEC = 400;            // üzenet / mp / kapcsolat (rajzolásnál sok kicsi jön)
+const MAX_RING_BYTES = 16 * 1024 * 1024; // játékosonként ennyi megőrzött üzenet fér el
+const HEARTBEAT_MS = 5_000;          // ilyen sűrűn nézzük, él-e a kapcsolat (régen 20 mp volt)
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // ---------------------------------------------------------------------
 // Állapot
 // ---------------------------------------------------------------------
-/** peerId -> { id, token, ws, room, buffer[], dropTimer, ip } */
+/** peerId -> { id, token, ws, room, ring[], outQ, inSeq, dropTimer, ip } */
 const peers = new Map();
 /** roomId -> Set(peerId) */
 const rooms = new Map();
@@ -68,15 +70,28 @@ function originAllowed(origin){
   });
 }
 
+// Szobaforgalom (msg / pjoin / pleave): minden üzenet sorszámot kap (q), és addig megőrizzük,
+// amíg a böngésző nem jelzi, hogy megkapta. Így ha a kapcsolat "félholtan" elnyel pár üzenetet,
+// újracsatlakozáskor ezek is megérkeznek, a böngésző pedig a sorszám alapján kiszűri a duplát.
 function sendRaw(peer, obj){
-  const str = typeof obj === 'string' ? obj : JSON.stringify(obj);
-  if(peer.ws && peer.ws.readyState === 1){
-    peer.ws.send(str);
-  } else if(peer.room){
-    // épp nincs kapcsolata (pl. lezárt telefon): eltesszük, visszatéréskor megkapja
-    peer.buffer.push(str);
-    if(peer.buffer.length > MAX_BUFFERED) peer.buffer.splice(0, peer.buffer.length - MAX_BUFFERED);
+  if(peer.room){
+    const q = ++peer.outQ;
+    // obj lehet már kész JSON-szöveg (a továbbított üzenet) vagy objektum
+    const str = typeof obj === 'string' ? obj.replace(/}\s*$/, ',"q":' + q + '}') : JSON.stringify(Object.assign({}, obj, { q }));
+    const rec = { q, str, sent: false };
+    if(peer.ws && peer.ws.readyState === 1){ peer.ws.send(str); rec.sent = true; }
+    if(rec.sent && !peer.v2) return;        // régi böngésző: nem nyugtáz, nem tartjuk meg
+    peer.ring.push(rec); peer.ringBytes = (peer.ringBytes || 0) + str.length;
+    while(peer.ring.length > MAX_BUFFERED || (peer.ringBytes > MAX_RING_BYTES && peer.ring.length > 1)){
+      peer.ringBytes -= peer.ring.shift().str.length;
+    }
+  } else if(peer.ws && peer.ws.readyState === 1){
+    peer.ws.send(JSON.stringify(obj));
   }
+}
+function ackRing(peer, r){
+  if(typeof r !== 'number' || !Number.isFinite(r)) return;
+  while(peer.ring.length && peer.ring[0].q <= r) peer.ringBytes -= peer.ring.shift().str.length;
 }
 
 function roomMembers(roomId){ return rooms.get(roomId) || new Set(); }
@@ -85,7 +100,7 @@ function leaveRoom(peer, why){
   const roomId = peer.room;
   if(!roomId) return;
   peer.room = null;
-  peer.buffer = [];
+  peer.ring = []; peer.ringBytes = 0;
   const set = rooms.get(roomId);
   if(set){
     set.delete(peer.id);
@@ -269,25 +284,28 @@ wss.on('connection', (ws, req) => {
     if(m.t === 'hello'){
       if(peer) return;
       if(!isStr(m.id, 64) || !isStr(m.token, 128)) { ws.close(4000, 'hello'); return; }
+      const v2 = m.v === 2;   // a böngésző ismeri a sorszámozást
       const old = peers.get(m.id);
       if(old){
         if(old.token !== m.token){ ws.close(4001, 'azonosító foglalt'); return; }
         // visszatérés: régi kapcsolat le, a félretett üzenetek mennek
         clearTimeout(old.dropTimer);
         if(old.ws && old.ws !== ws){ try{ old.ws.close(4002, 'átvéve'); }catch(e){} }
-        old.ws = ws; old.ip = ip; old.dirSub = !!m.dir;
+        old.ws = ws; old.ip = ip; old.dirSub = !!m.dir; old.v2 = v2;
         peer = old;
         const resumedRoom = peer.room && m.room === peer.room;
-        ws.send(JSON.stringify({ t:'welcome', resumed: !!resumedRoom, online: peers.size,
+        ws.send(JSON.stringify({ t:'welcome', v:2, resumed: !!resumedRoom, online: peers.size, s: peer.inSeq,
           peers: resumedRoom ? [...roomMembers(peer.room)].filter(id => id !== peer.id) : [] }));
         if(!resumedRoom && peer.room) leaveRoom(peer, 'más szobával tért vissza');
-        const buffered = peer.buffer.splice(0);
-        buffered.forEach(s => ws.send(s));
-        log('visszatért', peer.id.slice(0,6), resumedRoom ? `(${buffered.length} félretett üzenet)` : '');
+        // ami nem biztosan ért át: újra (az új böngésző megmondja, meddig kapta meg; a régi csak a ki nem küldötteket kapja)
+        if(v2) ackRing(peer, Number(m.r));
+        const again = peer.ring.filter(x => v2 || !x.sent);
+        again.forEach(x => { ws.send(x.str); x.sent = true; });
+        log('visszatért', peer.id.slice(0,6), resumedRoom ? `(${again.length} üzenet újra)` : '');
       } else {
-        peer = { id: m.id, token: m.token, ws, room: null, buffer: [], dropTimer: null, ip, dirSub: !!m.dir };
+        peer = { id: m.id, token: m.token, ws, room: null, ring: [], ringBytes: 0, outQ: 0, inSeq: 0, v2, dropTimer: null, ip, dirSub: !!m.dir };
         peers.set(peer.id, peer);
-        ws.send(JSON.stringify({ t:'welcome', resumed:false, peers: [], online: peers.size }));
+        ws.send(JSON.stringify({ t:'welcome', v:2, fresh:true, resumed:false, peers: [], online: peers.size, s: 0 }));
       }
       if(peer.dirSub){
         const now2 = Date.now();
@@ -296,6 +314,7 @@ wss.on('connection', (ws, req) => {
       return;
     }
     if(!peer || peer.ws !== ws) return;
+    ws.isAlive = true;   // bármilyen üzenet bizonyítja, hogy él a kapcsolat
 
     switch(m.t){
       case 'join': {
@@ -321,6 +340,10 @@ wss.on('connection', (ws, req) => {
         return;
       case 'send': {
         if(!peer.room || !isStr(m.a, 32)) return;
+        if(typeof m.s === 'number'){            // újraküldött példány, amit már továbbítottunk
+          if(m.s <= peer.inSeq) return;
+          peer.inSeq = m.s;
+        }
         const set = roomMembers(peer.room);
         const out = JSON.stringify({ t:'msg', a: m.a, d: m.d, f: peer.id });
         if(Array.isArray(m.to)){
@@ -365,7 +388,8 @@ wss.on('connection', (ws, req) => {
         try{ ws.close(1000); }catch(e){}
         return;
       case 'ping':
-        ws.send('{"t":"pong"}');
+        ackRing(peer, Number(m.r));
+        ws.send(JSON.stringify({ t:'pong', s: peer.inSeq }));
         return;
     }
   });
@@ -380,13 +404,17 @@ wss.on('connection', (ws, req) => {
   ws.on('error', () => {});
 });
 
-// halott kapcsolatok kiszűrése (a mobilhálózat néha szó nélkül eldobja)
+// halott kapcsolatok kiszűrése (a mobilhálózat néha szó nélkül eldobja). 5 mp-enként nézzük,
+// így egy "félholt" kapcsolatot 5–10 mp alatt lezárunk, és onnantól a neki szóló üzeneteket
+// félretesszük, amíg vissza nem tér (régen ez 20–40 mp volt, közben az üzenetek elvesztek).
 setInterval(() => {
   wss.clients.forEach(ws => {
     if(!ws.isAlive){ try{ ws.terminate(); }catch(e){} return; }
     ws.isAlive = false;
     try{ ws.ping(); }catch(e){}
   });
+}, HEARTBEAT_MS);
+setInterval(() => {
   const now = Date.now();
   directory.forEach((e, k) => { if(now - e.at > DIR_TTL_MS) directory.delete(k); });
   const online = JSON.stringify({ t:'online', n: peers.size });
