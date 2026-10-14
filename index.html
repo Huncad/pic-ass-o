@@ -8481,6 +8481,25 @@ const SRV = (function(){
     const pendingJoins = [];
     const rtcPeers = ()=>{ try{ return rtc.getPeers() || {}; }catch(e){ return {}; } };
     const fbAlive = id => { const t = ch.heard.get(id); return !!t && Date.now() - t < FB_TTL_MS; };
+    // v3.87: a direct link can "freeze": the browser still lists it, but nothing gets through for
+    // tens of seconds, then everything arrives at once. If a peer has been silent on the direct
+    // link (it normally sends a sign of life every 4 s) but is alive on the fallback, we send to
+    // it over the fallback until the direct link speaks again.
+    const lastDirect = new Map(), stalledLogged = new Set();
+    const DIRECT_STALL_MS = 9000;
+    const directStalled = (id, pc)=>{
+      if(!fbAlive(id)) return false;                       // no alternative: keep trying direct
+      let bad = false;
+      try{
+        const cs = pc && pc.connectionState, ics = pc && pc.iceConnectionState;
+        bad = cs === 'disconnected' || cs === 'failed' || ics === 'disconnected' || ics === 'failed';
+      }catch(e){}
+      const t = lastDirect.get(id);
+      if(!bad && t !== undefined && Date.now() - t > DIRECT_STALL_MS) bad = true;
+      if(bad && !stalledLogged.has(id)){ stalledLogged.add(id); clog('F04', `a közvetlen kapcsolat akadozik, ideiglenesen a tartalék úton küldök: ${String(id).slice(0,5)}`); }
+      if(!bad && stalledLogged.delete(id)) clog('F05', `a közvetlen kapcsolat helyreállt: ${String(id).slice(0,5)}`);
+      return bad;
+    };
     const fireJoin = id => { if(appJoin){ try{ appJoin(id); }catch(e){ console.error(e); } } else pendingJoins.push(id); };
     const fireLeave = id => { if(appLeave){ try{ appLeave(id); }catch(e){ console.error(e); } } };
     ch.ready = (async ()=>{
@@ -8497,6 +8516,7 @@ const SRV = (function(){
 
     // ---- direct (WebRTC) side
     rtc.onPeerJoin = id=>{
+      lastDirect.set(id, Date.now());
       if(ch.viaFb.delete(id)) clog('F02', `közvetlen kapcsolat létrejött, a tartalék út helyett ezt használjuk: ${String(id).slice(0,5)}`);
       if(!ch.joined.has(id)){ ch.joined.add(id); fireJoin(id); }
     };
@@ -8597,7 +8617,7 @@ const SRV = (function(){
         const ra = rtc.makeAction(name);
         let handler = null; const buffered = [];
         const deliver = (d, peerId)=>{ if(handler){ try{ handler(d, { peerId }); }catch(e){ console.error(e); } } else buffered.push([d, peerId]); };
-        ra.onMessage = (d, meta)=>deliver(d, meta && meta.peerId);
+        ra.onMessage = (d, meta)=>{ const pid = meta && meta.peerId; if(pid) lastDirect.set(pid, Date.now()); deliver(d, pid); };
         ch.actions.set(name, { deliver });
         return {
           async send(data, opts = {}){
@@ -8605,10 +8625,11 @@ const SRV = (function(){
             let want = opts.target;
             if(want == null) want = Array.from(new Set(Object.keys(peers).concat(Array.from(ch.joined))));
             else if(!Array.isArray(want)) want = [want];
-            const direct = want.filter(id=>id in peers);
-            const viaFb = want.filter(id=>!(id in peers) && ch.joined.has(id));
+            const stalled = new Set(want.filter(id=>id in peers && directStalled(id, peers[id])));
+            const direct = want.filter(id=>id in peers && !stalled.has(id));
+            const viaFb = want.filter(id=>(!(id in peers) || stalled.has(id)) && ch.joined.has(id));
             const jobs = [];
-            if(direct.length) jobs.push(ra.send(data, Object.assign({}, opts, { target: opts.target == null && direct.length === Object.keys(peers).length ? undefined : direct })));
+            if(direct.length) jobs.push(ra.send(data, Object.assign({}, opts, { target: opts.target == null && !stalled.size && direct.length === Object.keys(peers).length ? undefined : direct })));
             if(viaFb.length) jobs.push(fbSend(name, data, viaFb));
             await Promise.all(jobs);
           },
@@ -13607,6 +13628,9 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'3.87', changes:[
+      'Javítás: ha egy játékos kapcsolata menet közben megakadt, a tippek és a rajz fél percig is késhettek, aztán egyszerre jelentek meg. Most a játék ilyenkor néhány másodpercen belül átvált a tartalék kapcsolatra, így az üzenetek folyamatosan megérkeznek.'
+    ]},
     { version:'4.00', changes:[
       'Saját játékszerver: ha elérhető, a szobák és a játék egy otthoni szerveren keresztül mennek. Nincs többé WebRTC-s kapcsolatépítés, közvetítő (TURN) és iPhone-os mikrofon-trükk — mindenki ugyanúgy, gyorsan csatlakozik. Ha a szerver nem érhető el, minden a régi úton működik tovább.',
       'Visszacsatlakozás: ha lezár a telefon vagy egy pillanatra elmegy a net, a szerver egy percig megtartja a helyedet, és a közben történteket visszatéréskor megkapod — a többiek észre sem veszik.',
