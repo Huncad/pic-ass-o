@@ -1,0 +1,2 @@
+# PIC-ASS-O: rövid indító a Proxmox Shellhez (lásd server/proxmox-konterner.sh)
+curl -fsSL https://raw.githubusercontent.com/Huncad/pic-ass-o/test/server/proxmox-konterner.sh -o /root/picasso.sh && bash /root/picasso.sh < /dev/tty
