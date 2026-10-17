@@ -2275,6 +2275,14 @@
   @media (max-width:859px) and (orientation:portrait){
     html body:has(.board.wide-mode) #screen-watch .guess-row #btn-watch-voice{ width:48px; padding:0; border-radius:12px; }
   }
+
+  /* v4.10: visszajátszás sebességválasztó */
+  .glb-speed{ display:inline-flex; gap:2px; padding:3px; border-radius:12px; background:rgba(0,0,0,.35); border:1.5px solid rgba(var(--line-rgb),.18); }
+  .glb-speed.hidden{ display:none; }
+  .glb-speed button{ background:transparent; color:var(--chalk); box-shadow:none; padding:8px 11px; font-size:.9rem; border-radius:9px; }
+  .glb-speed button:hover{ transform:none; background:rgba(255,255,255,.08); }
+  .glb-speed button.active{ background:var(--yellow); color:#16302A; }
+  #glb-replay-canvas{ display:block; margin:0 auto; }
 </style>
 </head>
 <body>
@@ -2930,13 +2938,16 @@
 
 <div id="gallery-lightbox" class="hidden" role="dialog" aria-label="Rajz megtekintése">
   <img id="glb-img" alt="">
-  <canvas id="glb-replay-canvas" class="hidden" style="max-width:100%;max-height:70vh;border-radius:10px;background:#FBF7EC;"></canvas>
+  <canvas id="glb-replay-canvas" class="hidden" style="border-radius:10px;background:#FBF7EC;"></canvas>
   <div class="glb-word" id="glb-word"></div>
   <div class="glb-guesses" id="glb-guesses"></div>
   <div class="glb-hint" id="glb-hint"></div>
   <div class="glb-actions">
     <button class="pink" id="glb-share">📤 Mentés / megosztás</button>
     <button class="secondary" id="glb-replay">▶️ Visszajátszás</button>
+    <span class="glb-speed hidden" id="glb-speed" role="group" aria-label="Lejátszási sebesség">
+      <button type="button" data-sp="0.5">0,5×</button><button type="button" data-sp="1">1×</button><button type="button" data-sp="2">2×</button><button type="button" data-sp="4">4×</button>
+    </span>
     <button class="secondary" id="glb-download">📥 Letöltés</button>
     <button class="ghost" id="glb-close">Bezárás ✕</button>
   </div>
@@ -13290,21 +13301,40 @@ const SRV = (function(){
     const file = new File([blob], name, { type: blob.type || 'image/png' });
     return navigator.share({ files:[file], title:'PIC-ASS-O', text }).catch(()=>{});
   }
-  // v4.00: rajz-visszajátszás — a vonalak abban a sorrendben rajzolódnak ki,
-  // ahogy a rajzoló húzta őket, kb. 7 másodperc alatt
+  // v4.00: rajz-visszajátszás — a vonalak abban a sorrendben rajzolódnak ki, ahogy a rajzoló húzta őket.
+  // v4.10: valós sebesség körül (1× ≈ ahogy rajzolták), 0,5×–4× között állítható
+  // lejátszás közben is; a kép pontosan a rajz arányában, torzítás nélkül.
   let replayRun = 0;
+  let replaySpeed = 2;
+  try{ const v = parseFloat(localStorage.getItem('picasso-replay-speed')); if([0.5,1,2,4].includes(v)) replaySpeed = v; }catch(e){}
+  function syncSpeedUi(){
+    document.querySelectorAll('#glb-speed button').forEach(b=>b.classList.toggle('active', parseFloat(b.dataset.sp) === replaySpeed));
+  }
+  document.querySelectorAll('#glb-speed button').forEach(b=>b.addEventListener('click', ()=>{
+    sndClick(); replaySpeed = parseFloat(b.dataset.sp) || 2;
+    try{ localStorage.setItem('picasso-replay-speed', String(replaySpeed)); }catch(e){}
+    syncSpeedUi();
+  }));
+  syncSpeedUi();
   function stopReplay(){
     replayRun++;
     const cv = document.getElementById('glb-replay-canvas');
     if(cv){ cv.classList.add('hidden'); }
     const img = document.getElementById('glb-img'); if(img) img.classList.remove('hidden');
     const b = document.getElementById('glb-replay'); if(b) b.textContent = '▶️ Visszajátszás';
+    const sp = document.getElementById('glb-speed'); if(sp) sp.classList.add('hidden');
   }
   function startReplay(it){
     const run = ++replayRun;
     const cv = document.getElementById('glb-replay-canvas');
     const img = document.getElementById('glb-img');
     const W = it.w, H = it.h;
+    // same on-screen box as the picture, keeping the drawing's own shape
+    const r = img.getBoundingClientRect();
+    let boxW = r.width || Math.min(window.innerWidth * 0.92, W), boxH = r.height || Math.min(window.innerHeight * 0.7, H);
+    const scale = Math.min(boxW / W, boxH / H);
+    cv.style.width = Math.round(W * scale) + 'px';
+    cv.style.height = Math.round(H * scale) + 'px';
     cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d');
     if(!ctx) return;
@@ -13315,19 +13345,25 @@ const SRV = (function(){
     paint(()=>{ bctx.fillStyle = paperColor(); bctx.fillRect(0,0,W,H); });
     img.classList.add('hidden'); cv.classList.remove('hidden');
     document.getElementById('glb-replay').textContent = '⏹ Állj';
+    document.getElementById('glb-speed').classList.remove('hidden');
+    syncSpeedUi();
     const strokes = it.strokes || [];
-    const total = strokes.reduce((n,st)=>n + Math.max(1, (st && st.points && st.points.length) || 1), 0);
-    const perFrame = Math.max(1, Math.ceil(total / (60 * 7)));
-    let si = 0, pi = 0;
-    const frame = ()=>{
+    // 1× ≈ 60 points a second (one pointer event per screen frame — about how
+    // it was drawn); shapes and fills count as a short beat of their own
+    let si = 0, pi = 0, carry = 0, lastT = 0;
+    const frame = (t)=>{
       if(run !== replayRun) return;
-      let budget = perFrame;
+      const dt = lastT ? Math.min(100, t - lastT) : 16.7;
+      lastT = t;
+      carry += replaySpeed * 60 * dt / 1000;
+      let budget = Math.floor(carry); carry -= budget;
       while(budget > 0 && si < strokes.length){
         const st = strokes[si];
         const n = (st && st.points && st.points.length) || 0;
         const whole = !n || st.t === 'fill' || st.t === 'line' || st.t === 'rect' || st.t === 'circle';
-        if(whole || pi + budget >= n){
-          budget -= whole ? 1 : (n - pi);
+        if(whole){ budget -= 8; paint(()=>drawStrokeOn(bctx, st, W, H)); si++; pi = 0; continue; }
+        if(pi + budget >= n){
+          budget -= (n - pi);
           paint(()=>drawStrokeOn(bctx, st, W, H));
           si++; pi = 0;
         } else { pi += budget; budget = 0; }
@@ -13338,7 +13374,7 @@ const SRV = (function(){
         paint(()=>drawStrokeOn(ctx, Object.assign({}, st, { points: st.points.slice(0, pi + 1) }), W, H));
       }
       if(si >= strokes.length){
-        setTimeout(()=>{ if(run === replayRun){ releaseCanvas(base); stopReplay(); } }, 1200);
+        setTimeout(()=>{ if(run === replayRun){ releaseCanvas(base); stopReplay(); } }, 1500);
         return;
       }
       requestAnimationFrame(frame);
@@ -14293,6 +14329,7 @@ const SRV = (function(){
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
     { version:'4.10', changes:[
+      'Rajz-visszajátszás: nagyjából olyan tempóban játssza le a rajzot, ahogy készült, és lejátszás közben állítható a sebesség (0,5× – 4×). A kép már nem nyúlik meg, pontosan a rajz arányában jelenik meg.',
       'Tippelés hanggal: a tippmező melletti 🎙️ gombbal gépelés helyett ki is mondhatod a tippjeidet. Amíg be van kapcsolva, folyamatosan figyel; ha gyorsan több szót mondasz egymás után, mindegyik külön tippként megy el, és ha a gép rosszul hallotta, de valamelyik másik olvasata jó, az is számít. A kör végén magától kikapcsol. (Chrome-ban és iPhone-on Safariban működik.)',
       'Telefonos tippelő képernyő újratervezve: a visszaszámláló nem lóg bele a körszámlálóba, a rajzlap pontosan a rajz arányában jelenik meg (nincsenek üres sávok), a tipplista kitölti a maradék helyet, és a legújabb tipp közvetlenül a beíró mező fölött látszik. Nyitott billentyűzetnél semmi nem ugrál: a rajz és a lista arányosan zsugorodik.',
       'Megújult kezdőképernyő: áttekinthető kártyák (játékos beállításai, elérhető szobák, értesítő, súgó). A játékosszínt már nem kell választani — mindenki automatikusan kap egyet.',
