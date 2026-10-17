@@ -2011,6 +2011,91 @@
   #chat-fs-val{ font-weight:900; color:var(--chalk); min-width:46px; text-align:center; }
   #chat-settings .cs-preview{ margin:10px 0 0; padding:6px 10px; border-radius:10px; background:rgba(0,0,0,.22); color:var(--chalk);
     font-size:calc(.95rem * var(--chat-fs)); }
+
+  /* ===== v4.10: új kezdőképernyő (kártyás elrendezés) ===== */
+  .phone-hint{ display:flex; align-items:flex-start; gap:12px; margin:0 0 16px; padding:12px 14px; border-radius:14px;
+    background:color-mix(in srgb, var(--yellow) 14%, transparent); border:1.5px solid color-mix(in srgb, var(--yellow) 55%, transparent);
+    color:var(--chalk); font-size:.92rem; line-height:1.4; }
+  .phone-hint.hidden{ display:none; }
+  .phone-hint-ico{ font-size:1.5rem; line-height:1; }
+  .phone-hint b{ color:var(--yellow); }
+  #phone-hint-close{ margin-left:auto; padding:2px 9px; flex-shrink:0; }
+
+  .home-hero{ display:flex; align-items:center; gap:16px; margin:4px 0 18px; animation:fadeUp .5s ease both; }
+  .home-hero-ico{ width:62px; flex-shrink:0; color:var(--purple); }
+  .home-hero-ico svg{ width:100%; height:auto; display:block; }
+  .home-hero h2{ margin:0; font-family:'Nunito',sans-serif; font-weight:800; font-size:2rem; color:var(--chalk); line-height:1.1; }
+  .home-hero p{ margin:4px 0 0; color:var(--chalk-dim); font-size:1rem; }
+  .home-card{ background:rgba(0,0,0,.16); border:1.5px solid rgba(var(--line-rgb),.12); border-radius:16px; padding:18px 20px; margin:0 0 16px; animation:fadeUp .5s ease .1s both; }
+  .home-card-h{ display:flex; align-items:center; gap:12px; margin:0 0 14px; font-family:'Nunito',sans-serif; font-weight:800; font-size:1.15rem; color:var(--chalk); letter-spacing:0; }
+  .hc-ico{ width:28px; height:22px; color:var(--chalk-dim); flex-shrink:0; display:inline-flex; }
+  .hc-ico svg{ width:100%; height:100%; }
+  #player-card .field-label{ margin-bottom:6px; }
+  #player-card .spectate-toggle{ margin:12px 0 0; justify-content:flex-start; background:transparent; border:none; padding:4px 0; font-weight:600; }
+  #player-card .spectate-toggle input{ width:20px; height:20px; accent-color:var(--blue); }
+  .rooms-h{ flex-wrap:wrap; }
+  .rooms-status{ display:inline-flex !important; align-items:center; gap:6px; margin:0 !important; font-size:.9rem !important; font-weight:600; color:var(--chalk-dim) !important; cursor:pointer; }
+  .rooms-status.ok::before{ content:""; width:10px; height:10px; border-radius:50%; background:var(--green); flex-shrink:0; }
+  .rooms-refresh{ margin-left:auto; display:inline-flex !important; align-items:center; gap:8px; padding:8px 14px !important; border-radius:10px !important;
+    border:1.5px solid color-mix(in srgb, var(--blue) 60%, transparent) !important; color:var(--chalk) !important; background:color-mix(in srgb, var(--blue) 10%, transparent) !important; font-weight:800; }
+  .rooms-refresh svg{ width:18px; height:18px; }
+  #rooms-card .room-list{ max-height:300px; }
+  .room-empty{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:6px; padding:30px 16px;
+    border:1.5px dashed rgba(var(--line-rgb),.18); border-radius:14px; }
+  .room-empty-ico{ width:84px; color:var(--chalk-dim); opacity:.75; margin-bottom:4px; }
+  .room-empty-ico svg{ width:100%; height:auto; display:block; }
+  .room-empty b{ font-size:1.25rem; color:var(--chalk); }
+  .room-empty p{ margin:0; color:var(--chalk-dim); font-size:.98rem; }
+  #rooms-card .create-wrap{ margin-top:16px; }
+  #rooms-card .create-cta{ width:100%; max-width:none; justify-content:space-between; padding:16px 22px; border-radius:14px;
+    background:linear-gradient(180deg, color-mix(in srgb, var(--green) 85%, white), var(--green)); }
+  #rooms-card .create-cta > span:nth-child(2){ flex:1; text-align:center; font-size:1.3rem; }
+  .cta-plus{ width:42px; height:42px; border-radius:50%; background:#0f2a1d; color:var(--green); display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .cta-plus svg{ width:22px !important; height:22px !important; }
+  #home-warning:empty{ display:none; }
+  #subscribe-box{ padding:0; overflow:hidden; }
+  .sub-head{ all:unset; box-sizing:border-box; width:100%; display:flex; align-items:center; gap:16px; padding:18px 20px; cursor:pointer; color:var(--chalk); }
+  .sub-head:focus-visible{ outline:2px solid var(--yellow); outline-offset:-2px; border-radius:16px; }
+  .sub-mail{ width:42px; flex-shrink:0; } .sub-mail svg{ width:100%; height:auto; display:block; }
+  .sub-titles{ flex:1; display:flex; flex-direction:column; gap:2px; }
+  .sub-titles b{ font-size:1.15rem; font-weight:800; }
+  .sub-titles small{ color:var(--chalk-dim); font-size:.9rem; }
+  .sub-chev{ width:22px; height:22px; color:var(--chalk-dim); transition:transform .2s ease; }
+  #subscribe-box.collapsed .sub-chev{ transform:rotate(180deg); }
+  #subscribe-box.collapsed .sub-body{ display:none; }
+  .sub-body{ margin:0 14px 14px; padding:14px; border:1.5px solid rgba(var(--line-rgb),.12); border-radius:14px; background:rgba(0,0,0,.12); }
+  .sub-row{ display:flex; gap:12px; align-items:stretch; }
+  .sub-input{ flex:1; min-width:0; }
+  .sub-input input{ width:100%; padding:14px 16px 14px 52px !important; font-size:1.02rem; color:var(--chalk); font-family:'Nunito',sans-serif;
+    background:rgba(0,0,0,.28) !important; border:1.5px solid rgba(var(--line-rgb),.22) !important; border-radius:12px; }
+  .sub-input input::placeholder{ color:var(--chalk-dim); opacity:.7; }
+  .sub-input input:focus{ outline:none; border-color:var(--yellow) !important; }
+  #btn-subscribe{ padding:12px 24px; border-radius:12px; white-space:nowrap; }
+  .sub-consent{ display:flex; align-items:flex-start; gap:10px; margin:14px 0 0; font-size:.92rem; color:var(--chalk); cursor:pointer; line-height:1.4; }
+  .sub-consent input{ width:20px; height:20px; margin:1px 0 0; flex-shrink:0; accent-color:var(--blue); }
+  .sub-consent a{ color:var(--blue); }
+  .sub-note{ margin:8px 0 0 30px; font-size:.84rem; color:var(--chalk-dim); line-height:1.4; }
+  .home-tiles{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:4px 0 0; animation:fadeUp .5s ease .2s both; }
+  .home-tile{ display:flex; align-items:center; gap:14px; padding:16px; border-radius:14px; text-align:left;
+    background:rgba(0,0,0,.16); border:1.5px solid rgba(var(--line-rgb),.12); color:var(--chalk); box-shadow:none; font-weight:800; font-size:.98rem; }
+  .home-tile:hover{ border-color:var(--yellow); }
+  .home-tile > span:nth-child(2){ flex:1; }
+  .tile-ico{ width:40px; height:40px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; color:#fff; font-size:1.3rem; font-weight:900; }
+  .tile-emoji{ background:transparent; font-size:1.6rem; }
+  .tile-chev{ font-size:1.5rem; color:var(--chalk-dim); line-height:1; }
+  .home-foot{ margin-top:18px; padding-top:16px; border-top:1px solid rgba(var(--line-rgb),.12); text-align:center; }
+  .home-foot .home-stats{ margin:0 0 12px; }
+  .home-foot .stats-open-btn{ display:inline-flex; gap:8px; align-items:center; padding:10px 18px; border-radius:12px; }
+  @media (max-width:640px){
+    .home-hero h2{ font-size:1.6rem; } .home-hero-ico{ width:48px; }
+    .home-card{ padding:16px 14px; }
+    .home-tiles{ grid-template-columns:1fr; gap:10px; }
+    .sub-row{ flex-direction:column; }
+    #btn-subscribe{ width:100%; }
+    .sub-note{ margin-left:0; }
+    .rooms-refresh{ padding:6px 10px !important; font-size:.85rem; }
+    #rooms-card .create-cta > span:nth-child(2){ font-size:1.12rem; }
+  }
 </style>
 </head>
 <body>
@@ -2095,56 +2180,78 @@
       <p style="margin:6px 0;font-weight:800;">Meghívtak egy PIC-ASS-O partiba!</p>
       <p class="center-note" id="invite-room-hint" style="margin:0 0 12px;"></p>
     </div>
-    <div class="setup-section">
-      <label class="field-label">A neved</label>
-      <span class="input-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4.2" fill="currentColor"/><path d="M3.5 21 C4.5 15.5 8 13.6 12 13.6 C16 13.6 19.5 15.5 20.5 21 Z" fill="currentColor"/></svg>
+    <div id="phone-hint" class="phone-hint hidden" role="note">
+      <span class="phone-hint-ico" aria-hidden="true">💻</span>
+      <span><b>Telefonról vagy itt?</b> A játék telefonon is működik, de rajzolni és tippelni sokkal kényelmesebb laptopon, számítógépen vagy tableten — ha van rá lehetőséged, használd azt!</span>
+      <button type="button" class="ghost small" id="phone-hint-close" aria-label="Értesítés bezárása">✕</button>
+    </div>
+    <div class="home-hero">
+      <span class="home-hero-ico"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M12 4h24c6 0 9 5 10 12l2 9c.6 4-3 6.5-6 4l-6-5H12l-6 5c-3 2.5-6.6 0-6-4l2-9C3 9 6 4 12 4Z" fill="currentColor"/><path d="M13 12v8M9 16h8" stroke="var(--panel)" stroke-width="3" stroke-linecap="round"/><circle cx="33" cy="13" r="2.2" fill="var(--panel)"/><circle cx="38" cy="18" r="2.2" fill="var(--panel)"/></svg></span>
+      <div><h2>Játékosszoba</h2><p>Csatlakozz egy nyitott szobához, vagy hozz létre saját játékot.</p></div>
+    </div>
+
+    <section class="home-card" id="player-card">
+      <h3 class="home-card-h"><span class="hc-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4.2" fill="currentColor"/><path d="M3.5 21C4.5 15.5 8 13.6 12 13.6s7.5 1.9 8.5 7.4Z" fill="currentColor"/></svg></span>Játékos beállításai</h3>
+      <label class="field-label" for="home-name">A neved</label>
+      <span class="input-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4.2" fill="currentColor"/><path d="M3.5 21C4.5 15.5 8 13.6 12 13.6s7.5 1.9 8.5 7.4Z" fill="currentColor"/></svg>
       <input type="text" id="home-name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" maxlength="16" placeholder="pl. Anna" aria-label="A neved"></span>
-      <div class="avatar-picker" id="avatar-picker"></div>
       <label class="spectate-toggle" title="Nézőként mindent látsz, de nem rajzolsz, nem tippelsz és nem kapsz pontot — pl. kivetítőhöz">
         <input type="checkbox" id="join-as-spectator"><span>👀 Csak nézőként csatlakozom</span>
       </label>
-    </div>
+    </section>
     <div id="invite-join-wrap" class="hidden" style="text-align:center;margin:10px 0 20px;">
       <button class="big" id="btn-invite-join" style="background:var(--green);">Csatlakozás a partihoz 🚀</button>
     </div>
-    <div class="setup-section">
-      <label class="field-label" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">Elérhető szobák <span id="room-list-status" class="conn-status" style="display:inline;margin:0;font-size:.7rem;"></span>
-        <button type="button" class="secondary small" id="btn-room-list-refresh" style="margin-left:auto;padding:4px 10px;font-size:.8rem;" title="Újrakeresés az összes hálózaton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14.3 4.9M4 12A8 8 0 0 1 18.3 7.1" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M18.8 2.8v4.8H14M5.2 21.2v-4.8H10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Frissítés</button></label>
+
+    <section class="home-card" id="rooms-card">
+      <div class="home-card-h rooms-h">
+        <span class="hc-ico"><svg viewBox="0 0 32 24" aria-hidden="true"><circle cx="11" cy="7" r="4.5" fill="currentColor"/><path d="M2 22c.8-6 4.5-8.5 9-8.5s8.2 2.5 9 8.5Z" fill="currentColor"/><circle cx="22" cy="8" r="3.8" fill="currentColor" opacity=".75"/><path d="M19 13.8c.9-.2 1.9-.3 3-.3 4 0 7.2 2.2 8 8.5h-8.2c-.3-3.5-1.3-6.2-2.8-8.2Z" fill="currentColor" opacity=".75"/></svg></span><span>Elérhető szobák</span>
+        <span id="room-list-status" class="conn-status rooms-status"></span>
+        <button type="button" class="ghost small rooms-refresh" id="btn-room-list-refresh" title="Újrakeresés az összes hálózaton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14.3 4.9M4 12A8 8 0 0 1 18.3 7.1" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M18.8 2.8v4.8H14M5.2 21.2v-4.8H10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Frissítés</button>
+      </div>
       <div id="apple-fix-box" class="hidden" style="background:rgba(255,209,102,0.12);border:2px dashed var(--yellow);border-radius:12px;padding:12px;margin:0 0 12px;text-align:center;">
         <p class="center-note" id="apple-fix-text" style="margin:0 0 10px;font-size:.85rem;"></p>
         <button class="secondary small" id="btn-apple-fix">📶 iPhone-kapcsolat javítása</button>
       </div>
       <div id="room-list" class="room-list">
-        <p class="center-note" id="room-list-empty">Még nincs nyitva szoba — hozz létre egyet! 👇</p>
+        <div class="room-empty"><span class="room-empty-ico"><svg viewBox="0 0 32 24" aria-hidden="true"><circle cx="11" cy="7" r="4.5" fill="currentColor"/><path d="M2 22c.8-6 4.5-8.5 9-8.5s8.2 2.5 9 8.5Z" fill="currentColor"/><circle cx="22" cy="8" r="3.8" fill="currentColor" opacity=".75"/><path d="M19 13.8c.9-.2 1.9-.3 3-.3 4 0 7.2 2.2 8 8.5h-8.2c-.3-3.5-1.3-6.2-2.8-8.2Z" fill="currentColor" opacity=".75"/></svg></span><b id="room-empty-title">Még nincs nyitva szoba</b><p id="room-list-empty">Hozz létre egyet, és hívd meg a többieket!</p></div>
       </div>
-    </div>
-    <div class="setup-section" id="subscribe-box">
-      <label class="field-label">🔔 Szólj, ha új szoba nyílik <span id="sub-count" class="conn-status" style="display:inline;margin:0;font-size:.75rem;"></span></label>
-      <div class="sub-row">
-        <input type="email" id="sub-email" maxlength="120" autocomplete="email" placeholder="e-mail címed" aria-label="E-mail cím az értesítéshez">
-        <button class="secondary small" id="btn-subscribe" type="button">Feliratkozom</button>
+      <p class="center-note hidden" id="invite-or-label">— vagy —</p>
+      <div class="create-wrap">
+        <button class="big create-cta" id="card-create"><span class="cta-plus" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></span><span>Szoba létrehozása</span><svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4 L13 10 L7 16" fill="none" stroke="#0f2a1d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       </div>
-      <label class="spectate-toggle" style="margin-top:8px;font-size:.82rem;">
-        <input type="checkbox" id="sub-consent"><span>Elmúltam 16 éves, és hozzájárulok, hogy az e-mail címemre értesítést küldjetek új szobákról (<a href="#" id="sub-privacy-link" style="color:var(--blue);">adatvédelem</a>).</span>
-      </label>
-      <p class="center-note" id="sub-status" style="margin:6px 0 0;font-size:.8rem;min-height:16px;">Először kapsz egy megerősítő levelet. Leiratkozni bármelyik levél alján lehet, vagy írd be újra a címed, és küldünk egy leiratkozó linket.</p>
+      <div id="home-warning" style="text-align:center;color:var(--red);font-weight:700;min-height:0;margin-top:10px;"></div>
+    </section>
+
+    <section class="home-card" id="subscribe-box">
+      <button type="button" class="sub-head" id="sub-toggle" aria-expanded="true" aria-controls="sub-body">
+        <span class="sub-mail"><svg viewBox="0 0 32 24" aria-hidden="true"><rect x="1" y="1" width="30" height="22" rx="4" fill="var(--blue)"/><path d="M3 4l13 10L29 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sub-titles"><b>Értesítés új szobákról</b><small>Kapsz egy e-mailt, ha valaki új szobát nyit. <span id="sub-count"></span></small></span>
+        <svg class="sub-chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 12.5 10 7.5l5 5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="sub-body" id="sub-body">
+        <div class="sub-row">
+          <span class="input-icon sub-input"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5" fill="currentColor"/><path d="M3.5 7l8.5 6.5L20.5 7" fill="none" stroke="var(--panel)" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input type="email" id="sub-email" maxlength="120" autocomplete="email" placeholder="e-mail címed" aria-label="E-mail cím az értesítéshez"></span>
+          <button class="secondary" id="btn-subscribe" type="button">Feliratkozom</button>
+        </div>
+        <label class="sub-consent">
+          <input type="checkbox" id="sub-consent"><span>Elmúltam 16 éves, és hozzájárulok, hogy az e-mail címemre értesítést küldjetek új szobákról (<a href="#" id="sub-privacy-link">adatvédelem</a>).</span>
+        </label>
+        <p class="sub-note" id="sub-status">Először kapsz egy megerősítő levelet. Leiratkozni bármelyik levél alján lehet, vagy írd be újra a címed, és küldünk egy leiratkozó linket.</p>
+      </div>
+    </section>
+
+    <div class="home-tiles">
+      <button class="home-tile" id="btn-open-tutorial" type="button"><span class="tile-ico" style="background:var(--blue);">?</span><span>Hogyan működik?</span><span class="tile-chev">›</span></button>
+      <button class="home-tile" id="btn-open-feedback" type="button"><span class="tile-ico" style="background:var(--purple);">…</span><span>Visszajelzés · hibabejelentés</span><span class="tile-chev">›</span></button>
+      <button class="home-tile" id="btn-open-privacy" type="button"><span class="tile-ico tile-emoji">🔒</span><span>Adatvédelem</span><span class="tile-chev">›</span></button>
     </div>
-    <p class="center-note hidden" id="invite-or-label">— vagy —</p>
-    <div class="create-wrap">
-      <svg class="cta-rays l" viewBox="0 0 44 64" aria-hidden="true"><g class="deco-line" stroke="currentColor"><path d="M40 10 L26 2 M40 32 L20 32 M40 54 L26 62"/></g></svg>
-      <button class="big create-cta" id="card-create"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 26 L8 19 L21 6 L26 11 L13 24 Z" fill="#0f2a1d"/><path d="M19 8 L24 13" style="stroke:color-mix(in srgb, var(--green) 70%, white)" stroke-width="2"/><path d="M5 27 L8 19 L13 24 Z" fill="#0f2a1d"/></svg><span>Szoba létrehozása</span><svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4 L13 10 L7 16" fill="none" stroke="#0f2a1d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      <svg class="cta-rays r" viewBox="0 0 44 64" aria-hidden="true"><g class="deco-line" stroke="currentColor"><path d="M40 10 L26 2 M40 32 L20 32 M40 54 L26 62"/></g></svg>
-      <p class="center-note create-sub">Te leszel a szobanyitó — beállítod a játékot, és meghívod a többieket.</p>
+    <div class="home-foot">
+      <p class="home-stats hidden" id="home-stats"></p>
+      <p class="home-stats hidden" id="home-ranglista-wrap"><a id="home-ranglista" href="#" target="_blank" rel="noopener" style="color:var(--yellow);">🏆 Közös ranglista</a></p>
+      <button class="ghost small stats-open-btn" id="btn-open-stats" type="button">📊 Statisztikáim <span aria-hidden="true">›</span></button>
     </div>
-    <div id="home-warning" style="text-align:center;color:var(--red);font-weight:700;min-height:20px;margin-top:14px;"></div>
-    <div class="feedback-cta">
-      <button class="ghost" id="btn-open-tutorial"><span class="ico" aria-hidden="true">❓</span>Hogyan működik?</button>
-      <button class="ghost" id="btn-open-feedback"><span class="ico" aria-hidden="true">💬</span>Visszajelzés · hibabejelentés</button>
-      <button class="ghost" id="btn-open-privacy"><span class="ico" aria-hidden="true">🔒</span>Adatvédelem</button>
-    </div>
-    <p class="home-stats hidden" id="home-stats"></p>
-    <p class="home-stats hidden" id="home-ranglista-wrap"><a id="home-ranglista" href="#" target="_blank" rel="noopener" style="color:var(--yellow);">🏆 Közös ranglista</a></p>
-    <button class="ghost small stats-open-btn" id="btn-open-stats" type="button">📊 Statisztikáim</button>
     <p class="center-note" id="words-loading-note">Szavak betöltése…</p>
   </div>
 
@@ -4450,6 +4557,24 @@ const SRV = (function(){
   // can also forward it as an e-mail. The channel name comes from the
   // live store (ertesites.json), set on the admin page.
   // =====================================================================
+  // v4.10: telefonon javasoljuk a nagyobb képernyőt (tableten nem)
+  (function(){
+    const el = document.getElementById('phone-hint');
+    if(!el) return;
+    let isPhone = false;
+    try{
+      const shortSide = Math.min(screen.width, screen.height);
+      const touch = matchMedia('(pointer:coarse)').matches;
+      isPhone = touch && shortSide < 600 && !/iPad|Tablet/i.test(navigator.userAgent);
+    }catch(e){}
+    let dismissed = false;
+    try{ dismissed = sessionStorage.getItem('picasso-phone-hint') === '0'; }catch(e){}
+    if(isPhone && !dismissed) el.classList.remove('hidden');
+    document.getElementById('phone-hint-close').addEventListener('click', ()=>{
+      el.classList.add('hidden');
+      try{ sessionStorage.setItem('picasso-phone-hint', '0'); }catch(e){}
+    });
+  })();
   // v4.10: e-mail feliratkozás új szobákra
   const SUBSCRIBE_URL = '/.netlify/functions/subscribe';
   function showSubCount(n){
@@ -4481,6 +4606,13 @@ const SRV = (function(){
     }catch(e){ st.style.color='var(--red)'; st.textContent = 'Nem sikerült: ' + e.message; }
     finally{ btn.disabled = false; }
   }
+  (function(){
+    const box = document.getElementById('subscribe-box'), tg = document.getElementById('sub-toggle');
+    const set = open => { box.classList.toggle('collapsed', !open); tg.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+    let open = true; try{ open = localStorage.getItem('picasso-sub-open') !== '0'; }catch(e){}
+    set(open);
+    tg.addEventListener('click', ()=>{ open = !open; set(open); try{ localStorage.setItem('picasso-sub-open', open ? '1' : '0'); }catch(e){} });
+  })();
   document.getElementById('btn-subscribe').addEventListener('click', doSubscribe);
   document.getElementById('sub-privacy-link').addEventListener('click', e=>{ e.preventDefault(); const b = document.getElementById('btn-open-privacy'); if(b) b.click(); });
   document.getElementById('sub-email').addEventListener('keydown', e=>{ if(e.key === 'Enter') doSubscribe(); });
@@ -5466,7 +5598,8 @@ const SRV = (function(){
   // Networking (Trystero — serverless WebRTC, no backend needed at all)
   // =====================================================================
   let myName = '';
-  const AVATAR_COLORS = ['#FF6FA0','#FFD166','#5FB6DE','#7BD389','#C79CF0','#FF6B5B','#4FD6E8','#F5A623'];
+  // v4.10: automatikus szín, rózsaszín nélkül
+  const AVATAR_COLORS = ['#FFD166','#5FB6DE','#7BD389','#C79CF0','#FF6B5B','#4FD6E8','#F5A623'];
   function loadMyAvatarColor(){
     try{
       const saved = localStorage.getItem('picasso-avatar-color');
@@ -5934,23 +6067,7 @@ const SRV = (function(){
     showOnly(['screen-error']);
   }
 
-  function renderAvatarPicker(){
-    const el = document.getElementById('avatar-picker');
-    el.innerHTML = AVATAR_COLORS.map(c=>
-      `<button class="avatar-swatch${c===myAvatarColor?' active':''}" data-color="${c}" style="background:${c};" title="Ez legyen a színed" aria-label="Válaszd ezt a színt magadnak"></button>`
-    ).join('');
-    el.querySelectorAll('.avatar-swatch').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        sndClick();
-        myAvatarColor = btn.dataset.color;
-        playerAvatars[selfId] = myAvatarColor;
-        try{ localStorage.setItem('picasso-avatar-color', myAvatarColor); }catch(e){}
-        el.querySelectorAll('.avatar-swatch').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-      });
-    });
-  }
-  renderAvatarPicker();
+  // v4.10: a játékosszín automatikus (nincs választó)
   playerAvatars[selfId] = myAvatarColor;
   function nameDotHtml(peerId){
     const color = playerAvatars[peerId];
@@ -9230,11 +9347,10 @@ const SRV = (function(){
       return;
     }
     if(SRV.up){   // v4.00
-      st.textContent = ` 🟢 kapcsolódva a játékszerverhez · ${peers+1} online ⓘ`;
+      st.textContent = `${peers+1} játékos online`; st.classList.add('ok');
       st.style.cursor = 'pointer';
       st.title = 'A szobák és a játék a saját játékszerveren keresztül mennek.';
-      const emptyEl = document.getElementById('room-list-empty');
-      if(emptyEl) emptyEl.textContent = 'Még nincs nyitva szoba — hozz létre egyet! 👇';
+      setRoomEmpty('Még nincs nyitva szoba', 'Hozz létre egyet, és hívd meg a többieket!');
       updateAppleFixUI();
       return;
     }
@@ -9255,17 +9371,13 @@ const SRV = (function(){
     else if(peers === 0 && dirConnErrors > 0) txt = '🟠 találtam másik játékost, de nem sikerült vele kapcsolatot építeni';
     else if(peers === 0) txt = `🟢 kapcsolódva · még nincs más online`;
     else txt = `🟢 ${peers+1} játékos online`;
-    st.textContent = ' ' + txt + ' ⓘ';
+    st.textContent = txt.replace(/^[🟢🟡🟠🔴]\s*/u, ''); st.classList.toggle('ok', txt.startsWith('🟢'));
     st.style.cursor = 'pointer';
     st.title = `Hálózati szerverek: ${open}/${total} elérhető. Talált játékosok: ${peers}. Koppints a részletekért.`;
     // "No rooms" is only true if we can actually hear the others. When every
     // connection failed we simply don't know — say that instead.
-    const emptyEl = document.getElementById('room-list-empty');
-    if(emptyEl){
-      emptyEl.textContent = (peers === 0 && dirConnErrors > 0)
-        ? 'Most nem látom a szobákat, mert nem jött létre kapcsolat a többi eszközzel — ettől még lehet nyitott szoba.'
-        : 'Még nincs nyitva szoba — hozz létre egyet! 👇';
-    }
+    if(peers === 0 && dirConnErrors > 0) setRoomEmpty('Most nem látom a szobákat', 'Nem jött létre kapcsolat a többi eszközzel — ettől még lehet nyitott szoba.');
+    else setRoomEmpty('Még nincs nyitva szoba', 'Hozz létre egyet, és hívd meg a többieket!');
     updateAppleFixUI();
   }
 
@@ -9440,6 +9552,11 @@ const SRV = (function(){
     });
   })();
 
+  const ROOM_EMPTY_HTML = '<div class="room-empty"><span class="room-empty-ico"><svg viewBox="0 0 32 24" aria-hidden="true"><circle cx="11" cy="7" r="4.5" fill="currentColor"/><path d="M2 22c.8-6 4.5-8.5 9-8.5s8.2 2.5 9 8.5Z" fill="currentColor"/><circle cx="22" cy="8" r="3.8" fill="currentColor" opacity=".75"/><path d="M19 13.8c.9-.2 1.9-.3 3-.3 4 0 7.2 2.2 8 8.5h-8.2c-.3-3.5-1.3-6.2-2.8-8.2Z" fill="currentColor" opacity=".75"/></svg></span><b id="room-empty-title">Még nincs nyitva szoba</b><p id="room-list-empty">Hozz létre egyet, és hívd meg a többieket!</p></div>';
+  function setRoomEmpty(title, sub){
+    const t = document.getElementById('room-empty-title'), p = document.getElementById('room-list-empty');
+    if(t) t.textContent = title; if(p) p.textContent = sub;
+  }
   function renderRoomList(){
     const listEl = document.getElementById('room-list');
     const rooms = [...knownRooms.values()].sort((a,b)=>
@@ -9448,7 +9565,7 @@ const SRV = (function(){
     if(sig === lastRoomListSig) return;
     lastRoomListSig = sig;
     if(rooms.length === 0){
-      listEl.innerHTML = '<p class="center-note" id="room-list-empty">Még nincs nyitva szoba — hozz létre egyet! 👇</p>';
+      listEl.innerHTML = ROOM_EMPTY_HTML;
       return;
     }
     listEl.innerHTML = rooms.map(r => {
@@ -13759,6 +13876,8 @@ const SRV = (function(){
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
     { version:'4.10', changes:[
+      'Megújult kezdőképernyő: áttekinthető kártyák (játékos beállításai, elérhető szobák, értesítő, súgó). A játékosszínt már nem kell választani — mindenki automatikusan kap egyet.',
+      'Telefonról belépve egy bezárható jelzés javasolja, hogy ha lehet, laptopon, számítógépen vagy tableten játssz — rajzolni ott sokkal kényelmesebb.',
       'Adatvédelem: új, részletes tájékoztató (ki kezeli az adatokat, milyen jogalapon, meddig, kik férnek hozzá, milyen jogaid vannak). A betűtípusok mostantól a játék saját tárhelyéről töltődnek be, nem a Google szervereiről. A közös ranglista bejegyzései 1 év után törlődnek.',
       'Új szoba értesítő: a kezdőoldalon megadhatod az e-mail címedet, és szólunk, ha valaki új nyilvános szobát nyit (legfeljebb 15 percenként egy levél). Először egy megerősítő levél érkezik, így senki nem iratkoztathat fel mást. Leiratkozni bármelyik levél alján, vagy a cím újbóli beírásával lehet. A kezdőoldalon látszik, hányan vannak feliratkozva.'
     ]},
