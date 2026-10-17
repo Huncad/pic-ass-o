@@ -2182,10 +2182,14 @@
 
     /* rajzlap: a papír arányában, legfeljebb a képernyő ~56%-a */
     html body:has(.board.wide-mode) #screen-watch .watch-content-wrap{ gap:6px; }
+    /* contain:size — a rajzlap mérete SOHA nem függ a benne lévő vászontól, így nem tud
+       kitolni a képernyőből (ez okozta az ugrálást és a lecsúszott fejlécet) */
     html body:has(.board.wide-mode) #screen-watch .canvas-area{
-      flex:0 1 auto; width:100%; aspect-ratio:var(--paper-ar, 1.8); height:auto;
-      max-height:56%; min-height:120px; padding:3px; }
-    html body.kb-open:has(.board.wide-mode) #screen-watch .canvas-area{ max-height:50%; min-height:90px; }
+      flex:0 1 auto; width:100%; min-width:0; aspect-ratio:var(--paper-ar, 1.8); height:auto;
+      max-height:calc(var(--vvh, 100vh) * .5); min-height:0; padding:3px; overflow:hidden; contain:size layout; }
+    html body.kb-open:has(.board.wide-mode) #screen-watch .canvas-area{ max-height:calc(var(--vvh, 100vh) * .42); }
+    html body:has(.board.wide-mode) #screen-watch .watch-content-wrap,
+    html body:has(.board.wide-mode) #screen-watch #watch-live{ min-width:0; min-height:0; overflow:hidden; }
 
     /* tipplista: kitölti a maradék helyet, a legújabb alul, a beíró mező fölött */
     html body:has(.board.wide-mode) #screen-watch .guess-sidebar{ flex:1 1 0; min-height:0; display:flex; flex-direction:column; gap:6px; }
@@ -6116,8 +6120,22 @@ const SRV = (function(){
       if(e.cancelable) e.preventDefault();
     }, { passive:false });
     // the on-screen keyboard can leave the page shifted — put it back
-    const resetShift = ()=>{ if(document.documentElement.classList.contains('watch-lock') && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0); };
+    // v4.10: while a text box has the keyboard, iOS keeps the box in view by
+    // scrolling; fighting it (scrolling back at once) made the screen jump up
+    // and down every couple of seconds. The game panel follows the visible
+    // area on its own (--vvtop), so we only tidy up once the keyboard closes.
+    const typing = ()=>{ const a = document.activeElement; return !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable); };
+    const unshiftPanels = ()=>{
+      ['screen-watch','screen-fulldraw'].forEach(id=>{ const el = document.getElementById(id); if(el && (el.scrollTop || el.scrollLeft)){ el.scrollTop = 0; el.scrollLeft = 0; } });
+      document.querySelectorAll('#screen-watch .watch-content-wrap, #screen-watch #watch-live').forEach(el=>{ if(el.scrollTop || el.scrollLeft){ el.scrollTop = 0; el.scrollLeft = 0; } });
+    };
+    const resetShift = ()=>{
+      if(!document.documentElement.classList.contains('watch-lock') || typing()) return;
+      if(window.scrollY || document.documentElement.scrollTop) window.scrollTo(0, 0);
+      unshiftPanels();
+    };
     window.addEventListener('scroll', resetShift, { passive:true });
+    document.addEventListener('focusout', ()=>{ setTimeout(resetShift, 120); setTimeout(resetShift, 450); });
     if(window.visualViewport) window.visualViewport.addEventListener('resize', ()=>setTimeout(resetShift, 60));
     window.addEventListener('resize', ()=>{
       const w = document.getElementById('screen-watch');
