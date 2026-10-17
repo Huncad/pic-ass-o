@@ -4648,7 +4648,7 @@ const SRV = (function(){
     const set = open => { box.classList.toggle('collapsed', !open); tg.setAttribute('aria-expanded', open ? 'true' : 'false'); };
     let open = false; try{ open = localStorage.getItem('picasso-sub-open') === '1'; }catch(e){}
     set(open);
-    tg.addEventListener('click', ()=>{ open = !open; set(open); try{ localStorage.setItem('picasso-sub-open', open ? '1' : '0'); }catch(e){} });
+    tg.addEventListener('click', ()=>{ open = !open; set(open); try{ localStorage.setItem('picasso-sub-open', open ? '1' : '0'); }catch(e){} try{ fitMainBoard(); }catch(e){} });
   })();
   document.getElementById('btn-subscribe').addEventListener('click', doSubscribe);
   document.getElementById('sub-privacy-link').addEventListener('click', e=>{ e.preventDefault(); const b = document.getElementById('btn-open-privacy'); if(b) b.click(); });
@@ -6062,6 +6062,11 @@ const SRV = (function(){
     const usable = big && !b.classList.contains('hidden') && !b.classList.contains('wide-mode');
     if(!usable){ b.style.zoom = ''; b.style.width = ''; b.style.minHeight = ''; b.style.maxWidth = ''; return; }
     fitBoardBusy = true;
+    // v4.10: the zoom is measured with the e-mail card OPEN, so opening or
+    // closing it never makes the whole page jump to another size
+    const subBox = document.getElementById('subscribe-box');
+    const subWasCollapsed = !!subBox && subBox.classList.contains('collapsed');
+    if(subWasCollapsed) subBox.classList.remove('collapsed');
     try{
       // body has 24px padding on each side
       b.style.zoom = z > 1.01 ? z.toFixed(3) : '';
@@ -6083,8 +6088,11 @@ const SRV = (function(){
       }
       const zf = parseFloat(b.style.zoom) || 1;
       b.style.minHeight = Math.floor((H - 48) / zf) + 'px';
+    } finally {
+      if(subWasCollapsed) subBox.classList.add('collapsed');
       fitBoardLast = b.scrollHeight + 'x' + b.scrollWidth;
-    } finally { fitBoardBusy = false; }
+      fitBoardBusy = false;
+    }
   }
   var fitBoardLast = '';
   // content that grows or shrinks (players joining, room list…) is re-fitted
