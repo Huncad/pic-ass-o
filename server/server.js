@@ -141,6 +141,17 @@ const lastReportByRoom = new Map();
 
 function nameKey(n){ return String(n).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim(); }
 
+// GDPR: a ranglista bejegyzései 1 év után törlődnek
+const GAME_RETENTION_MS = 365 * 86400_000;
+function pruneOldGames(){
+  const cut = Date.now() - GAME_RETENTION_MS;
+  const keep = games.filter(g => (g.at || 0) >= cut);
+  if(keep.length !== games.length){ games.length = 0; games.push(...keep); return true; }
+  return false;
+}
+setInterval(() => { if(pruneOldGames()) saveGames(); }, 6 * 3600_000).unref?.();
+setTimeout(() => { if(pruneOldGames()) saveGames(); }, 5000).unref?.();
+
 function recordGame(peer, rows){
   if(!peer.room) return 'nincs szobában';
   const members = roomMembers(peer.room);
@@ -157,6 +168,7 @@ function recordGame(peer, rows){
   }
   lastReportByRoom.set(peer.room, Date.now());
   games.push({ at: Date.now(), players: clean });
+  pruneOldGames();
   if(games.length > 20000) games.splice(0, games.length - 20000);
   saveGames();
   log('játék rögzítve', clean.map(r => `${r.name}:${r.score}`).join(', '));

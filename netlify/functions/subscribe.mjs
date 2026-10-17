@@ -138,6 +138,7 @@ export default async (req) => {
   // ---- feliratkozás ----
   if (body.action === 'subscribe') {
     if (limited('s|' + ip, 5, 3600000)) return json({ error: 'Túl sok próbálkozás, próbáld újra később.' }, 429);
+    if (body.consent !== true) return json({ error: 'A feliratkozáshoz hozzájárulás kell.' }, 400);
     const email = cleanEmail(body.email);
     if (!email) return json({ error: 'Ez nem tűnik érvényes e-mail címnek.' }, 400);
     const d = await read();
@@ -162,6 +163,7 @@ export default async (req) => {
     if (!cur && Object.keys(d.subs).length >= MAX_SUBS) return json({ error: 'Megtelt a lista.' }, 503);
     const s = cur || { email, status: 'pending', ut: token() };
     s.ct = token(); s.at = Date.now(); s.sentAt = Date.now();
+    s.consent = 'v4.10: 16+ és hozzájárulás az új szobák e-mail értesítőjéhez';
     d.subs[h] = s;
     try {
       await sendMail(email, 'Erősítsd meg a feliratkozást — PIC-ASS-O',

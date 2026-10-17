@@ -17,9 +17,21 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="PIC-ASS-O">
 <link rel="manifest" id="app-manifest-link">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<!-- v4.10: betűtípusok helyből (nem a Google szervereiről — GDPR) -->
+<style>
+@font-face{font-family:'Kalam';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/kalam-latin-ext-400-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;}
+@font-face{font-family:'Kalam';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/kalam-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Kalam';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/kalam-latin-ext-700-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;}
+@font-face{font-family:'Kalam';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/kalam-latin-700-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/nunito-latin-ext-400-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/nunito-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:600;font-display:swap;src:url(fonts/nunito-latin-ext-600-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:600;font-display:swap;src:url(fonts/nunito-latin-600-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/nunito-latin-ext-700-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/nunito-latin-700-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:800;font-display:swap;src:url(fonts/nunito-latin-ext-800-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:800;font-display:swap;src:url(fonts/nunito-latin-800-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+</style>
 <style>
   :root{
     --bg-base:#16302A; --bg2-base:#1E3E2E; --panel-base:#20452F; --paper-base:#FBF7EC;
@@ -233,6 +245,7 @@
   #privacy-overlay{ position:fixed; inset:0; z-index:1000; background:rgba(10,20,16,0.92); display:flex; align-items:flex-start; justify-content:center; padding:20px; overflow-y:auto; }
   #privacy-overlay p, #privacy-overlay li{ font-size:.9rem; line-height:1.45; color:var(--chalk); }
   #privacy-overlay ul{ padding-left:20px; }
+  #privacy-overlay .pv-h{ color:var(--yellow); font-size:1.05rem; margin:18px 0 6px; }
   .setup-hint{ margin:8px 2px 0; font-size:.78rem; line-height:1.35; color:var(--chalk-dim); opacity:.85; }
   .setup-section{margin:20px 0;}
   .sub-row{ display:flex; gap:8px; }
@@ -2111,6 +2124,9 @@
         <input type="email" id="sub-email" maxlength="120" autocomplete="email" placeholder="e-mail címed" aria-label="E-mail cím az értesítéshez">
         <button class="secondary small" id="btn-subscribe" type="button">Feliratkozom</button>
       </div>
+      <label class="spectate-toggle" style="margin-top:8px;font-size:.82rem;">
+        <input type="checkbox" id="sub-consent"><span>Elmúltam 16 éves, és hozzájárulok, hogy az e-mail címemre értesítést küldjetek új szobákról (<a href="#" id="sub-privacy-link" style="color:var(--blue);">adatvédelem</a>).</span>
+      </label>
       <p class="center-note" id="sub-status" style="margin:6px 0 0;font-size:.8rem;min-height:16px;">Először kapsz egy megerősítő levelet. Leiratkozni bármelyik levél alján lehet, vagy írd be újra a címed, és küldünk egy leiratkozó linket.</p>
     </div>
     <p class="center-note hidden" id="invite-or-label">— vagy —</p>
@@ -2453,18 +2469,40 @@
       <h2 id="privacy-title">🔒 Adatvédelem</h2>
       <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
     </div>
-    <p>A játéknak nincs felhasználói fiókja. Röviden, mi hova kerül:</p>
+    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. október 17-től · v4.10</p>
+    <h3 class="pv-h">Ki kezeli az adatokat?</h3>
+    <p><b>Adatkezelő:</b> Ádám, magánszemély, a PIC-ASS-O hobbiprojekt fejlesztője és üzemeltetője.<br>
+    <b>Kapcsolat:</b> <a href="mailto:picasso.ertesito@gmail.com" style="color:var(--blue);">picasso.ertesito@gmail.com</a> — minden adatvédelmi kérdéssel és kéréssel ide írhatsz.</p>
+    <p>A játéknak nincs felhasználói fiókja, nincs benne reklám, analitika vagy követő süti. Csak annyi adat keletkezik, amennyi a működéshez kell.</p>
+
+    <h3 class="pv-h">Milyen adatot, miért és meddig?</h3>
     <ul>
-      <li><b>Saját játékszerver (ha be van kapcsolva):</b> a szobák forgalma egy otthoni szerveren megy át, ami a beszélgetést nem tárolja, csak továbbítja (egy megszakadt kapcsolatnál legfeljebb egy percig tartja meg). A szobakódot sem látja, csak egy lenyomatát. A befejezett játékokból a beceneveket és a pontszámokat menti a közös ranglistához.</li>
-      <li><b>Rajz, tippek, chat, hangüzenet:</b> közvetlenül a játékosok eszközei között mennek, titkosított WebRTC-kapcsolaton. Ha ez nem jön létre, nyilvános MQTT-szervereken át mennek tovább, a szobakóddal titkosítva.</li>
-      <li><b>Kapcsolódáshoz:</b> nyilvános jelzőszerverek (Nostr / BitTorrent tracker / MQTT) és a közvetítő (TURN) szolgáltatás látja az eszközöd IP-címét.</li>
-      <li><b>Kitiltás:</b> ha a szobanyitó kirúgna, a játék egy véletlenszerű eszközazonosítót és az IP-címed egy visszafejthetetlen lenyomatát (nem magát a címet) tárolja a Netlify-on, hogy a kirúgott játékos ne tudjon visszalépni. A szobás tiltás legfeljebb 30 napig, az egész játékból való tiltás 7 napig marad meg, ezután az adat törlődik. Ha nem rúgnak ki, semmi sem marad meg rólad.</li>
-      <li><b>Nyilvános szobák:</b> a szoba neve, a szobanyitó becenevét és a létszám bárki számára látható a szobalistán. Privát szobánál ez nem jelenik meg a listán.</li>
-      <li><b>E-mail értesítő (csak ha feliratkozol):</b> az e-mail címedet a Netlify tárolja, a leveleket a játék saját Gmail fiókja küldi ki. Megerősítés nélkül a cím 24 óra után törlődik; leiratkozáskor azonnal. Más célra nem használjuk, és senkinek nem adjuk ki.</li>
-      <li><b>Visszajelzés-űrlap:</b> a Netlify Forms tárolja. A név és az elérhetőség önkéntes.</li>
-      <li><b>Az eszközödön marad:</b> beceneved, beállításaid, saját statisztikád és egy kapcsolódási hibanapló (24 óra után törlődik). Ezek nem kerülnek máshová, kivéve ha a naplót te magad kimásolod és elküldöd.</li>
+      <li><b>Játék közben (becenév, rajz, tippek, chat, hangüzenet):</b> a játékosok eszközei között mennek közvetlenül, titkosított WebRTC-kapcsolaton, vagy a saját játékszerveren / nyilvános MQTT-szervereken át, titkosítva. Sehol nem tároljuk őket, a játék végével eltűnnek (a szerver egy megszakadt kapcsolatnál legfeljebb 1 percig tartja meg). <i>Jogalap: a játék nyújtása, amit te kértél (GDPR 6. cikk (1) b).</i></li>
+      <li><b>IP-cím a kapcsolódáshoz:</b> a jelzőszerverek (Nostr / BitTorrent tracker / MQTT), a közvetítő (TURN) és a saját játékszerver látja, mert e nélkül nem jön létre a kapcsolat. Mi nem mentjük el. <i>Jogalap: jogos érdek a játék működtetéséhez (6. cikk (1) f).</i></li>
+      <li><b>Nyilvános szobák listája:</b> a szoba neve, a szobanyitó beceneve és a létszám, amíg a szoba nyitva van. Zárt szoba nem jelenik meg névvel. <i>Jogalap: 6. cikk (1) b.</i></li>
+      <li><b>Közös ranglista:</b> a befejezett játékokból a becenevek és a pontszámok kerülnek a saját játékszerverre, <b>1 évig</b>. Valódi nevet nem kérünk — ha a becenevedet törölnéd, írj a fenti címre. <i>Jogalap: jogos érdek (6. cikk (1) f) — tiltakozhatsz ellene.</i></li>
+      <li><b>Kitiltás:</b> ha a szobanyitó kirúg, egy véletlen eszközazonosítót és az IP-címed titkos kulccsal képzett lenyomatát (nem magát a címet) tároljuk a Netlify-on, hogy ne tudj visszalépni. Szobás tiltás legfeljebb 30, egész játékból való tiltás 7 napig marad meg. <i>Jogalap: jogos érdek a játék rendjének védelméhez (6. cikk (1) f).</i></li>
+      <li><b>E-mail értesítő új szobákról (csak ha feliratkozol):</b> az e-mail címedet, a feliratkozás és a megerősítés időpontját tároljuk a Netlify-on. Megerősítés nélkül 24 óra után, leiratkozáskor azonnal töröljük. Csak az új szobákról szóló értesítéshez használjuk, senkinek nem adjuk ki. Csak 16 éven felüliek iratkozhatnak fel. <i>Jogalap: a hozzájárulásod (6. cikk (1) a), amit bármikor visszavonhatsz a levelek alján lévő linkkel — a visszavonás az addigi küldések jogszerűségét nem érinti.</i></li>
+      <li><b>Visszajelzés-űrlap:</b> amit beírsz (a név és az elérhetőség önkéntes), a Netlify Forms tárolja; a válasz után, de legkésőbb 1 év múlva töröljük. <i>Jogalap: hozzájárulás (6. cikk (1) a).</i></li>
+      <li><b>Az eszközödön marad:</b> beceneved, beállításaid, saját statisztikád és egy kapcsolódási hibanapló (24 óra után törlődik). Ezek a böngésződ helyi tárhelyén vannak, csak a működéshez kellenek, ezért nincs szükség süti-hozzájárulásra; nem kerülnek máshová, kivéve ha a naplót te magad kimásolod és elküldöd.</li>
       <li><b>Mikrofon:</b> csak akkor kér hozzáférést, ha hangüzenetet veszel fel.</li>
     </ul>
+
+    <h3 class="pv-h">Kik férhetnek hozzá (adatfeldolgozók)?</h3>
+    <ul>
+      <li><b>Netlify Inc.</b> (USA) — a weboldal tárhelye, a feliratkozók, a kitiltások és a visszajelzések tárolása.</li>
+      <li><b>Google LLC</b> (USA) — a Gmail küldi ki az értesítő leveleket a picasso.ertesito@gmail.com fiókból.</li>
+      <li><b>GitHub Inc.</b> (USA) és a <b>jsDelivr / esm.run</b> CDN — a szólista, a zenék és a játék programkönyvtárainak betöltése; ezek a letöltéskor látják az IP-címedet.</li>
+      <li><b>Tailscale Inc.</b> (USA) — a saját játékszerver internetes elérése.</li>
+      <li><b>Metered / Cloudflare</b> — közvetítő (TURN) szerver, ha a közvetlen kapcsolat nem jön létre.</li>
+      <li><b>ntfy.sh</b> — az üzemeltető telefonjára küld értesítést új szobáról (csak a szoba nevét és a szobanyitó becenevét).</li>
+      <li>Nyilvános jelzőszerverek (Nostr, BitTorrent tracker, MQTT) — csak kapcsolódáshoz, titkosított tartalommal.</li>
+    </ul>
+    <p>Az USA-beli szolgáltatóknál az adattovábbítás az EU–USA adatvédelmi keretrendszer, illetve az Európai Bizottság általános szerződési feltételei alapján történik.</p>
+
+    <h3 class="pv-h">A jogaid</h3>
+    <p>Kérheted, hogy megmondjuk, milyen adatot tárolunk rólad (hozzáférés), kijavítsuk vagy töröljük, korlátozzuk a kezelését, és tiltakozhatsz a jogos érdeken alapuló kezelés ellen. A hozzájárulásodat bármikor visszavonhatod. Írj a fenti címre — legkésőbb 30 napon belül válaszolunk. Ha úgy érzed, megsértettük a jogaidat, panaszt tehetsz a <b>Nemzeti Adatvédelmi és Információszabadság Hatóságnál</b> (NAIH, <a href="https://naih.hu" target="_blank" rel="noopener" style="color:var(--blue);">naih.hu</a>), vagy bírósághoz fordulhatsz.</p>
+    <p>Automatizált döntéshozatal, profilalkotás nincs.</p>
     <p>Mindent törölhetsz a böngésző „webhelyadatok törlése” funkciójával, vagy az alábbi gombbal.</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px;">
       <button class="secondary small" id="privacy-clear-btn">🧹 Helyi adataim törlése</button>
@@ -4426,9 +4464,10 @@ const SRV = (function(){
     const input = document.getElementById('sub-email'), st = document.getElementById('sub-status'), btn = document.getElementById('btn-subscribe');
     const email = input.value.trim();
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ st.style.color='var(--red)'; st.textContent='Adj meg egy érvényes e-mail címet.'; return; }
+    if(!document.getElementById('sub-consent').checked){ st.style.color='var(--red)'; st.textContent='A feliratkozáshoz pipáld be a hozzájárulást.'; return; }
     btn.disabled = true; st.style.color='var(--chalk-dim)'; st.textContent='Küldés…';
     try{
-      const r = await fetch(SUBSCRIBE_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'subscribe', email }) });
+      const r = await fetch(SUBSCRIBE_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'subscribe', email, consent:true }) });
       const j = await r.json().catch(()=>({}));
       if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
       showSubCount(j.count);
@@ -4443,6 +4482,7 @@ const SRV = (function(){
     finally{ btn.disabled = false; }
   }
   document.getElementById('btn-subscribe').addEventListener('click', doSubscribe);
+  document.getElementById('sub-privacy-link').addEventListener('click', e=>{ e.preventDefault(); const b = document.getElementById('btn-open-privacy'); if(b) b.click(); });
   document.getElementById('sub-email').addEventListener('keydown', e=>{ if(e.key === 'Enter') doSubscribe(); });
 
   function cleanNotifyTopic(t){ const s = String(t || '').trim(); return /^[A-Za-z0-9_-]{8,64}$/.test(s) ? s : ''; }
@@ -13719,7 +13759,8 @@ const SRV = (function(){
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
     { version:'4.10', changes:[
-      'Új szoba értesítő: a kezdőoldalon megadhatod az e-mail címedet, és szólunk, ha valaki új nyilvános szobát nyit (legfeljebb 15 percenként egy levél). Először egy megerősítő levél érkezik, így senki nem iratkoztathat fel mást. Minden levél alján egy kattintással leiratkozhatsz. A kezdőoldalon látszik, hányan vannak feliratkozva.'
+      'Adatvédelem: új, részletes tájékoztató (ki kezeli az adatokat, milyen jogalapon, meddig, kik férnek hozzá, milyen jogaid vannak). A betűtípusok mostantól a játék saját tárhelyéről töltődnek be, nem a Google szervereiről. A közös ranglista bejegyzései 1 év után törlődnek.',
+      'Új szoba értesítő: a kezdőoldalon megadhatod az e-mail címedet, és szólunk, ha valaki új nyilvános szobát nyit (legfeljebb 15 percenként egy levél). Először egy megerősítő levél érkezik, így senki nem iratkoztathat fel mást. Leiratkozni bármelyik levél alján, vagy a cím újbóli beírásával lehet. A kezdőoldalon látszik, hányan vannak feliratkozva.'
     ]},
     { version:'4.01', changes:[
       'Javítás: ha egy játékos kapcsolata menet közben megakadt, a tippek és a rajz fél percig is késhettek, aztán egyszerre jelentek meg. Most a játék néhány másodpercen belül észreveszi, ha a kapcsolat elakadt, újracsatlakozik, és minden közben elküldött üzenet megérkezik, duplázás nélkül.'
