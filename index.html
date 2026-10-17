@@ -2216,6 +2216,38 @@
     html body.kb-open:has(.board.wide-mode) #screen-watch .roster{ display:none; }
     html body.kb-open:has(.board.wide-mode) #screen-watch .watch-top{ margin-bottom:4px; }
   }
+
+  /* ================================================================
+     v4.10: egységes méretek nagy képernyőn — a kezdőképernyő és a
+     szobabeállítás ugyanabban a keretben, ugyanakkora betűkkel, görgetés nélkül
+     ================================================================ */
+  /* kezdőképernyő: az értesítő legördülőként nyílik, így nem nő tőle az oldal
+     (és a keret sem kicsinyedik le miatta) */
+  body.fit-frame #screen-home{ overflow:visible !important; }
+  body.fit-frame #screen-home > #subscribe-box{ position:relative; overflow:visible; z-index:6; }
+  body.fit-frame #subscribe-box .sub-body{ position:absolute; left:0; right:0; top:calc(100% + 6px); margin:0; z-index:40;
+    background:var(--bg); border:1.5px solid rgba(var(--line-rgb),.18); border-radius:14px; box-shadow:0 22px 44px -14px rgba(0,0,0,.7); }
+  body.fit-frame #screen-home .home-card-h{ font-size:1.08rem; }
+  body.fit-frame #screen-home .home-hero h2{ font-size:1.7rem; }
+
+  /* szobabeállítás: két oszlopos kártyarács, kompakt sorok, logó nélkül */
+  body.fit-frame.on-create .title-row{ display:none !important; }
+  body.fit-frame.in-game #main-board > #screen-create{ max-width:1180px; padding:20px 26px 22px; }
+  body.fit-frame #screen-create{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px 14px; align-items:stretch; }
+  body.fit-frame #screen-create > p.center-note:first-child{ grid-column:1 / -1; margin:0 0 2px; display:flex; align-items:center; gap:14px; }
+  body.fit-frame #screen-create > p.center-note:first-child::after{ content:"Új szoba beállításai"; font-family:'Nunito',sans-serif; font-weight:800; font-size:1.45rem; color:var(--chalk); }
+  body.fit-frame #screen-create > .start-btn-wrap, body.fit-frame #screen-create > #rematch-warning,
+  body.fit-frame #screen-create > :not(.setup-section):not(:first-child){ grid-column:1 / -1; }
+  body.fit-frame #screen-create .setup-section{ display:block; padding:12px 14px; margin:0; border:1.5px solid rgba(var(--line-rgb),.1); border-radius:14px; background:rgba(0,0,0,.14); }
+  body.fit-frame #screen-create .setup-section.hidden{ display:none; }
+  body.fit-frame #screen-create .setup-section > label.field-label{ display:flex; align-items:center; gap:10px; margin:0 0 9px; padding:0; font-size:.98rem; line-height:1.25; }
+  body.fit-frame #screen-create .setup-section > label.field-label::before{ flex:0 0 26px; height:26px; font-size:1rem; border-radius:8px; margin:0; }
+  body.fit-frame #screen-create .pill-row{ gap:7px; }
+  body.fit-frame #screen-create .pill{ padding:6px 13px; font-size:.9rem; }
+  body.fit-frame #screen-create input[type=text]{ padding:9px 12px; font-size:.98rem; }
+  body.fit-frame #screen-create .setup-section .center-note, body.fit-frame #screen-create .setup-hint{ font-size:.76rem; line-height:1.35; margin:7px 0 0 !important; }
+  body.fit-frame #screen-create .start-btn-wrap{ margin-top:4px !important; }
+  body.fit-frame #screen-create #btn-create-room{ padding:12px 30px; font-size:1.15rem; }
 </style>
 </head>
 <body>
@@ -2389,7 +2421,7 @@
         <button class="pill active" data-visibility="private">🔒 Zárt (kód kell)</button>
         <button class="pill" data-visibility="public">🌐 Nyilvános (kód nélkül)</button>
       </div>
-      <p class="center-note" style="margin:8px 0 0;">Mindkét fajta szoba megjelenik a kezdőképernyő listáján. Nyilvános szobába bárki egy kattintással beléphet, zárt szobába csak a kóddal.</p>
+      <p class="center-note" style="margin:8px 0 0;">Mindkettő látszik a szobalistán: nyilvánosba bárki egy kattintással beléphet, zártba csak kóddal.</p>
     </div>
     <div class="setup-section" id="maxplayers-section">
       <label class="field-label">Maximum hány játékos csatlakozhat?</label>
@@ -2461,7 +2493,7 @@
         <button class="pill active" data-guessmode="first">Az első helyes tippnél 🏁</button>
         <button class="pill" data-guessmode="all">Ha már mindenki kitalálta 👥</button>
       </div>
-      <p class="setup-hint">Tippelni mindig mindenki tud. Az első esetben az első jó tipp lezárja a kört, a másodikban a kör addig tart, amíg mindenki eltalálta (vagy lejár az idő). Minél gyorsabb valaki, annál több pontot kap. A rajzoló pontja attól függ, milyen gyorsan rajzolta le a szót: az utolsó módosításáig mérjük, és csak akkor jár, ha valaki kitalálta.</p>
+      <p class="setup-hint">Tippelni mindig mindenki tud. Minél gyorsabb valaki, annál több pontot kap; a rajzoló akkor kap pontot, ha valaki kitalálta.</p>
     </div>
     <div class="setup-section">
       <label class="field-label">Saját szavak a játékosoktól</label>
@@ -2470,7 +2502,7 @@
         <button class="pill" data-customonly="only">Csak a saját szavak</button>
         <button class="pill" data-customonly="off">Nincsenek saját szavak</button>
       </div>
-      <p class="setup-hint">A váróteremben minden játékos (te is) beírhat legfeljebb 15 saját szót. Mindenki csak a saját beküldött szavait kaphatja rajzolásra, és ha ilyet választ, a rajzoló nem kap érte pontot (a kitalálók igen). Ha senki nem ír be semmit, a beépített szavakkal játszotok.</p>
+      <p class="setup-hint">A váróteremben mindenki beírhat legfeljebb 15 saját szót. Saját szavadért rajzolóként nem jár pont; ha senki nem ír be semmit, a beépített szavak jönnek.</p>
     </div>
     <div class="start-btn-wrap" style="display:flex;justify-content:center;margin-top:24px;">
       <button class="big" id="btn-create-room" style="background:var(--green);">Szoba létrehozása 🎉</button>
