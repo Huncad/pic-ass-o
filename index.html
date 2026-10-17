@@ -2151,6 +2151,67 @@
     box-shadow:0 4px 0 rgba(0,0,0,.25); }
   #leave-to-home-wrap.as-primary .leave-room-btn:hover{ color:#16302A; }
   @media (max-width:520px){ .alone-card{ flex-direction:column; text-align:center; } }
+
+  /* ================================================================
+     v4.10: TELEFON (álló) — újratervezett tippelő képernyő
+     · egy sor fejléc: menü | kör (rövidül) | óra — a csevegő/emoji gomboknak fenntartott hellyel
+     · a rajzlap pontosan a rajzoló papírjának arányában, üres sávok nélkül
+     · a tipplista kitölti a maradék helyet; a legújabb tipp közvetlenül a beíró mező fölött
+     · nyitott billentyűzetnél a rajz és a lista arányosan zsugorodik, semmi nem ugrál
+     ================================================================ */
+  @media (max-width:859px) and (orientation:portrait){
+    html body:has(.board.wide-mode) #screen-watch{ padding:6px 10px max(8px, env(safe-area-inset-bottom)); padding-top:calc(env(safe-area-inset-top, 0px) + 6px); }
+    html body:has(.board.wide-mode) #screen-watch .watch-top{
+      display:flex !important; align-items:center; gap:6px; margin:0 0 6px; min-height:42px; padding-right:0 !important; }
+    html body.fabs-top:has(.board.wide-mode) #screen-watch .watch-top{ padding-right:96px !important; }
+    html body:has(.board.wide-mode) #screen-watch .watch-top-left{ flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:6px; flex-wrap:nowrap; }
+    html body:has(.board.wide-mode) #screen-watch .watch-top .leave-btn{ flex-shrink:0; width:40px; height:40px; padding:0; justify-content:center; }
+    html body:has(.board.wide-mode) #screen-watch #watch-round-indicator{
+      flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      font-size:.74rem; padding:6px 10px; line-height:1.15; }
+    html body:has(.board.wide-mode) #screen-watch .watch-top .timer{
+      flex-shrink:0; order:0; justify-self:auto; margin:0 0 0 auto; font-size:1.05rem; padding:4px 10px 4px 5px; transform:none; }
+    html body:has(.board.wide-mode) #screen-watch .watch-top .watch-logo-slot{ display:none !important; }
+    html body:has(.board.wide-mode) #screen-watch #btn-last-round .lr-label{ display:none; }
+
+    /* játékosok: kisebb csipek, a szélén elhalványul, hogy látszódjon: görgethető */
+    html body:has(.board.wide-mode) #screen-watch .roster{
+      margin:0 0 6px; gap:6px; -webkit-mask-image:linear-gradient(90deg,#000 88%,transparent); mask-image:linear-gradient(90deg,#000 88%,transparent); }
+    html body:has(.board.wide-mode) #screen-watch .roster .rchip{ font-size:.8rem; padding:2px 4px 2px 2px; gap:6px; }
+    html body:has(.board.wide-mode) #screen-watch .roster .rav{ width:22px; height:22px; font-size:.72rem; }
+
+    /* rajzlap: a papír arányában, legfeljebb a képernyő ~56%-a */
+    html body:has(.board.wide-mode) #screen-watch .watch-content-wrap{ gap:6px; }
+    html body:has(.board.wide-mode) #screen-watch .canvas-area{
+      flex:0 1 auto; width:100%; aspect-ratio:var(--paper-ar, 1.8); height:auto;
+      max-height:56%; min-height:120px; padding:3px; }
+    html body.kb-open:has(.board.wide-mode) #screen-watch .canvas-area{ max-height:50%; min-height:90px; }
+
+    /* tipplista: kitölti a maradék helyet, a legújabb alul, a beíró mező fölött */
+    html body:has(.board.wide-mode) #screen-watch .guess-sidebar{ flex:1 1 0; min-height:0; display:flex; flex-direction:column; gap:6px; }
+    html body:has(.board.wide-mode) #screen-watch .guess-feed{
+      order:1; flex:1 1 0; height:auto; min-height:52px; max-height:none; margin:0; padding:4px 6px; overflow:hidden; display:flex; flex-direction:column; }
+    html body:has(.board.wide-mode) #screen-watch .guess-feed h3,
+    html body:has(.board.wide-mode) #screen-watch .guess-inputs h3{ display:none !important; }
+    /* column-reverse: a legújabb (első) tipp alul van, és a görgetés is alulról indul */
+    html body:has(.board.wide-mode) #screen-watch #watch-guess-feed{
+      flex:1 1 0; min-height:0; overflow-y:auto; overscroll-behavior:contain; display:flex; flex-direction:column-reverse; gap:3px; }
+    html body:has(.board.wide-mode) #screen-watch .guess-feed .gentry{
+      flex-shrink:0; margin:0; padding:3px 8px 3px 4px; min-height:0; gap:7px; align-items:center; border-radius:9px; font-size:.88rem; line-height:1.25; }
+    html body:has(.board.wide-mode) #screen-watch .guess-feed .gentry .rav{ width:20px; height:20px; font-size:.66rem; flex-shrink:0; }
+    html body:has(.board.wide-mode) #screen-watch .guess-feed .gbody{ display:flex; gap:6px; align-items:baseline; min-width:0; }
+    html body:has(.board.wide-mode) #screen-watch .guess-feed .gname{ font-weight:800; flex-shrink:0; font-size:.82rem; color:var(--chalk-dim); }
+    html body:has(.board.wide-mode) #screen-watch .guess-feed .gtext{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    html body:has(.board.wide-mode) #screen-watch .guess-feed .gentry.correct{ background:color-mix(in srgb, var(--green) 18%, transparent); border-color:color-mix(in srgb, var(--green) 50%, transparent); }
+    html body:has(.board.wide-mode) #screen-watch .guess-feed:not(:has(.gentry))::before{
+      content:"Itt jelennek meg a tippek"; display:flex; flex:1; align-items:center; justify-content:center; color:var(--chalk-dim); font-size:.85rem; opacity:.7; }
+    html body:has(.board.wide-mode) #screen-watch .guess-inputs{ order:2; flex-shrink:0; padding:0; background:none; border:0; box-shadow:none; }
+    html body:has(.board.wide-mode) #screen-watch .guess-row{ gap:8px; }
+    html body:has(.board.wide-mode) #screen-watch .guess-row input{ font-size:16px; padding:11px 14px; border-radius:12px; }
+    html body:has(.board.wide-mode) #screen-watch .guess-row button{ width:48px; padding:0; flex-shrink:0; border-radius:12px; }
+    html body.kb-open:has(.board.wide-mode) #screen-watch .roster{ display:none; }
+    html body.kb-open:has(.board.wide-mode) #screen-watch .watch-top{ margin-bottom:4px; }
+  }
 </style>
 </head>
 <body>
@@ -12366,6 +12427,7 @@ const SRV = (function(){
     }catch(e){}
   }, 2500);
   let lastFdPaint = 0;
+  let watchAreaObserved = false;
   function watchRedraw(strokes){
     lastWatchPaint = Date.now();
     if(!watchCtx) return;                        // the live view isn't up yet
@@ -12378,6 +12440,18 @@ const SRV = (function(){
     const availW = Math.max(50, container.clientWidth - padX);
     const availH = Math.max(50, container.clientHeight - padY);
     const aspect = (Number.isFinite(watchCanvasAspect) && watchCanvasAspect > 0) ? watchCanvasAspect : (900/500);
+    // v4.10: phones size the drawing area to the paper's own shape (CSS aspect-ratio)
+    const arStr = aspect.toFixed(4);
+    if(container.style.getPropertyValue('--paper-ar') !== arStr) container.style.setProperty('--paper-ar', arStr);
+    if(!watchAreaObserved && window.ResizeObserver){
+      watchAreaObserved = true;
+      let lastSz = '';
+      new ResizeObserver(()=>{
+        const k = container.clientWidth + 'x' + container.clientHeight;
+        if(k === lastSz) return; lastSz = k;
+        requestAnimationFrame(()=>{ if(!document.getElementById('screen-watch').classList.contains('hidden')) watchRedraw(lastWatchStrokes); });
+      }).observe(container);
+    }
     let cssW = availW, cssH = cssW / aspect;
     if(cssH > availH){ cssH = availH; cssW = cssH * aspect; }
     cssW = Math.max(1, cssW); cssH = Math.max(1, cssH);
@@ -13946,6 +14020,7 @@ const SRV = (function(){
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
     { version:'4.10', changes:[
+      'Telefonos tippelő képernyő újratervezve: a visszaszámláló nem lóg bele a körszámlálóba, a rajzlap pontosan a rajz arányában jelenik meg (nincsenek üres sávok), a tipplista kitölti a maradék helyet, és a legújabb tipp közvetlenül a beíró mező fölött látszik. Nyitott billentyűzetnél semmi nem ugrál: a rajz és a lista arányosan zsugorodik.',
       'Megújult kezdőképernyő: áttekinthető kártyák (játékos beállításai, elérhető szobák, értesítő, súgó). A játékosszínt már nem kell választani — mindenki automatikusan kap egyet.',
       'Telefonról belépve egy bezárható jelzés javasolja, hogy ha lehet, laptopon, számítógépen vagy tableten játssz — rajzolni ott sokkal kényelmesebb.',
       'Adatvédelem: új, részletes tájékoztató (ki kezeli az adatokat, milyen jogalapon, meddig, kik férnek hozzá, milyen jogaid vannak). A betűtípusok mostantól a játék saját tárhelyéről töltődnek be, nem a Google szervereiről. A közös ranglista bejegyzései 1 év után törlődnek.',
