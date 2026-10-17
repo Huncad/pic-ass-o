@@ -11228,8 +11228,11 @@ const SRV = (function(){
     if(btn.dataset.baseLabel) btn.textContent = btn.dataset.baseLabel;
   }
   let choicePointerAt = 0;
+  let choiceHover = false;   // v4.11: a mouse pointer is over the word choices
   (function(){
     const el = document.getElementById('prep-choices');
+    el.addEventListener('pointerover', e=>{ if(e.pointerType === 'mouse') choiceHover = true; });
+    el.addEventListener('pointerleave', ()=>{ choiceHover = false; });
     const grab = ()=>{
       choicePointerAt = Date.now();
       el.querySelectorAll('button').forEach(b=>disarmAutoPress(b));
@@ -11260,6 +11263,12 @@ const SRV = (function(){
         // v3.58: a finger/mouse already on one of the words wins over the
         // automatic pick — they used to fire in the same instant
         if(btn.closest && btn.closest('#prep-choices') && Date.now() - choicePointerAt < 1500) return;
+        // v4.11: the mouse is right over the words (about to click one) — wait
+        // a few more seconds instead of snatching a different word away
+        if(btn.closest && btn.closest('#prep-choices') && choiceHover && Date.now() < endAt + 5000){
+          btn._autoTimer = setInterval(tick, 250); return;
+        }
+        if(btn.closest && btn.closest('#prep-choices')) btn.dataset.autoPicked = '1';
         btn.click();
       }
     };
@@ -11324,8 +11333,10 @@ const SRV = (function(){
       b.title = tierInfo.label;
       b.style.background = tierInfo.color;
       b.addEventListener('click', ()=>{
+        const auto = b.dataset.autoPicked === '1';
+        delete b.dataset.autoPicked;
         buttons.forEach(disarmAutoPress);
-        chooseWordAndStart(c);
+        chooseWordAndStart(c, auto);
       });
       choicesEl.appendChild(b);
       return b;
@@ -11493,7 +11504,7 @@ const SRV = (function(){
     if(currentRound && currentRound.drawerId === selfId && currentRound.word) openWhatIs(currentRound.word);
   });
 
-  function chooseWordAndStart(choice){
+  function chooseWordAndStart(choice, autoPicked){
     if(!currentRound || currentRound.drawerId !== selfId || !roundAction) return;
     if(currentRound.phase === 'drawing') return;     // already started (double press)
     sndWhoosh();
@@ -11516,11 +11527,13 @@ const SRV = (function(){
     roundAction.send(publicRound(currentRound));
     // v3.58: show clearly WHICH word was taken (an automatic pick in the
     // last moment used to go unnoticed — you drew one word, the game had another)
-    showChosenWordFlash(choice.w);
+    showChosenWordFlash(choice.w, autoPicked);
   }
-  function showChosenWordFlash(w){
+  function showChosenWordFlash(w, autoPicked){
     const el = document.getElementById('chosen-word-flash');
     if(!el) return;
+    // v4.11: say it plainly when the game picked, not the drawer
+    el.firstChild.textContent = autoPicked ? '⏱️ Lejárt a választás — a játék ezt adta: ' : '✏️ Ezt rajzolod: ';
     el.querySelector('b').textContent = w;
     el.classList.remove('hidden', 'go'); void el.offsetWidth; el.classList.add('go');
     clearTimeout(el._t); el._t = setTimeout(()=>el.classList.add('hidden'), 2200);
