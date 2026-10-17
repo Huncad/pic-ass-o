@@ -2257,6 +2257,15 @@
     input[type=text], input[type=email], input[type=search], input[type=password], input:not([type]), textarea, select,
     #chat-text-input{ font-size:max(16px, 1em) !important; }
   }
+
+  /* v4.10: hangos tippelés gomb */
+  #btn-watch-voice{ flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; background:var(--blue); color:#0f2a1d; }
+  #btn-watch-voice.hidden{ display:none !important; }
+  #btn-watch-voice.listening{ background:var(--red); color:#fff; animation:voicePulse 1.1s ease-in-out infinite; }
+  @keyframes voicePulse{ 0%,100%{ box-shadow:0 0 0 0 color-mix(in srgb, var(--red) 60%, transparent); } 50%{ box-shadow:0 0 0 8px color-mix(in srgb, var(--red) 0%, transparent); } }
+  @media (max-width:859px) and (orientation:portrait){
+    html body:has(.board.wide-mode) #screen-watch .guess-row #btn-watch-voice{ width:48px; padding:0; border-radius:12px; }
+  }
 </style>
 </head>
 <body>
@@ -2596,6 +2605,7 @@
             <h3>Tippeld meg, mit rajzol!</h3>
             <div class="guess-row">
               <form class="pw-form" autocomplete="off" onsubmit="return false" role="presentation"><input type="text" id="watch-guess-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" placeholder="Ide írd a tipped…" aria-label="Tipp"></form>
+              <button class="small hidden" id="btn-watch-voice" type="button" aria-label="Tippelés hanggal" aria-pressed="false" title="Tippelés hanggal — mondd ki a tippjeidet, akár többet egymás után"><svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
               <button class="small" id="btn-watch-guess" aria-label="Tipp elküldése" title="Küld"><svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg></button>
             </div>
           </div>
@@ -2755,7 +2765,7 @@
       <li><b>E-mail értesítő új szobákról (csak ha feliratkozol):</b> az e-mail címedet, a feliratkozás és a megerősítés időpontját tároljuk a Netlify-on. Megerősítés nélkül 24 óra után, leiratkozáskor azonnal töröljük. Csak az új szobákról szóló értesítéshez használjuk, senkinek nem adjuk ki. Csak 16 éven felüliek iratkozhatnak fel. <i>Jogalap: a hozzájárulásod (6. cikk (1) a), amit bármikor visszavonhatsz a levelek alján lévő linkkel — a visszavonás az addigi küldések jogszerűségét nem érinti.</i></li>
       <li><b>Visszajelzés-űrlap:</b> amit beírsz (a név és az elérhetőség önkéntes), a Netlify Forms tárolja; a válasz után, de legkésőbb 1 év múlva töröljük. <i>Jogalap: hozzájárulás (6. cikk (1) a).</i></li>
       <li><b>Az eszközödön marad:</b> beceneved, beállításaid, saját statisztikád és egy kapcsolódási hibanapló (24 óra után törlődik). Ezek a böngésződ helyi tárhelyén vannak, csak a működéshez kellenek, ezért nincs szükség süti-hozzájárulásra; nem kerülnek máshová, kivéve ha a naplót te magad kimásolod és elküldöd.</li>
-      <li><b>Mikrofon:</b> csak akkor kér hozzáférést, ha hangüzenetet veszel fel.</li>
+      <li><b>Mikrofon:</b> csak akkor kér hozzáférést, ha hangüzenetet veszel fel, vagy bekapcsolod a hangos tippelést. A hangos tippelésnél a beszédet a böngésződ saját beszédfelismerője alakítja szöveggé (Chrome-ban a Google, Safariban az Apple szolgáltatása); a játék csak a felismert szavakat kapja meg, hangot nem rögzít és nem tárol.</li>
     </ul>
 
     <h3 class="pv-h">Kik férhetnek hozzá (adatfeldolgozók)?</h3>
@@ -7216,7 +7226,7 @@ const SRV = (function(){
       if(!iAmReferee || !meta || !meta.playerNames[peerId]) return;
       if(!isPlainObject(data)) return;
       if(tooOften(peerId, 'guess', 250)) return;           // no guess flooding
-      const text = cleanText(data.text, 80);
+      let text = cleanText(data.text, 80);
       if(!text.trim()) return;
       const multi = settings.guessMode === 'all';
       // v2.89: someone who already found the word this round is done guessing
@@ -7224,7 +7234,15 @@ const SRV = (function(){
       if(multi && roundHits.some(h=>h.pid === peerId)) return;
       const name = displayNameFor(peerId, data && data.name);
       if(ownWordDone.key === roundKey(currentRound) && ownWordDone.ids.has(peerId)) return;
-      const verdict = guessVerdict(text, currentRound.word);
+      let verdict = guessVerdict(text, currentRound.word);
+      // v4.10: a spoken guess comes with the speech recogniser's other
+      // readings of the same word ("alts"); if one of them is right, it counts
+      if(verdict !== 'correct' && Array.isArray(data.alts)){
+        for(const a of data.alts.slice(0, 4)){
+          const at = cleanText(a, 80);
+          if(at.trim() && guessVerdict(at, currentRound.word) === 'correct'){ text = at; verdict = 'correct'; break; }
+        }
+      }
       const correct = verdict === 'correct';
       const gid = ++guessSeq;
       const rk = roundKey(currentRound);
@@ -12782,6 +12800,145 @@ const SRV = (function(){
     if(btn) btn.disabled = locked;
     input.placeholder = amSpectator ? '👀 Nézőként nem tippelhetsz' : (locked ? '⏳ Még nem rajzol…' : input.dataset.ph0);
   }
+  // =====================================================================
+  // v4.10: TIPPELÉS HANGGAL (Web Speech API — Chrome/Android, Safari/iOS 14.5+)
+  // Egy koppintás bekapcsolja, és amíg be van kapcsolva, folyamatosan figyel:
+  // minden kimondott szó külön tippként megy el, sorban, a rajzoló 250 ms-os
+  // tippkorlátja szerint ütemezve (így a gyorsan egymás után mondott szavak
+  // sem vesznek el). A felismerő másik olvasatai is mennek mellé ("alts"), így
+  // ha a gép rosszul hallotta, de a második tippje jó, az is számít.
+  // Ugyanaz a szó egy körben csak egyszer megy el.
+  // =====================================================================
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const voice = { on:false, rec:null, queue:[], sent:new Set(), roundKey:'', timer:null, restarts:0, lastSend:0 };
+  function voiceBtn(){ return document.getElementById('btn-watch-voice'); }
+  function voiceWords(str){
+    return String(str || '').toLowerCase().split(/[\s.,!?;:„”"()\-–]+/u).map(w=>w.trim()).filter(w=>w.length >= 2).slice(0, 8);
+  }
+  function voiceCanGuess(){
+    return !!currentRound && !!guessAction && !guessLocked() && currentRound.drawerId !== selfId &&
+      !processedResultRounds.has(roundKey(currentRound)) && !(myRoundHit && myRoundHit.key === roundKey(currentRound)) &&
+      !document.getElementById('screen-watch').classList.contains('hidden');
+  }
+  function voicePump(){
+    if(!voice.queue.length) return;
+    if(!voiceCanGuess()){ voice.queue = []; return; }
+    const wait = 320 - (Date.now() - voice.lastSend);
+    if(wait > 0){ clearTimeout(voice.pumpT); voice.pumpT = setTimeout(voicePump, wait); return; }
+    const item = voice.queue.shift();
+    voice.lastSend = Date.now();
+    try{ guessAction.send({ name:myName, text:item.text, alts:item.alts, v:1 }, { target: currentRound.drawerId }); }catch(e){}
+    if(voice.queue.length){ clearTimeout(voice.pumpT); voice.pumpT = setTimeout(voicePump, 320); }
+  }
+  function voiceEnqueue(best, altPhrases){
+    if(!currentRound) return;
+    const rk = roundKey(currentRound);
+    if(voice.roundKey !== rk){ voice.roundKey = rk; voice.sent = new Set(); voice.queue = []; }
+    const words = voiceWords(best);
+    const altWords = altPhrases.map(voiceWords);
+    words.forEach((w, i)=>{
+      const key = normalize(w);
+      if(!key || voice.sent.has(key)) return;
+      voice.sent.add(key);
+      const alts = [];
+      altWords.forEach(aw=>{ const x = aw[i]; if(x && normalize(x) !== key && !alts.includes(x)) alts.push(x); });
+      // a whole alternative phrase can be the answer too (e.g. "jég kocka" → "jégkocka")
+      if(i === 0 && words.length > 1){
+        const joined = words.join(''); if(!alts.includes(joined)) alts.push(joined);
+        altPhrases.forEach(p=>{ const j = p.toLowerCase().replace(/\s+/g, ''); if(j.length >= 3 && !alts.includes(j)) alts.push(j); });
+      }
+      voice.queue.push({ text:w, alts:alts.slice(0, 4) });
+    });
+    voicePump();
+  }
+  function voiceSetUi(){
+    const b = voiceBtn(), input = document.getElementById('watch-guess-input');
+    if(!b) return;
+    b.classList.toggle('listening', voice.on);
+    b.setAttribute('aria-pressed', voice.on ? 'true' : 'false');
+    if(input && !input.disabled){
+      if(input.dataset.ph0 === undefined) input.dataset.ph0 = input.placeholder;
+      input.placeholder = voice.on ? '🎙️ Mondd ki a tippjeidet…' : input.dataset.ph0;
+    }
+  }
+  function voiceNotice(msg){
+    const input = document.getElementById('watch-guess-input');
+    if(input && !input.disabled){
+      input.placeholder = msg;
+      setTimeout(()=>{ if(!voice.on && input.dataset.ph0 !== undefined && !input.disabled) input.placeholder = input.dataset.ph0; }, 6000);
+    }
+    try{ addSystemChatMessage(msg); }catch(e){}
+  }
+  function voiceStop(){
+    voice.on = false;
+    clearInterval(voice.timer); voice.timer = null;
+    const r = voice.rec; voice.rec = null;
+    if(r){ try{ r.onend = null; r.abort(); }catch(e){} }
+    const input = document.getElementById('watch-guess-input');
+    if(input && input.dataset.voiceInterim){ input.value = ''; delete input.dataset.voiceInterim; }
+    voiceSetUi();
+  }
+  function voiceStartRec(){
+    let r;
+    try{ r = new SpeechRec(); }catch(e){ voiceStop(); return; }
+    r.lang = 'hu-HU';
+    r.continuous = true;
+    r.interimResults = true;
+    r.maxAlternatives = 4;
+    r.onresult = (ev)=>{
+      const input = document.getElementById('watch-guess-input');
+      let interim = '';
+      for(let i = ev.resultIndex; i < ev.results.length; i++){
+        const res = ev.results[i];
+        if(res.isFinal){
+          const alts = [];
+          for(let k = 1; k < res.length; k++) if(res[k] && res[k].transcript) alts.push(res[k].transcript);
+          voiceEnqueue(res[0].transcript, alts);
+        } else interim += res[0].transcript;
+      }
+      if(input){
+        if(interim){ input.value = interim.trim(); input.dataset.voiceInterim = '1'; }
+        else if(input.dataset.voiceInterim){ input.value = ''; delete input.dataset.voiceInterim; }
+      }
+      voice.restarts = 0;
+    };
+    r.onerror = (ev)=>{
+      const err = ev && ev.error;
+      if(err === 'not-allowed' || err === 'service-not-allowed'){
+        voiceStop();
+        voiceNotice('🎙️ A hangfelismeréshez engedélyezd a mikrofont (és iPhone-on a Diktálást a Beállításokban).');
+      } else if(err === 'language-not-supported'){
+        voiceStop(); voiceNotice('🎙️ Ez a böngésző nem ismeri fel a magyar beszédet.');
+      }
+      // "no-speech", "network", "aborted": onend restarts it
+    };
+    r.onend = ()=>{
+      if(!voice.on || voice.rec !== r) return;
+      // phones stop listening after a pause — start again while switched on
+      if(++voice.restarts > 8){ voiceStop(); return; }
+      setTimeout(()=>{ if(voice.on && voice.rec === r){ try{ r.start(); }catch(e){ voiceStop(); } } }, 150);
+    };
+    voice.rec = r;
+    try{ r.start(); }catch(e){ voiceStop(); }
+  }
+  function voiceStart(){
+    if(!SpeechRec || voice.on || !voiceCanGuess()) return;
+    voice.on = true; voice.restarts = 0;
+    voiceSetUi();
+    voiceStartRec();
+    // switches itself off when the round is over / I found it / screen changes
+    voice.timer = setInterval(()=>{ if(!voiceCanGuess()) voiceStop(); }, 500);
+  }
+  (function(){
+    const b = voiceBtn();
+    if(!b || !SpeechRec) return;
+    b.classList.remove('hidden');
+    b.addEventListener('click', ()=>{ sndClick(); voice.on ? voiceStop() : voiceStart(); });
+    // typing by hand while listening: the typed text wins, the interim text is not sent
+    const input = document.getElementById('watch-guess-input');
+    if(input) input.addEventListener('input', ()=>{ delete input.dataset.voiceInterim; });
+  })();
+
   function submitWatchGuess(){
     const input = document.getElementById('watch-guess-input');
     if(guessLocked()) return;
@@ -14079,6 +14236,7 @@ const SRV = (function(){
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
     { version:'4.10', changes:[
+      'Tippelés hanggal: a tippmező melletti 🎙️ gombbal gépelés helyett ki is mondhatod a tippjeidet. Amíg be van kapcsolva, folyamatosan figyel; ha gyorsan több szót mondasz egymás után, mindegyik külön tippként megy el, és ha a gép rosszul hallotta, de valamelyik másik olvasata jó, az is számít. A kör végén magától kikapcsol. (Chrome-ban és iPhone-on Safariban működik.)',
       'Telefonos tippelő képernyő újratervezve: a visszaszámláló nem lóg bele a körszámlálóba, a rajzlap pontosan a rajz arányában jelenik meg (nincsenek üres sávok), a tipplista kitölti a maradék helyet, és a legújabb tipp közvetlenül a beíró mező fölött látszik. Nyitott billentyűzetnél semmi nem ugrál: a rajz és a lista arányosan zsugorodik.',
       'Megújult kezdőképernyő: áttekinthető kártyák (játékos beállításai, elérhető szobák, értesítő, súgó). A játékosszínt már nem kell választani — mindenki automatikusan kap egyet.',
       'Telefonról belépve egy bezárható jelzés javasolja, hogy ha lehet, laptopon, számítógépen vagy tableten játssz — rajzolni ott sokkal kényelmesebb.',
