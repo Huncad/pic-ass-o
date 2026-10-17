@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
+<script>
+// v4.10: a mentett téma és sötét mód AZONNAL, még az első kirajzolás előtt —
+// különben egy pillanatra az alap zöld háttér villan fel
+(function(){ try{
+  var d = document.documentElement, t = localStorage.getItem('picasso-theme');
+  if(t && t !== 'forest') d.setAttribute('data-theme', t);
+  if(localStorage.getItem('picasso-dark-mode') === '1') d.classList.add('dark-mode');
+}catch(e){} })();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <!-- v3.18: basic hardening that cannot break the P2P / CDN traffic: no plugins, no <base> hijack, forms only to this site -->
@@ -2679,7 +2688,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v2.0</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.10</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
