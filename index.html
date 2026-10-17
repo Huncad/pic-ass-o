@@ -2,7 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <!-- v3.18: basic hardening that cannot break the P2P / CDN traffic: no plugins, no <base> hijack, forms only to this site -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>PIC-ASS-O — party rajzjáték (több eszközön)</title>
@@ -2248,6 +2248,15 @@
   body.fit-frame #screen-create .setup-section .center-note, body.fit-frame #screen-create .setup-hint{ font-size:.76rem; line-height:1.35; margin:7px 0 0 !important; }
   body.fit-frame #screen-create .start-btn-wrap{ margin-top:4px !important; }
   body.fit-frame #screen-create #btn-create-room{ padding:12px 30px; font-size:1.15rem; }
+
+  /* v4.10: iPhone-on a 16 px-nél kisebb betűs beíró mezőre koppintva a Safari
+     BENAGYÍTJA az oldalt, és bezárás után így is marad — ettől csúszott le a
+     fejléc és lógott ki a tartalom jobbra a chat után. Érintőképernyőn minden
+     beíró mező legalább 16 px. */
+  @media (pointer:coarse){
+    input[type=text], input[type=email], input[type=search], input[type=password], input:not([type]), textarea, select,
+    #chat-text-input{ font-size:max(16px, 1em) !important; }
+  }
 </style>
 </head>
 <body>
