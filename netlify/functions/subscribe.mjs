@@ -145,6 +145,7 @@ export default async (req) => {
     const cur = d.subs[h];
     if (cur && cur.status === 'ok') {
       // már feliratkozott: újra elküldjük neki a leiratkozó linket (10 percenként egyszer)
+      let mailed = false;
       if (Date.now() - (cur.sentAt || 0) >= RESEND_MS) {
         cur.sentAt = Date.now();
         const unsubUrl = `${self}?unsub=${cur.ut}`;
@@ -152,11 +153,12 @@ export default async (req) => {
           await sendMail(email, 'Az értesítőd — PIC-ASS-O',
             mailWrap(`<p>Ez a cím már fel van iratkozva az új szobák értesítőjére. Ha le szeretnél iratkozni, kattints az alábbi gombra.</p>${btn(unsubUrl, 'Leiratkozás')}`, unsubUrl), unsubUrl);
           await store.setJSON(KEY, d);
+          mailed = true;
         } catch (e) { console.error(e); }
       }
-      return json({ ok: true, already: true, count: count(d) });
+      return json({ ok: true, already: true, mailed, count: count(d) });
     }
-    if (cur && Date.now() - (cur.sentAt || 0) < RESEND_MS) return json({ ok: true, pending: true, count: count(d) });
+    if (cur && Date.now() - (cur.sentAt || 0) < RESEND_MS) return json({ ok: true, pending: true, throttled: true, count: count(d) });
     if (!cur && Object.keys(d.subs).length >= MAX_SUBS) return json({ error: 'Megtelt a lista.' }, 503);
     const s = cur || { email, status: 'pending', ut: token() };
     s.ct = token(); s.at = Date.now(); s.sentAt = Date.now();

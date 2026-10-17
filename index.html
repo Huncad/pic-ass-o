@@ -4433,7 +4433,11 @@ const SRV = (function(){
       if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
       showSubCount(j.count);
       st.style.color='var(--green)';
-      st.textContent = j.already ? '✅ Ez a cím már fel van iratkozva — küldtünk rá egy levelet, amiben egy kattintással leiratkozhatsz.' : '📬 Elküldtük a megerősítő levelet — nézd meg a postafiókodat (a Spam mappát is)!';
+      st.textContent = j.already
+        ? (j.mailed ? '✅ Ez a cím már fel van iratkozva — küldtünk rá egy levelet, amiben egy kattintással leiratkozhatsz.'
+                    : '✅ Ez a cím már fel van iratkozva. Az elmúlt 10 percben már küldtünk rá levelet — ha leiratkoznál, próbáld újra kicsit később.')
+        : (j.throttled ? '📬 Nemrég már küldtünk megerősítő levelet erre a címre — nézd meg a postafiókodat (a Spam mappát is). Újat 10 perc múlva kérhetsz.'
+                       : '📬 Elküldtük a megerősítő levelet — nézd meg a postafiókodat (a Spam mappát is)!');
       input.value = '';
     }catch(e){ st.style.color='var(--red)'; st.textContent = 'Nem sikerült: ' + e.message; }
     finally{ btn.disabled = false; }
