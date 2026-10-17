@@ -11321,6 +11321,7 @@ const SRV = (function(){
     const list = Array.isArray(currentRound.choices) && currentRound.choices.length
       ? currentRound.choices : [pickWordAvoidingRepeats(settings.difficulties, revealedWords)];
     choicesEl.classList.toggle('many', list.length > 4);
+    const prepRound = currentRound;   // v4.11: these buttons belong to THIS word choice only
     const buttons = list.map((c, k)=>{
       const tierInfo = TIER_INFO[c.tier] || TIER_INFO.konnyu;
       const b = document.createElement('button');
@@ -11333,6 +11334,7 @@ const SRV = (function(){
       b.title = tierInfo.label;
       b.style.background = tierInfo.color;
       b.addEventListener('click', ()=>{
+        if(currentRound !== prepRound){ clog('K18', `régi szógomb megnyomva, kihagyva: ${c.w}`); return; }
         const auto = b.dataset.autoPicked === '1';
         delete b.dataset.autoPicked;
         buttons.forEach(disarmAutoPress);
@@ -11504,9 +11506,15 @@ const SRV = (function(){
     if(currentRound && currentRound.drawerId === selfId && currentRound.word) openWhatIs(currentRound.word);
   });
 
+  // v4.11: the word that was actually picked (and shown on the drawer's bar)
+  // is locked here — the round can only ever end with this word
+  let lockedWord = null;
   function chooseWordAndStart(choice, autoPicked){
     if(!currentRound || currentRound.drawerId !== selfId || !roundAction) return;
-    if(currentRound.phase === 'drawing') return;     // already started (double press)
+    if(currentRound.phase === 'drawing'){              // already started (double press)
+      if(choice && choice.w !== currentRound.word) clog('K18', `második szóválasztás elutasítva: ${choice.w} (marad: ${currentRound.word})`);
+      return;
+    }
     sndWhoosh();
     const choicesEl = document.getElementById('prep-choices');
     choicesEl.querySelectorAll('button').forEach(disarmAutoPress);
@@ -11527,6 +11535,8 @@ const SRV = (function(){
     roundAction.send(publicRound(currentRound));
     // v3.58: show clearly WHICH word was taken (an automatic pick in the
     // last moment used to go unnoticed — you drew one word, the game had another)
+    lockedWord = { key: roundKey(currentRound), w: choice.w };   // v4.11
+    clog('K18', `szó kiválasztva: ${choice.w}${autoPicked ? ' (automatikus)' : ''}`);
     showChosenWordFlash(choice.w, autoPicked);
   }
   function showChosenWordFlash(w, autoPicked){
@@ -13058,6 +13068,10 @@ const SRV = (function(){
   function finishRoundAsDrawer(result){
     if(!currentRound || currentRound.drawerId !== selfId) return;
     if(processedResultRounds.has(roundKey(currentRound))) return;
+    if(lockedWord && lockedWord.key === roundKey(currentRound) && lockedWord.w !== currentRound.word){
+      clog('K18', `HIBA: a kör szava menet közben megváltozott (${lockedWord.w} → ${currentRound.word}) — a kiválasztott marad`);
+      currentRound.word = lockedWord.w;
+    }
     result.word = currentRound.word;
     result.idx = currentRound.idx;   // v3.62: which drawing this result belongs to
     // v3.28: the other offered words, so no device offers them again (the round is over, nothing to give away)
