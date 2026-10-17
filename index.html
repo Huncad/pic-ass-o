@@ -12823,31 +12823,70 @@ const SRV = (function(){
   function voicePump(){
     if(!voice.queue.length) return;
     if(!voiceCanGuess()){ voice.queue = []; return; }
-    const wait = 320 - (Date.now() - voice.lastSend);
+    const wait = 280 - (Date.now() - voice.lastSend);
     if(wait > 0){ clearTimeout(voice.pumpT); voice.pumpT = setTimeout(voicePump, wait); return; }
     const item = voice.queue.shift();
     voice.lastSend = Date.now();
     try{ guessAction.send({ name:myName, text:item.text, alts:item.alts, v:1 }, { target: currentRound.drawerId }); }catch(e){}
-    if(voice.queue.length){ clearTimeout(voice.pumpT); voice.pumpT = setTimeout(voicePump, 320); }
+    if(voice.queue.length){ clearTimeout(voice.pumpT); voice.pumpT = setTimeout(voicePump, 280); }
   }
-  function voiceEnqueue(best, altPhrases){
-    if(!currentRound) return;
+  // Összetett szavak: a felismerő a „kalózágyú”-t gyakran „kalóz ágyú”-nak írja.
+  // A játék szólistája (ez amúgy is minden eszközön ott van) alapján az
+  // egybetartozó szavakat összevonja, így egy tippként, egybeírva megy el.
+  let voiceBank = null, voiceBankSize = -1;
+  function voiceBankKeys(){
+    const list = Array.isArray(WORDS) ? WORDS : [];
+    if(voiceBank && voiceBankSize === list.length) return voiceBank;
+    voiceBank = new Set(list.map(x=>squash(x && x.w)).filter(k=>k.length >= 3));
+    voiceBankSize = list.length;
+    return voiceBank;
+  }
+  function voiceIsPrefixOfLonger(key){
+    if(key.length < 2) return false;
+    for(const k of voiceBankKeys()) if(k.length > key.length + 1 && k.startsWith(key)) return true;
+    return false;
+  }
+  // tokens → tippek. finalAll=false: az utolsó szó (és ami összetett szó eleje
+  // lehet) még várhat, hátha folytatódik.
+  function voiceSegment(tokens, finalAll){
+    const bank = voiceBankKeys(), out = [];
+    let i = 0;
+    while(i < tokens.length){
+      let took = 0;
+      for(let n = Math.min(3, tokens.length - i); n >= 2; n--){
+        if(bank.has(squash(tokens.slice(i, i + n).join('')))){ took = n; break; }
+      }
+      if(took){
+        const end = i + took;
+        // pending: an even longer compound may still come
+        if(!finalAll && end >= tokens.length && voiceIsPrefixOfLonger(squash(tokens.slice(i, end).join('')))) break;
+        out.push({ text: tokens.slice(i, end).join(''), idx:i, n:took });
+        i = end; continue;
+      }
+      const isLast = i === tokens.length - 1;
+      if(!finalAll && isLast) break;                                         // still being spoken
+      if(!finalAll && i === tokens.length - 2 && voiceIsPrefixOfLonger(squash(tokens[i]))) break;   // "kalóz" … wait for "ágyú"
+      out.push({ text: tokens[i], idx:i, n:1 });
+      i++;
+    }
+    return out;
+  }
+  function voiceEnqueueTokens(tokens, altTokenLists, finalAll){
+    if(!currentRound || !tokens.length) return;
     const rk = roundKey(currentRound);
     if(voice.roundKey !== rk){ voice.roundKey = rk; voice.sent = new Set(); voice.queue = []; }
-    const words = voiceWords(best);
-    const altWords = altPhrases.map(voiceWords);
-    words.forEach((w, i)=>{
-      const key = normalize(w);
+    voiceSegment(tokens, finalAll).forEach(seg=>{
+      const key = squash(seg.text);
       if(!key || voice.sent.has(key)) return;
       voice.sent.add(key);
       const alts = [];
-      altWords.forEach(aw=>{ const x = aw[i]; if(x && normalize(x) !== key && !alts.includes(x)) alts.push(x); });
-      // a whole alternative phrase can be the answer too (e.g. "jég kocka" → "jégkocka")
-      if(i === 0 && words.length > 1){
-        const joined = words.join(''); if(!alts.includes(joined)) alts.push(joined);
-        altPhrases.forEach(p=>{ const j = p.toLowerCase().replace(/\s+/g, ''); if(j.length >= 3 && !alts.includes(j)) alts.push(j); });
-      }
-      voice.queue.push({ text:w, alts:alts.slice(0, 4) });
+      const push = x=>{ const k = squash(x); if(k && k !== key && !alts.some(a=>squash(a) === k)) alts.push(x); };
+      // the recogniser's other readings of the same spot
+      altTokenLists.forEach(at=>{ const x = at.slice(seg.idx, seg.idx + seg.n).join(''); if(x) push(x); });
+      // not in the word list, but maybe a compound anyway (e.g. a player's own word)
+      if(seg.n === 1 && seg.idx + 1 < tokens.length) push(tokens[seg.idx] + tokens[seg.idx + 1]);
+      if(seg.n === 1 && seg.idx > 0) push(tokens[seg.idx - 1] + tokens[seg.idx]);
+      voice.queue.push({ text:seg.text, alts:alts.slice(0, 4) });
     });
     voicePump();
   }
@@ -12892,12 +12931,21 @@ const SRV = (function(){
         const res = ev.results[i];
         if(res.isFinal){
           const alts = [];
-          for(let k = 1; k < res.length; k++) if(res[k] && res[k].transcript) alts.push(res[k].transcript);
-          voiceEnqueue(res[0].transcript, alts);
-        } else interim += res[0].transcript;
+          for(let k = 1; k < res.length; k++) if(res[k] && res[k].transcript) alts.push(voiceWords(res[k].transcript));
+          voiceEnqueueTokens(voiceWords(res[0].transcript), alts, true);
+        } else interim += ' ' + res[0].transcript;
+      }
+      // v4.10: no waiting for the end of the sentence — the words already
+      // spoken go out at once (only the last one, still being said, waits)
+      clearTimeout(voice.stableT);
+      const itoks = voiceWords(interim);
+      if(itoks.length){
+        voiceEnqueueTokens(itoks, [], false);
+        // the last word stays the same for a moment: it is finished too
+        voice.stableT = setTimeout(()=>{ if(voice.on) voiceEnqueueTokens(itoks, [], true); }, 700);
       }
       if(input){
-        if(interim){ input.value = interim.trim(); input.dataset.voiceInterim = '1'; }
+        if(interim.trim()){ input.value = interim.trim(); input.dataset.voiceInterim = '1'; }
         else if(input.dataset.voiceInterim){ input.value = ''; delete input.dataset.voiceInterim; }
       }
       voice.restarts = 0;
