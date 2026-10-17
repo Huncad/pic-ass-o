@@ -100,7 +100,13 @@ export default async (req) => {
       if (!hit) return page('A link lejárt', '<p>Ez a megerősítő link már nem érvényes (24 óráig él). Iratkozz fel újra a játék kezdőoldalán.</p>', 404);
       hit[1].status = 'ok'; hit[1].ct = null; hit[1].okAt = Date.now();
       await store.setJSON(KEY, d);
-      return page('Kész! 🎉', `<p>Mostantól szólunk e-mailben, ha valaki új nyilvános szobát nyit. Bármikor leiratkozhatsz a levelek alján lévő linkkel.</p><a class="b" href="${esc(site)}">Irány a játék</a>`);
+      const unsubUrl = `${self}?unsub=${hit[1].ut}`;
+      try {
+        await sendMail(hit[1].email, 'Feliratkoztál — PIC-ASS-O',
+          mailWrap(`<p>Kész! Mostantól szólunk, ha valaki új nyilvános szobát nyit a PIC-ASS-O-ban (legfeljebb 15 percenként egy levél).</p><p>Ezt a levelet érdemes megtartani: az alján lévő linkkel bármikor leiratkozhatsz.</p>`, unsubUrl), unsubUrl);
+      } catch (e) { console.error(e); }
+      return page('Kész! 🎉', `<p>Mostantól szólunk e-mailben, ha valaki új nyilvános szobát nyit. Küldtünk egy visszaigazoló levelet is, aminek az alján bármikor leiratkozhatsz.</p><a class="b" href="${esc(site)}">Irány a játék</a>
+<p style="font-size:.85rem;margin-top:18px"><a href="${esc(unsubUrl)}" style="color:#BFD3C4">Mégsem kérem — leiratkozás</a></p>`);
     }
     return page('Feliratkozás megerősítése', `<p>Egy kattintás, és szólunk, ha valaki új szobát nyit a PIC-ASS-O-ban.</p>
 <form method="post" action="${esc(self)}?confirm=${encodeURIComponent(confirmT)}"><button>✅ Igen, kérem az értesítéseket</button></form>
@@ -137,7 +143,19 @@ export default async (req) => {
     const d = await read();
     const h = hashOf(email);
     const cur = d.subs[h];
-    if (cur && cur.status === 'ok') return json({ ok: true, already: true, count: count(d) });
+    if (cur && cur.status === 'ok') {
+      // már feliratkozott: újra elküldjük neki a leiratkozó linket (10 percenként egyszer)
+      if (Date.now() - (cur.sentAt || 0) >= RESEND_MS) {
+        cur.sentAt = Date.now();
+        const unsubUrl = `${self}?unsub=${cur.ut}`;
+        try {
+          await sendMail(email, 'Az értesítőd — PIC-ASS-O',
+            mailWrap(`<p>Ez a cím már fel van iratkozva az új szobák értesítőjére. Ha le szeretnél iratkozni, kattints az alábbi gombra.</p>${btn(unsubUrl, 'Leiratkozás')}`, unsubUrl), unsubUrl);
+          await store.setJSON(KEY, d);
+        } catch (e) { console.error(e); }
+      }
+      return json({ ok: true, already: true, count: count(d) });
+    }
     if (cur && Date.now() - (cur.sentAt || 0) < RESEND_MS) return json({ ok: true, pending: true, count: count(d) });
     if (!cur && Object.keys(d.subs).length >= MAX_SUBS) return json({ error: 'Megtelt a lista.' }, 503);
     const s = cur || { email, status: 'pending', ut: token() };

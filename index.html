@@ -2111,7 +2111,7 @@
         <input type="email" id="sub-email" maxlength="120" autocomplete="email" placeholder="e-mail címed" aria-label="E-mail cím az értesítéshez">
         <button class="secondary small" id="btn-subscribe" type="button">Feliratkozom</button>
       </div>
-      <p class="center-note" id="sub-status" style="margin:6px 0 0;font-size:.8rem;min-height:16px;">Először kapsz egy megerősítő levelet. Bármikor leiratkozhatsz a levelek alján lévő linkkel.</p>
+      <p class="center-note" id="sub-status" style="margin:6px 0 0;font-size:.8rem;min-height:16px;">Először kapsz egy megerősítő levelet. Leiratkozni bármelyik levél alján lehet, vagy írd be újra a címed, és küldünk egy leiratkozó linket.</p>
     </div>
     <p class="center-note hidden" id="invite-or-label">— vagy —</p>
     <div class="create-wrap">
@@ -4433,7 +4433,7 @@ const SRV = (function(){
       if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
       showSubCount(j.count);
       st.style.color='var(--green)';
-      st.textContent = j.already ? '✅ Ez a cím már fel van iratkozva.' : '📬 Elküldtük a megerősítő levelet — nézd meg a postafiókodat (a Spam mappát is)!';
+      st.textContent = j.already ? '✅ Ez a cím már fel van iratkozva — küldtünk rá egy levelet, amiben egy kattintással leiratkozhatsz.' : '📬 Elküldtük a megerősítő levelet — nézd meg a postafiókodat (a Spam mappát is)!';
       input.value = '';
     }catch(e){ st.style.color='var(--red)'; st.textContent = 'Nem sikerült: ' + e.message; }
     finally{ btn.disabled = false; }
