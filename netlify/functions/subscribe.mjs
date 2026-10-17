@@ -12,11 +12,12 @@
 //        módosít, mert a levélszűrők előre megnyitják a linkeket.
 //
 // Környezeti változók (Netlify → Site configuration → Environment variables):
-//   BREVO_API_KEY   — a Brevo API kulcsa
-//   BREVO_SENDER    — a Brevóban hitelesített feladó e-mail cím
-//   BREVO_SENDER_NAME (nem kötelező, alapból "PIC-ASS-O")
+//   GMAIL_USER          — a küldő Gmail cím
+//   GMAIL_APP_PASSWORD  — a Google fiók 16 karakteres alkalmazásjelszava
+//   MAIL_FROM_NAME (nem kötelező, alapból "PIC-ASS-O")
 import { getStore } from '@netlify/blobs';
 import { createHash, randomBytes } from 'node:crypto';
+import nodemailer from 'nodemailer';
 
 const KEY = 'subs';
 const NOTIFY_COOLDOWN_MS = 15 * 60 * 1000;   // legfeljebb 1 értesítés / 15 perc
@@ -55,19 +56,15 @@ button.r{background:#FF6B5B}</style></head><body><div class="c"><h1>${esc(title)
     { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex' } });
 }
 
+let transport = null;
 async function sendMail(to, subject, html, unsubUrl) {
-  const key = process.env.BREVO_API_KEY, from = process.env.BREVO_SENDER;
-  if (!key || !from) throw new Error('nincs beállítva a Brevo');
-  const body = {
-    sender: { email: from, name: process.env.BREVO_SENDER_NAME || 'PIC-ASS-O' },
-    to: [{ email: to }], subject, htmlContent: html
-  };
-  if (unsubUrl) body.headers = { 'List-Unsubscribe': `<${unsubUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' };
-  const r = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST', headers: { 'api-key': key, 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) throw new Error('Brevo HTTP ' + r.status + ' ' + (await r.text().catch(() => '')).slice(0, 200));
+  const user = process.env.GMAIL_USER, pass = process.env.GMAIL_APP_PASSWORD;
+  if (!user || !pass) throw new Error('nincs beállítva a Gmail');
+  if (!transport) transport = nodemailer.createTransport({ service: 'gmail', auth: { user, pass: pass.replace(/\s+/g, '') } });
+  const msg = { from: { name: process.env.MAIL_FROM_NAME || 'PIC-ASS-O', address: user }, to, subject, html };
+  if (unsubUrl) msg.list = { unsubscribe: { url: unsubUrl, comment: 'Leiratkozás' } };
+  if (unsubUrl) msg.headers = { 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' };
+  await transport.sendMail(msg);
 }
 
 const mailWrap = (inner, unsubUrl) => `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:auto;background:#20452F;color:#F4F1E6;border-radius:16px;padding:24px">
