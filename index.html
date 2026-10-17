@@ -235,6 +235,8 @@
   #privacy-overlay ul{ padding-left:20px; }
   .setup-hint{ margin:8px 2px 0; font-size:.78rem; line-height:1.35; color:var(--chalk-dim); opacity:.85; }
   .setup-section{margin:20px 0;}
+  .sub-row{ display:flex; gap:8px; }
+  .sub-row input{ flex:1; min-width:0; font-family:'Nunito',sans-serif; padding:10px 12px; border-radius:10px; border:none; font-size:1rem; }
 
   .create-wrap{ margin-top:14px; text-align:center; }
   .create-cta{ width:100%; max-width:340px; padding:13px 22px; font-size:1.08rem; background:var(--green); }
@@ -2103,6 +2105,14 @@
         <p class="center-note" id="room-list-empty">Még nincs nyitva szoba — hozz létre egyet! 👇</p>
       </div>
     </div>
+    <div class="setup-section" id="subscribe-box">
+      <label class="field-label">🔔 Szólj, ha új szoba nyílik <span id="sub-count" class="conn-status" style="display:inline;margin:0;font-size:.75rem;"></span></label>
+      <div class="sub-row">
+        <input type="email" id="sub-email" maxlength="120" autocomplete="email" placeholder="e-mail címed" aria-label="E-mail cím az értesítéshez">
+        <button class="secondary small" id="btn-subscribe" type="button">Feliratkozom</button>
+      </div>
+      <p class="center-note" id="sub-status" style="margin:6px 0 0;font-size:.8rem;min-height:16px;">Először kapsz egy megerősítő levelet. Bármikor leiratkozhatsz a levelek alján lévő linkkel.</p>
+    </div>
     <p class="center-note hidden" id="invite-or-label">— vagy —</p>
     <div class="create-wrap">
       <svg class="cta-rays l" viewBox="0 0 44 64" aria-hidden="true"><g class="deco-line" stroke="currentColor"><path d="M40 10 L26 2 M40 32 L20 32 M40 54 L26 62"/></g></svg>
@@ -2450,6 +2460,7 @@
       <li><b>Kapcsolódáshoz:</b> nyilvános jelzőszerverek (Nostr / BitTorrent tracker / MQTT) és a közvetítő (TURN) szolgáltatás látja az eszközöd IP-címét.</li>
       <li><b>Kitiltás:</b> ha a szobanyitó kirúgna, a játék egy véletlenszerű eszközazonosítót és az IP-címed egy visszafejthetetlen lenyomatát (nem magát a címet) tárolja a Netlify-on, hogy a kirúgott játékos ne tudjon visszalépni. A szobás tiltás legfeljebb 30 napig, az egész játékból való tiltás 7 napig marad meg, ezután az adat törlődik. Ha nem rúgnak ki, semmi sem marad meg rólad.</li>
       <li><b>Nyilvános szobák:</b> a szoba neve, a szobanyitó becenevét és a létszám bárki számára látható a szobalistán. Privát szobánál ez nem jelenik meg a listán.</li>
+      <li><b>E-mail értesítő (csak ha feliratkozol):</b> az e-mail címedet a Netlify tárolja, a leveleket a Brevo küldi ki. Megerősítés nélkül a cím 24 óra után törlődik; leiratkozáskor azonnal. Más célra nem használjuk, és senkinek nem adjuk ki.</li>
       <li><b>Visszajelzés-űrlap:</b> a Netlify Forms tárolja. A név és az elérhetőség önkéntes.</li>
       <li><b>Az eszközödön marad:</b> beceneved, beállításaid, saját statisztikád és egy kapcsolódási hibanapló (24 óra után törlődik). Ezek nem kerülnek máshová, kivéve ha a naplót te magad kimásolod és elküldöd.</li>
       <li><b>Mikrofon:</b> csak akkor kér hozzáférést, ha hangüzenetet veszel fel.</li>
@@ -4401,6 +4412,35 @@ const SRV = (function(){
   // can also forward it as an e-mail. The channel name comes from the
   // live store (ertesites.json), set on the admin page.
   // =====================================================================
+  // v4.10: e-mail feliratkozás új szobákra
+  const SUBSCRIBE_URL = '/.netlify/functions/subscribe';
+  function showSubCount(n){
+    const el = document.getElementById('sub-count');
+    if(el && typeof n === 'number') el.textContent = `· ${n} fő feliratkozva`;
+  }
+  (async ()=>{
+    try{ const r = await fetch(SUBSCRIBE_URL, { cache:'no-store' }); if(r.ok) showSubCount((await r.json()).count); }
+    catch(e){ const b = document.getElementById('subscribe-box'); if(b && location.protocol === 'file:') b.classList.add('hidden'); }
+  })();
+  async function doSubscribe(){
+    const input = document.getElementById('sub-email'), st = document.getElementById('sub-status'), btn = document.getElementById('btn-subscribe');
+    const email = input.value.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ st.style.color='var(--red)'; st.textContent='Adj meg egy érvényes e-mail címet.'; return; }
+    btn.disabled = true; st.style.color='var(--chalk-dim)'; st.textContent='Küldés…';
+    try{
+      const r = await fetch(SUBSCRIBE_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'subscribe', email }) });
+      const j = await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      showSubCount(j.count);
+      st.style.color='var(--green)';
+      st.textContent = j.already ? '✅ Ez a cím már fel van iratkozva.' : '📬 Elküldtük a megerősítő levelet — nézd meg a postafiókodat (a Spam mappát is)!';
+      input.value = '';
+    }catch(e){ st.style.color='var(--red)'; st.textContent = 'Nem sikerült: ' + e.message; }
+    finally{ btn.disabled = false; }
+  }
+  document.getElementById('btn-subscribe').addEventListener('click', doSubscribe);
+  document.getElementById('sub-email').addEventListener('keydown', e=>{ if(e.key === 'Enter') doSubscribe(); });
+
   function cleanNotifyTopic(t){ const s = String(t || '').trim(); return /^[A-Za-z0-9_-]{8,64}$/.test(s) ? s : ''; }
   function setNotifyCfg(raw){
     const c = isPlainObject(raw) ? raw : {};
@@ -4437,6 +4477,11 @@ const SRV = (function(){
     return { ok:false, detail:`az ntfy.sh visszautasította (HTTP ${res.status}${why ? ': ' + why : ''})` };
   }
   function notifyRoomOpened(roomName, hostName, isPublic, code){
+    // v4.10: e-mail értesítés a feliratkozóknak (csak nyilvános szobáról)
+    if(isPublic){
+      try{ fetch(SUBSCRIBE_URL, { method:'POST', keepalive:true, headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'notify', name:String(roomName).slice(0,60), host:String(hostName).slice(0,24), code }) }).catch(()=>{}); }catch(e){}
+    }
     if(!notifyCfg.on || !notifyCfg.topic) return;
     try{ if(localStorage.getItem(NOTIFY_SKIP_OWN_KEY) === '1') return; }catch(e){}
     const base = location.origin + location.pathname;
@@ -13669,6 +13714,9 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.10', changes:[
+      'Új szoba értesítő: a kezdőoldalon megadhatod az e-mail címedet, és szólunk, ha valaki új nyilvános szobát nyit (legfeljebb 15 percenként egy levél). Először egy megerősítő levél érkezik, így senki nem iratkoztathat fel mást. Minden levél alján egy kattintással leiratkozhatsz. A kezdőoldalon látszik, hányan vannak feliratkozva.'
+    ]},
     { version:'4.01', changes:[
       'Javítás: ha egy játékos kapcsolata menet közben megakadt, a tippek és a rajz fél percig is késhettek, aztán egyszerre jelentek meg. Most a játék néhány másodpercen belül észreveszi, ha a kapcsolat elakadt, újracsatlakozik, és minden közben elküldött üzenet megérkezik, duplázás nélkül.'
     ]},
