@@ -2134,6 +2134,23 @@
   .home-foot{ margin-top:10px; padding-top:10px; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 14px; }
   .home-foot .home-stats{ margin:0; }
   .home-foot .stats-open-btn{ padding:6px 14px; }
+
+  /* v4.10: "egyedül maradtál" kártya és kilépés gomb */
+  .alone-card{ display:flex; align-items:center; gap:16px; max-width:520px; margin:14px auto 4px; padding:16px 18px; text-align:left;
+    background:color-mix(in srgb, var(--yellow) 10%, rgba(0,0,0,.18)); border:1.5px solid color-mix(in srgb, var(--yellow) 45%, transparent); border-radius:16px; }
+  .alone-card.hidden{ display:none; }
+  .alone-ico{ width:52px; height:52px; flex-shrink:0; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.7rem;
+    background:color-mix(in srgb, var(--yellow) 22%, transparent); }
+  .alone-txt b{ display:block; font-size:1.15rem; color:var(--yellow); margin-bottom:3px; }
+  .alone-txt p{ margin:0; color:var(--chalk); font-size:.95rem; line-height:1.45; }
+  .leave-room-btn{ display:inline-flex; align-items:center; gap:8px; padding:9px 18px; border-radius:12px; font-weight:800; font-size:.95rem;
+    color:var(--chalk-dim); text-decoration:none; border:1.5px solid rgba(var(--line-rgb),.22); transition:border-color .12s ease, color .12s ease, transform .12s ease; }
+  .leave-room-btn:hover{ color:var(--chalk); border-color:var(--yellow); transform:translateY(-1px); }
+  .leave-room-btn svg{ width:18px; height:18px; }
+  #leave-to-home-wrap.as-primary .leave-room-btn{ padding:13px 28px; font-size:1.08rem; color:#16302A; background:var(--yellow); border-color:var(--yellow);
+    box-shadow:0 4px 0 rgba(0,0,0,.25); }
+  #leave-to-home-wrap.as-primary .leave-room-btn:hover{ color:#16302A; }
+  @media (max-width:520px){ .alone-card{ flex-direction:column; text-align:center; } }
 </style>
 </head>
 <body>
@@ -2532,10 +2549,13 @@
         <button class="big secondary" id="btn-rematch-no">🚪 Nem, kilépek</button>
       </div>
       <p class="center-note hidden" id="gameend-waiting-note"></p>
-      <p class="center-note hidden" id="gameend-alone-note" style="color:var(--red);"></p>
+      <div class="alone-card hidden" id="gameend-alone-card" role="status">
+        <div class="alone-ico" aria-hidden="true">🪑</div>
+        <div class="alone-txt"><b id="gameend-alone-title">Elfogytak a játékostársak</b><p id="gameend-alone-note"></p></div>
+      </div>
       <button class="big hidden" id="btn-restart" style="margin-top:6px;">Új parti indítása 🚀</button>
       <p class="center-note" id="leave-to-home-wrap" style="margin-top:10px;">
-        <a href="#" id="link-leave-to-home" style="color:var(--chalk-dim);">Kilépés az egész szobából</a>
+        <a href="#" id="link-leave-to-home" class="leave-room-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Kilépés a szobából</span></a>
       </p>
     </div>
   </div>
@@ -13557,12 +13577,16 @@ const SRV = (function(){
       voteWrap.classList.add('hidden');
       waitNote.classList.add('hidden');
       restartBtn.classList.add('hidden');
-      aloneNote.textContent = hostGone
-        ? 'A szobanyitó kilépett, ezért ebben a szobában nem indítható új játék. Kilépés után létrehozhattok egy újat.'
+      const [aTitle, aIco, aText] = hostGone
+        ? ['A szobanyitó kilépett', '🚪', 'Ebben a szobában már nem indulhat új parti. Lépj ki, és nyissatok egy újat — a többiek a kezdőképernyőn megtalálják.']
         : (expired
-          ? 'Lejárt a szavazási idő, és rajtad kívül senki nem mondott igent — nincs kivel új játékot indítani. Lépj ki, és hozz létre egy új szobát!'
-          : 'Már csak te maradtál a szobában — nincs kivel új játékot indítani. Lépj ki, és hozz létre egy új szobát!');
-      aloneNote.classList.remove('hidden');
+          ? ['Senki nem szavazott igennel', '⏰', 'Lejárt a szavazási idő, és rajtad kívül senki nem kért új partit. Lépj ki, és hozz létre egy új szobát!']
+          : ['Már csak te maradtál', '🪑', 'A többiek kiléptek, így nincs kivel új partit indítani. Lépj ki, és hozz létre egy új szobát!']);
+      aloneNote.textContent = aText;
+      document.getElementById('gameend-alone-title').textContent = aTitle;
+      document.querySelector('#gameend-alone-card .alone-ico').textContent = aIco;
+      document.getElementById('gameend-alone-card').classList.remove('hidden');
+      leaveWrap.classList.add('as-primary');
       if(!canRematch && rematchMode){
         // this warning lives on the rematch settings screen: only show it there
         warn.textContent = 'Időközben mindenki más kilépett a szobából — nincs kivel folytatni. Lépj vissza, vagy hozz létre egy új szobát.';
@@ -13575,7 +13599,8 @@ const SRV = (function(){
       document.getElementById('vote-status').classList.add('hidden');
       return;
     }
-    aloneNote.classList.add('hidden');
+    document.getElementById('gameend-alone-card').classList.add('hidden');
+    leaveWrap.classList.remove('as-primary');
     warn.classList.add('hidden');
     startBtn.disabled = false;
 
