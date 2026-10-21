@@ -114,6 +114,25 @@ Visszaállítás: `localStorage.removeItem('picasso-server-url')`.
 - Megjelenik a **🏆 Közös ranglista** link.
 - A kapcsolódási naplóban (ⓘ) `S01` és `hálózat: saját szerver` sorok vannak.
 
+## Szójelentések titkos kulcsa (v4.12-től)
+
+A lerajzolt és a hibásnak jelölt szavakat a játékszerver továbbítja a Netlify felé, egy közös titkos kulccsal. Ehhez **mindkét helyen ugyanaz** a legalább 24 karakteres, véletlen érték kell. A kulcsot **soha ne tedd fel a GitHubra**.
+
+1. Készíts egy kulcsot a konténer konzoljában: `openssl rand -hex 24`
+2. **Szerver:** hozd létre a `/etc/systemd/system/picasso.service.d/secret.conf` fájlt ezzel a tartalommal (a kulcsot írd be a helyére):
+
+   ```
+   [Service]
+   Environment=WORDS_SECRET=ide-a-kulcs
+   ```
+
+   Utána: `chmod 600 /etc/systemd/system/picasso.service.d/secret.conf && systemctl daemon-reload && systemctl restart picasso`
+3. **Netlify:** Project configuration → Environment variables → Add a variable. A kulcs neve `PICASSO_SERVER_SECRET`, az értéke ugyanaz a kulcs. A hatókörnél elég a Functions. Mentés után indíts egy új deployt (Deploys → Trigger deploy).
+
+Ha a kulcs hiányzik, a játék működik, csak a közös szólisták nem frissülnek.
+
+Nem kötelező beállítások: `WORD_USED_DAY_CAP` (alapból 300) és `WORD_BLOCK_DAY_CAP` (alapból 20) — ennyi szót jelezhet naponta összesen az egész játék.
+
 ## Hasznos parancsok (a konténer konzoljában)
 
 | Mit | Parancs |

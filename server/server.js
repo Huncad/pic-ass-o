@@ -114,9 +114,10 @@ function sendRaw(peer, obj){
     // lassú kliens: nem tömjük tovább, a gyűrűben megvárja (újracsatlakozáskor megkapja)
     if(peer.ws && peer.ws.readyState === 1 && peer.ws.bufferedAmount < MAX_WS_BUFFER){ peer.ws.send(str); rec.sent = true; }
     if(rec.sent && !peer.v2) return;        // régi böngésző: nem nyugtáz, nem tartjuk meg
-    peer.ring.push(rec); peer.ringBytes = (peer.ringBytes || 0) + str.length;
+    rec.bytes = Buffer.byteLength(str, 'utf8');
+    peer.ring.push(rec); peer.ringBytes = (peer.ringBytes || 0) + rec.bytes;
     while(peer.ring.length > MAX_BUFFERED || (peer.ringBytes > MAX_RING_BYTES && peer.ring.length > 1)){
-      peer.ringBytes -= peer.ring.shift().str.length;
+      peer.ringBytes -= peer.ring.shift().bytes || 0;
     }
   } else if(peer.ws && peer.ws.readyState === 1 && peer.ws.bufferedAmount < MAX_WS_BUFFER){
     peer.ws.send(JSON.stringify(obj));
@@ -124,7 +125,7 @@ function sendRaw(peer, obj){
 }
 function ackRing(peer, r){
   if(typeof r !== 'number' || !Number.isFinite(r)) return;
-  while(peer.ring.length && peer.ring[0].q <= r) peer.ringBytes -= peer.ring.shift().str.length;
+  while(peer.ring.length && peer.ring[0].q <= r) peer.ringBytes -= peer.ring.shift().bytes || 0;
 }
 
 function roomMembers(roomId){ return rooms.get(roomId) || new Set(); }
@@ -200,6 +201,13 @@ async function handleDir(peer, d){
     if(!rid || rid !== peer.room) return;                      // a kód nem ehhez a szobához tartozik
   }
   if(prev && prev.from !== peer.id && Date.now() - prev.at < DIR_TTL_MS) return;   // más szobáját nem írhatja felül
+  // v4.13: egy IP-ről egyszerre legfeljebb 3 hirdetett szoba (zárt szobánál a
+  // kódot nem ismerjük, így ez fogja vissza a hamis zárt szobákat)
+  if(!prev || prev.from !== peer.id){
+    let fromIp = 0;
+    directory.forEach((e2, k2) => { if(k2 !== key && e2.ip === peer.ip && Date.now() - e2.at <= DIR_TTL_MS) fromIp++; });
+    if(fromIp >= 3) return;
+  }
   // szobánként (és bejelentőnként) egyetlen bejegyzés
   for(const [k, e] of directory){ if(k !== key && (e.from === peer.id || e.room === roomId)) directory.delete(k); }
   if(directory.size > 300 && !prev) return;
@@ -207,7 +215,7 @@ async function handleDir(peer, d){
     players: clampInt(d.players, 0, 999), max: clampInt(d.max, 0, 999), inGame: !!d.inGame };
   if(!clean.name) return;
   if(code) clean.code = code; else { clean.id = fp; clean.isPrivate = true; }
-  directory.set(key, { d: clean, from: peer.id, room: roomId, at: Date.now(), firstAt: prev && prev.from === peer.id ? (prev.firstAt || prev.at) : Date.now() });
+  directory.set(key, { d: clean, from: peer.id, room: roomId, ip: peer.ip, at: Date.now(), firstAt: prev && prev.from === peer.id ? (prev.firstAt || prev.at) : Date.now() });
   broadcastDir(clean, peer.id);
 }
 
@@ -222,6 +230,11 @@ const WORDS_SECRET = process.env.WORDS_SECRET || '';
 const WORDS_API = String(process.env.WORDS_API_BASE || 'https://pic-ass-o.netlify.app').replace(/\/+$/, '');
 /** roomId -> Map("kind|szó" -> { word, peers:Set, sent }) */
 const wordReps = new Map();
+// v4.13: napi plafon MINDEN szobára együtt — ennyi szót tehet "elhasználttá" /
+// "felfüggesztetté" egy nap az egész játék. Kitalált kapcsolatokkal így sem
+// lehet a szólistát kiüríteni (a felfüggesztést az admin panelen fel lehet oldani).
+const WORD_DAY_CAP = { used: Number(process.env.WORD_USED_DAY_CAP || 300), block: Number(process.env.WORD_BLOCK_DAY_CAP || 20) };
+const wordDay = { day: '', used: 0, block: 0 };
 const wordNorm = w => String(w || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 60);
 function handleWordRep(peer, m){
   if(!WORDS_SECRET || !peer.room) return;
@@ -242,8 +255,13 @@ function handleWordRep(peer, m){
   if(e.sent) return;
   e.peers.add(peer.id);
   const live = [...e.peers].filter(id => members.has(id)).length;
-  const need = kind === 'used' ? 2 : Math.max(2, Math.ceil(members.size / 2));
-  if(live < need) return;
+  // v4.13: 2 különböző játékos elég (a "játékosok fele" szabályt a böngésző ellenőrzi,
+  // mert csak ő tudja, ki játékos és ki néző — a szerver a nézőket is a szobában látja)
+  if(live < 2) return;
+  const today = new Date().toISOString().slice(0, 10);
+  if(wordDay.day !== today){ wordDay.day = today; wordDay.used = 0; wordDay.block = 0; }
+  if(wordDay[kind] >= WORD_DAY_CAP[kind]){ e.sent = true; log('szójelentés napi plafon', kind); return; }
+  wordDay[kind]++;
   e.sent = true;
   const fn = kind === 'used' ? 'wordused' : 'wordblock';
   fetch(`${WORDS_API}/.netlify/functions/${fn}`, {

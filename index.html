@@ -2708,7 +2708,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.12</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.13</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -14477,6 +14477,11 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.13', changes:[
+      'Javítás: a hibás szó felfüggesztése a játékszerveren elakadhatott, ha nézők is voltak a szobában (a szerver őket is beszámolta). Most a játékosok szavazatát a játék számolja, a szerver két különböző jelzést vár.',
+      'Biztonság: napi összesített plafon a közös szólisták módosítására, és egy hálózatról egyszerre legfeljebb 3 hirdetett szoba.',
+      'Szerver: pontosabb (bájtalapú) számolás a visszacsatlakozáshoz megőrzött üzeneteknél; telepítési útmutató a szójelentések titkos kulcsáról.'
+    ]},
     { version:'4.12', changes:[
       'Biztonság — tartalék út: a nyilvános MQTT-szervereken át menő szobaforgalom titkosítókulcsa és csatornaneve mostantól lassított (PBKDF2) lenyomattal készül a szobakódból, így a kód végigpróbálgatásával nem lehet többé gyorsan visszafejteni. Ugyanez vonatkozik a „kopogtatás” jelzésre is. Fontos: régi és új verzió tartalék úton nem éri el egymást, ezért mindenki töltse újra az oldalt.',
       'Biztonság — szobalista: a játékszerver csak attól fogad el szobahirdetést, aki tényleg abban a szobában van és ő nyitotta meg; nyilvános szobánál a szerver maga ellenőrzi, hogy a kód valóban ahhoz a szobához tartozik. Hamis szobát (és vele hamis e-mail értesítőt) így nem lehet bejelenteni.',

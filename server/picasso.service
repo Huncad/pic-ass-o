@@ -9,6 +9,8 @@ WorkingDirectory=/opt/pic-ass-o/server
 ExecStart=/usr/bin/node server.js
 Environment=PORT=8787
 Environment=DATA_DIR=/var/lib/picasso
+# A WORDS_SECRET-et NE ide írd (ez a fájl a GitHubon van), hanem egy külön
+# drop-in fájlba — lásd TELEPITES.md, „Szójelentések titkos kulcsa”.
 # Melyik weboldalakról lehet csatlakozni (vesszővel). Alapból bármelyik *.netlify.app.
 # Ha saját domainre teszed a játékot, írd ide is, pl.:
 # Environment=ALLOWED_ORIGINS=https://pic-ass-o.netlify.app,*--pic-ass-o.netlify.app
