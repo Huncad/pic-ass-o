@@ -3,15 +3,18 @@
 // word is put "on hold" here and no game anywhere offers it again until the
 // admin reviews it (fixes, deletes or keeps it).
 //   GET                         -> { words: ["ajto", ...] }   (normalised keys)
-//   POST { word, votes, players } -> puts the word on hold (votes must reach the rule)
+//   POST { word, dev }          -> ONE device's own "broken word" vote
+//   v4.11: a szerver nem hisz a kliens által beküldött szavazatszámnak. Minden
+//   jelölő eszköz a SAJÁT szavazatát küldi; a szó akkor kerül karanténba, ha
+//   legalább 2 különböző eszköz jelölte 24 órán belül, és a szó a hivatalos
+//   szólistán van. Egy IP naponta legfeljebb 15 szavazatot adhat le.
 //   POST { action:"release", word } + header x-netlify-token -> admin only
 // The admin is checked against the Netlify API: the token must be able to
 // read THIS site, i.e. it belongs to the site's owner/team.
 import { getStore } from '@netlify/blobs';
+import { norm, ipHash, cleanDev, officialWords, dailyQuota } from '../lib/words.mjs';
 
 const KEY = 'held';
-const norm = w => String(w || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 60);
 
 
 // sebességkorlát és gyorsítótár (példányonként; a meleg függvénypéldány újrahasználja)
@@ -67,11 +70,27 @@ export default async (req) => {
     return json({ ok: true, words: Object.keys(held) });
   }
 
-  // the same rule as in the game: at least 2 marks, and at least half the players
-  const votes = Math.floor(Number(body.votes) || 0), players = Math.floor(Number(body.players) || 0);
-  if (players < 2 || votes < Math.max(2, Math.ceil(players / 2)) || votes > players) return json({ error: 'not enough votes' }, 400);
+  const dev = cleanDev(body.dev);
+  if (!dev) return json({ error: 'no device' }, 400);
+  const official = await officialWords();
+  if (!official) return json({ ok: false, skipped: 'wordlist unavailable' }, 503);
+  if (!official.has(k)) return json({ ok: false, skipped: 'not an official word' });
   const held = await read();
+  if (held[k]) return json({ ok: true, already: true });
   if (Object.keys(held).length > 2000) return json({ error: 'full' }, 429);
-  if (!held[k]) { held[k] = { word, at: new Date().toISOString() }; await store.setJSON(KEY, held); listCache = null; }
+  if (!(await dailyQuota(store, 'quota', ipHash(req), 15))) return json({ error: 'daily limit' }, 429);
+  const now = Date.now();
+  const vv = await store.get('votes', { type: 'json' }).catch(() => null);
+  const votes = (vv && typeof vv === 'object' && !Array.isArray(vv)) ? vv : {};
+  for (const w of Object.keys(votes)) if (now - (votes[w].at || 0) > 86400000) delete votes[w];
+  const e = votes[k] || { at: now, devs: [] };
+  if (!e.devs.includes(dev)) e.devs.push(dev);
+  if (e.devs.length >= 2) {
+    delete votes[k];
+    held[k] = { word, at: new Date().toISOString(), votes: e.devs.length };
+    await store.setJSON(KEY, held);
+    listCache = null;
+  } else votes[k] = e;
+  if (Object.keys(votes).length < 5000) await store.setJSON('votes', votes);
   return json({ ok: true });
 };

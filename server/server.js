@@ -13,10 +13,13 @@
 //      vissza, mintha mi sem történt volna.
 //   3. Szobalista: a nyitott szobák itt futnak össze, egy új látogató
 //      azonnal megkapja az aktuális listát.
-//   4. Ranglista: a játék végén a szobanyitó elküldi az eredményt, ebből
-//      összesített ranglista készül (/ranglista oldal, /api/ranglista JSON).
+//   4. Ranglista: a játék végén minden játékos elküldi az eredményt; csak a
+//      többség által egyezően megerősített eredmény kerül be (v4.11)
+//      (/ranglista oldal, /api/ranglista JSON).
 //
-// A szerver a szobakódot sem látja: a böngésző a kód hash-ével lép be.
+// A szerver a szobakódot sem látja: a böngésző a kód lassított (PBKDF2)
+// lenyomatával lép be. Az üzenetek TARTALMÁT viszont látja (továbbítja) —
+// nincs végpontok közötti titkosítás, ezt az adatvédelmi tájékoztató is mondja.
 // Indítás:  node server.js   (beállítások: környezeti változók, lásd lent)
 // =====================================================================
 import http from 'node:http';
@@ -29,18 +32,29 @@ import { WebSocketServer } from 'ws';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8787);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-// Melyik weboldalakról lehet csatlakozni. Vesszővel elválasztva; a
-// "*.netlify.app" alak bármelyik netlify.app aloldalt engedi.
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*.netlify.app,http://localhost,http://127.0.0.1')
+// Melyik weboldalakról lehet csatlakozni. Vesszővel elválasztva.
+// A "*" kezdetű szabály végződésre illeszt, csak https-en: a
+// "*--pic-ass-o.netlify.app" a Netlify ág-előnézeteket (pl. test--pic-ass-o)
+// engedi, de MÁS netlify.app oldalt nem (v4.11: régen az összeset engedte).
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pic-ass-o.netlify.app,*--pic-ass-o.netlify.app,http://localhost,http://127.0.0.1')
   .split(',').map(s => s.trim()).filter(Boolean);
+// Origin nélküli WebSocket (nem böngésző) alapból tiltva; teszthez: ALLOW_NO_ORIGIN=1
+const ALLOW_NO_ORIGIN = process.env.ALLOW_NO_ORIGIN === '1';
 
 const RESUME_GRACE_MS = 60_000;      // ennyi ideig tartjuk meg egy megszakadt játékos helyét
 const MAX_BUFFERED = 600;            // ennyi üzenetet tárolunk el neki közben
-const MAX_PAYLOAD = 4 * 1024 * 1024; // egy üzenet max. mérete (a késői belépő teljes rajzot kap)
+const MAX_PAYLOAD = 2 * 1024 * 1024; // egy üzenet max. mérete (a késői belépő teljes rajzot kap)
 const MAX_ROOM_PEERS = 40;
 const MAX_ROOMS = 500;
 const DIR_TTL_MS = 30_000;           // ennyi ideig él egy szoba-hirdetés frissítés nélkül
-const RATE_PER_SEC = 400;            // üzenet / mp / kapcsolat (rajzolásnál sok kicsi jön)
+const RATE_PER_SEC = 200;            // üzenet / mp / kapcsolat (rajzolásnál sok kicsi jön)
+// v4.11: bájtalapú korlát is — a beküldött és a szobába továbbított forgalomra
+const BYTES_PER_SEC = 512 * 1024;    // tartós beküldés / kapcsolat
+const BYTES_BURST = 6 * 1024 * 1024; // egyszeri löket (pl. teljes rajz egy késői belépőnek)
+const FANOUT_BYTES_PER_SEC = 4 * 1024 * 1024;   // ennyit továbbíthat a szerver egy küldő nevében mp-enként
+const FANOUT_BURST = 24 * 1024 * 1024;
+const MAX_WS_BUFFER = 8 * 1024 * 1024;           // ha egy lassú kliens kimenő puffere ennél nagyobb, várunk
+const MAX_CONN_PER_IP = 40;                      // egyszerre ennyi kapcsolat egy IP-ről (egy család bőven elfér)
 const MAX_RING_BYTES = 16 * 1024 * 1024; // játékosonként ennyi megőrzött üzenet fér el
 const HEARTBEAT_MS = 5_000;          // ilyen sűrűn nézzük, él-e a kapcsolat (régen 20 mp volt)
 
@@ -53,19 +67,23 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 const peers = new Map();
 /** roomId -> Set(peerId) */
 const rooms = new Map();
+/** roomId -> { createdAt, ever:Set(peerId), ips:Set } — a ranglista-ellenőrzéshez */
+const roomInfo = new Map();
+/** ip -> élő kapcsolatok száma */
+const connPerIp = new Map();
 /** szobalista: kulcs -> { d, from, at } */
 const directory = new Map();
 
 function log(...a){ console.log(new Date().toISOString(), ...a); }
 const isStr = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
 
-function originAllowed(origin){
-  if(!origin) return true;   // pl. curl / egészség-ellenőrzés
+function originAllowed(origin, forWs){
+  if(!origin) return !forWs || ALLOW_NO_ORIGIN;   // curl / egészség-ellenőrzés: csak HTTP-n
   let host, proto;
   try{ const u = new URL(origin); host = u.hostname; proto = u.protocol; }catch(e){ return false; }
   return ALLOWED_ORIGINS.some(rule => {
     if(rule === '*') return true;
-    if(rule.startsWith('*.')) return host.endsWith(rule.slice(1)) && proto === 'https:';
+    if(rule.startsWith('*')) return host.endsWith(rule.slice(1)) && proto === 'https:';
     try{ const r = new URL(rule); return r.hostname === host && r.protocol === proto; }catch(e){ return rule === host; }
   });
 }
@@ -79,13 +97,14 @@ function sendRaw(peer, obj){
     // obj lehet már kész JSON-szöveg (a továbbított üzenet) vagy objektum
     const str = typeof obj === 'string' ? obj.replace(/}\s*$/, ',"q":' + q + '}') : JSON.stringify(Object.assign({}, obj, { q }));
     const rec = { q, str, sent: false };
-    if(peer.ws && peer.ws.readyState === 1){ peer.ws.send(str); rec.sent = true; }
+    // lassú kliens: nem tömjük tovább, a gyűrűben megvárja (újracsatlakozáskor megkapja)
+    if(peer.ws && peer.ws.readyState === 1 && peer.ws.bufferedAmount < MAX_WS_BUFFER){ peer.ws.send(str); rec.sent = true; }
     if(rec.sent && !peer.v2) return;        // régi böngésző: nem nyugtáz, nem tartjuk meg
     peer.ring.push(rec); peer.ringBytes = (peer.ringBytes || 0) + str.length;
     while(peer.ring.length > MAX_BUFFERED || (peer.ringBytes > MAX_RING_BYTES && peer.ring.length > 1)){
       peer.ringBytes -= peer.ring.shift().str.length;
     }
-  } else if(peer.ws && peer.ws.readyState === 1){
+  } else if(peer.ws && peer.ws.readyState === 1 && peer.ws.bufferedAmount < MAX_WS_BUFFER){
     peer.ws.send(JSON.stringify(obj));
   }
 }
@@ -104,7 +123,7 @@ function leaveRoom(peer, why){
   const set = rooms.get(roomId);
   if(set){
     set.delete(peer.id);
-    if(set.size === 0) rooms.delete(roomId);
+    if(set.size === 0){ rooms.delete(roomId); roomInfo.delete(roomId); pendingResults.delete(roomId); }
     else set.forEach(id => { const p = peers.get(id); if(p) sendRaw(p, { t:'pleave', id: peer.id }); });
   }
   log('kilépés', peer.id.slice(0,6), why || '', 'szoba', roomId.slice(0,8), 'maradt', set ? set.size : 0);
@@ -138,6 +157,12 @@ function saveGames(){
   }, 500);
 }
 const lastReportByRoom = new Map();
+/** roomId -> Map(hash -> { rows, voters:Set(peerId), at }) — még meg nem erősített eredmények */
+const pendingResults = new Map();
+/** ip-csoport -> [rögzítés időpontjai] — egy IP-ről naponta legfeljebb ennyi játék kerülhet be */
+const recordsByIpSet = new Map();
+const MAX_GAMES_PER_IPSET_DAY = 40;
+const MIN_GAME_MS = 90_000;            // ennél rövidebb ideig élő szoba eredménye nem számít
 
 function nameKey(n){ return String(n).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim(); }
 
@@ -152,26 +177,58 @@ function pruneOldGames(){
 setInterval(() => { if(pruneOldGames()) saveGames(); }, 6 * 3600_000).unref?.();
 setTimeout(() => { if(pruneOldGames()) saveGames(); }, 5000).unref?.();
 
+// v4.11: a ranglistára csak az az eredmény kerül fel, amit a szoba TÖBB tagja
+// egymástól függetlenül, ugyanúgy küld be (legalább 2 különböző játékos, és a
+// szobában lévők legalább fele). Egyetlen játékos kitalált eredménye így nem
+// jut be, és nem is "foglalhatja le" a szoba helyét a valódi elől.
+// Őszinte korlát: aki több böngészőfüllel egyedül játszik "kétfős" játékot,
+// azt a szerver nem tudja megkülönböztetni — ezt a napi/IP korlát fogja vissza.
 function recordGame(peer, rows){
   if(!peer.room) return 'nincs szobában';
-  const members = roomMembers(peer.room);
-  if(members.size < 2) return 'egyedül van';          // a szobanyitón kívül legalább 1 másik ember
+  const roomId = peer.room;
+  const members = roomMembers(roomId);
+  const info = roomInfo.get(roomId);
+  if(!info || members.size < 2) return 'egyedül van';
+  if(Date.now() - info.createdAt < MIN_GAME_MS) return 'túl rövid';
   if(!Array.isArray(rows) || rows.length < 2 || rows.length > MAX_ROOM_PEERS) return 'hibás sorok';
-  const last = lastReportByRoom.get(peer.room) || 0;
-  if(Date.now() - last < 60_000) return 'túl gyakori';
+  if(rows.length > info.ever.size) return 'több sor, mint ahányan a szobában jártak';
+  if(Date.now() - (peer.lastResultAt || 0) < 20_000) return 'túl gyakori';
+  peer.lastResultAt = Date.now();
   const clean = [];
   for(const r of rows){
     if(!r || !isStr(r.name, 40)) return 'hibás név';
     const score = Number(r.score);
     if(!Number.isFinite(score) || score < 0 || score > 100000) return 'hibás pont';
+    if(!nameKey(r.name)) return 'hibás név';
     clean.push({ name: r.name.trim(), score: Math.round(score) });
   }
-  lastReportByRoom.set(peer.room, Date.now());
-  games.push({ at: Date.now(), players: clean });
+  const canon = [...clean].sort((a, b) => nameKey(a.name) < nameKey(b.name) ? -1 : nameKey(a.name) > nameKey(b.name) ? 1 : a.score - b.score);
+  const hash = crypto.createHash('sha256').update(JSON.stringify(canon.map(r => [nameKey(r.name), r.score]))).digest('hex');
+  let pend = pendingResults.get(roomId);
+  if(!pend){ pend = new Map(); pendingResults.set(roomId, pend); }
+  const now = Date.now();
+  pend.forEach((v, k) => { if(now - v.at > 5 * 60_000) pend.delete(k); });
+  let e = pend.get(hash);
+  if(!e){ if(pend.size >= 20) return 'túl sok eltérő eredmény'; e = { rows: clean, voters: new Set(), at: now, done: false }; pend.set(hash, e); }
+  if(e.done) return 'már rögzítve';
+  e.voters.add(peer.id);
+  const live = [...e.voters].filter(id => members.has(id)).length;
+  const need = Math.max(2, Math.ceil(members.size / 2));
+  if(live < need) return 'megerősítésre vár';
+  // ugyanabból a szobából 60 mp-en belül csak egy játék (pl. dupla küldés)
+  if(now - (lastReportByRoom.get(roomId) || 0) < 60_000) return 'túl gyakori';
+  // napi korlát a szobában lévők IP-címeire (egy család egy IP-n is bőven elfér)
+  const ipKey = [...info.ips].sort().join('|');
+  const recent = (recordsByIpSet.get(ipKey) || []).filter(t => now - t < 86400_000);
+  if(recent.length >= MAX_GAMES_PER_IPSET_DAY) return 'napi korlát';
+  recent.push(now); recordsByIpSet.set(ipKey, recent);
+  e.done = true;
+  lastReportByRoom.set(roomId, now);
+  games.push({ at: now, players: e.rows });
   pruneOldGames();
   if(games.length > 20000) games.splice(0, games.length - 20000);
   saveGames();
-  log('játék rögzítve', clean.map(r => `${r.name}:${r.score}`).join(', '));
+  log('játék rögzítve', e.rows.map(r => `${r.name}:${r.score}`).join(', '), `(${live} megerősítés)`);
   return 'ok';
 }
 
@@ -252,6 +309,20 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ ok:true, peers: peers.size, rooms: rooms.size, games: games.length }));
     return;
   }
+  // v4.11: a nyilvános szobák listája — az e-mail értesítő ezzel ellenőrzi,
+  // hogy tényleg nyílt-e szoba (a nevet és a szobanyitót is innen veszi)
+  if(url.pathname === '/api/szobak'){
+    const now = Date.now();
+    const list = [];
+    directory.forEach(e => {
+      if(now - e.at > DIR_TTL_MS || !e.d || e.d.removed || !e.d.code) return;
+      list.push({ code: String(e.d.code).slice(0, 8), name: String(e.d.name || '').slice(0, 60),
+        hostName: String(e.d.hostName || '').slice(0, 24), firstAt: e.firstAt || e.at });
+    });
+    res.writeHead(200, { 'content-type':'application/json', 'cache-control':'no-store' });
+    res.end(JSON.stringify({ rooms: list }));
+    return;
+  }
   if(url.pathname === '/api/ranglista'){
     const days = Math.max(0, Math.min(3650, Number(url.searchParams.get('napok')) || 0));
     res.writeHead(200, { 'content-type':'application/json', 'cache-control':'no-store' });
@@ -275,19 +346,29 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_PAYLOAD, perMessageDeflate: { threshold: 2048 } });
 
 wss.on('connection', (ws, req) => {
-  if(!originAllowed(req.headers.origin)){ ws.close(4003, 'origin'); return; }
-  const ip = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  if(!originAllowed(req.headers.origin, true)){ ws.close(4003, 'origin'); return; }
+  const ip = String(req.headers['cf-connecting-ip'] || String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'x');
+  const nConn = (connPerIp.get(ip) || 0) + 1;
+  if(nConn > MAX_CONN_PER_IP){ ws.close(4029, 'túl sok kapcsolat'); return; }
+  connPerIp.set(ip, nConn);
+  ws.on('close', () => { const n = (connPerIp.get(ip) || 1) - 1; if(n <= 0) connPerIp.delete(ip); else connPerIp.set(ip, n); });
   let peer = null;
   let tokens = RATE_PER_SEC, lastRefill = Date.now();
+  let byteTokens = BYTES_BURST, fanTokens = FANOUT_BURST;
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
 
   ws.on('message', (buf, isBinary) => {
     // egyszerű sebességkorlát
     const now = Date.now();
-    tokens = Math.min(RATE_PER_SEC, tokens + (now - lastRefill) / 1000 * RATE_PER_SEC);
+    const dt = (now - lastRefill) / 1000;
+    tokens = Math.min(RATE_PER_SEC, tokens + dt * RATE_PER_SEC);
+    byteTokens = Math.min(BYTES_BURST, byteTokens + dt * BYTES_PER_SEC);
+    fanTokens = Math.min(FANOUT_BURST, fanTokens + dt * FANOUT_BYTES_PER_SEC);
     lastRefill = now;
     if(--tokens < 0){ return; }
+    byteTokens -= buf.length;
+    if(byteTokens < 0){ return; }
     if(isBinary) return;
     let m; try{ m = JSON.parse(buf.toString()); }catch(e){ return; }
     if(!m || typeof m !== 'object') return;
@@ -342,6 +423,9 @@ wss.on('connection', (ws, req) => {
         const others = [...set];
         set.add(peer.id);
         peer.room = m.room;
+        let info = roomInfo.get(m.room);
+        if(!info){ info = { createdAt: Date.now(), ever: new Set(), ips: new Set() }; roomInfo.set(m.room, info); }
+        info.ever.add(peer.id); if(info.ips.size < 50) info.ips.add(peer.ip);
         ws.send(JSON.stringify({ t:'joined', room: m.room, peers: others }));
         others.forEach(id => { const p = peers.get(id); if(p) sendRaw(p, { t:'pjoin', id: peer.id }); });
         log('belépés', peer.id.slice(0,6), 'szoba', m.room.slice(0,8), 'létszám', set.size);
@@ -358,6 +442,9 @@ wss.on('connection', (ws, req) => {
         }
         const set = roomMembers(peer.room);
         const out = JSON.stringify({ t:'msg', a: m.a, d: m.d, f: peer.id });
+        const targets = Array.isArray(m.to) ? m.to.filter(id => typeof id === 'string' && set.has(id)).length : Math.max(0, set.size - 1);
+        fanTokens -= out.length * targets;
+        if(fanTokens < 0){ return; }   // túl sok továbbítandó adat: eldobjuk (normál játékban ide nem jut el)
         if(Array.isArray(m.to)){
           m.to.slice(0, MAX_ROOM_PEERS).forEach(id => {
             if(typeof id === 'string' && id !== peer.id && set.has(id)){ const p = peers.get(id); if(p) sendRaw(p, out); }
@@ -380,7 +467,7 @@ wss.on('connection', (ws, req) => {
         else {
           if(prev && prev.from !== peer.id && Date.now() - prev.at < DIR_TTL_MS) return;   // más szobáját nem írhatja felül
           if(directory.size > 300 && !prev) return;
-          directory.set(key, { d: tagged, from: peer.id, at: Date.now() });
+          directory.set(key, { d: tagged, from: peer.id, at: Date.now(), firstAt: prev && prev.from === peer.id ? (prev.firstAt || prev.at) : Date.now() });
         }
         broadcastDir(tagged, peer.id);
         return;
@@ -432,6 +519,7 @@ setInterval(() => {
   const online = JSON.stringify({ t:'online', n: peers.size });
   peers.forEach(p => { if(p.ws && p.ws.readyState === 1) p.ws.send(online); });
   lastReportByRoom.forEach((t, k) => { if(now - t > 3600_000) lastReportByRoom.delete(k); });
+  recordsByIpSet.forEach((arr, k) => { const a = arr.filter(t => now - t < 86400_000); if(a.length) recordsByIpSet.set(k, a); else recordsByIpSet.delete(k); });
 }, 20_000);
 
 server.listen(PORT, () => log(`PIC-ASS-O szerver fut: http://0.0.0.0:${PORT}  (engedélyezett oldalak: ${ALLOWED_ORIGINS.join(', ')})`));

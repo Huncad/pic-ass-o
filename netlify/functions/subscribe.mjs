@@ -5,7 +5,8 @@
 //
 //   GET                         -> { count }  (megerősített feliratkozók száma)
 //   POST { action:"subscribe", email }
-//   POST { action:"notify", name, host, code }   (nyilvános szoba nyílt)
+//   POST { action:"notify", code }   (nyilvános szoba nyílt — a játékszerver
+//        szobalistájából ellenőrizve, v4.11)
 //   GET  ?confirm=TOKEN / ?unsub=TOKEN  -> HTML oldal egy gombbal
 //   POST ?confirm=TOKEN / ?unsub=TOKEN  -> elvégzi (a gomb, ill. a levelezők
 //        "egykattintásos leiratkozás" funkciója) — a GET szándékosan nem
@@ -15,11 +16,13 @@
 //   GMAIL_USER          — a küldő Gmail cím
 //   GMAIL_APP_PASSWORD  — a Google fiók 16 karakteres alkalmazásjelszava
 //   MAIL_FROM_NAME (nem kötelező, alapból "PIC-ASS-O")
+//   GAME_SERVER_URL (nem kötelező, alapból a saját játékszerver címe)
 import { getStore } from '@netlify/blobs';
 import { createHash, randomBytes } from 'node:crypto';
 import nodemailer from 'nodemailer';
 
 const KEY = 'subs';
+const GAME_SERVER_URL = String(process.env.GAME_SERVER_URL || 'https://picasso.taile8c93.ts.net').replace(/\/+$/, '');
 const NOTIFY_COOLDOWN_MS = 15 * 60 * 1000;   // legfeljebb 1 értesítés / 15 perc
 const PENDING_TTL_MS = 24 * 3600 * 1000;      // a megerősítő link 24 óráig él
 const RESEND_MS = 10 * 60 * 1000;             // ugyanarra a címre 10 percenként 1 megerősítő levél
@@ -179,18 +182,38 @@ ${btn(`${self}?confirm=${s.ct}`, '✅ Feliratkozás megerősítése')}
   }
 
   // ---- értesítés új szobáról ----
+  // v4.11: a kérés csak jelzés ("nézd meg, nyílt-e szoba"). Hogy tényleg nyílt-e,
+  // azt a játékszerver nyilvános szobalistájából ellenőrizzük, és a levélbe a
+  // szoba nevét / a szobanyitót is ONNAN vesszük, nem a kérésből — így kitalált
+  // szobáról vagy kitalált szöveggel senki nem tud levelet küldetni.
   if (body.action === 'notify') {
     if (limited('n|' + ip, 6, 3600000)) return json({ ok: true, skipped: 'ip' });
     const code = String(body.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
-    const name = String(body.name || '').slice(0, 60).trim() || 'Új szoba';
-    const host = String(body.host || '').slice(0, 24).trim() || 'Valaki';
+    if (!code) return json({ ok: true, skipped: 'nocode' });
+    let room = null;
+    try {
+      const ctl = AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined;
+      const r = await fetch(GAME_SERVER_URL + '/api/szobak', { signal: ctl, headers: { accept: 'application/json' } });
+      if (r.ok) {
+        const d = await r.json();
+        room = (d && Array.isArray(d.rooms) ? d.rooms : []).find(x => x && String(x.code).toUpperCase() === code) || null;
+      }
+    } catch (e) { room = null; }
+    // csak frissen (3 percen belül) megnyílt, a szerveren tényleg látható nyilvános szoba
+    if (!room || Date.now() - Number(room.firstAt || 0) > 3 * 60 * 1000) return json({ ok: true, skipped: 'unverified' });
+    const name = String(room.name || '').slice(0, 60).trim() || 'Új szoba';
+    const host = String(room.hostName || '').slice(0, 24).trim() || 'Valaki';
     const d = await read();
     if (Date.now() - (d.lastNotifyAt || 0) < NOTIFY_COOLDOWN_MS) return json({ ok: true, skipped: 'cooldown' });
+    d.notified = (d.notified && typeof d.notified === 'object') ? d.notified : {};
+    for (const k of Object.keys(d.notified)) if (Date.now() - d.notified[k] > 86400000) delete d.notified[k];
+    if (d.notified[code]) return json({ ok: true, skipped: 'already' });
+    d.notified[code] = Date.now();
     const list = Object.values(d.subs).filter(s => s.status === 'ok');
     d.lastNotifyAt = Date.now();
     await store.setJSON(KEY, d);
     if (!list.length) return json({ ok: true, sent: 0 });
-    const joinUrl = code ? `${site}/?join=${encodeURIComponent(code)}` : site;
+    const joinUrl = `${site}/?join=${encodeURIComponent(code)}`;
     let sent = 0;
     for (let i = 0; i < list.length; i += 8) {
       const res = await Promise.allSettled(list.slice(i, i + 8).map(s => {

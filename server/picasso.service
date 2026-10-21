@@ -11,7 +11,8 @@ Environment=PORT=8787
 Environment=DATA_DIR=/var/lib/picasso
 # Melyik weboldalakról lehet csatlakozni (vesszővel). Alapból bármelyik *.netlify.app.
 # Ha saját domainre teszed a játékot, írd ide is, pl.:
-# Environment=ALLOWED_ORIGINS=*.netlify.app,https://picasso.example.hu
+# Environment=ALLOWED_ORIGINS=https://pic-ass-o.netlify.app,*--pic-ass-o.netlify.app
+# (v4.11: alapból is ez, csak a játék saját oldalai — más netlify.app oldal nem)
 Restart=always
 RestartSec=3
 NoNewPrivileges=true

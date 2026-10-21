@@ -2704,7 +2704,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.10</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.11</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -2782,7 +2782,7 @@
 
     <h3 class="pv-h">Milyen adatot, miért és meddig?</h3>
     <ul>
-      <li><b>Játék közben (becenév, rajz, tippek, chat, hangüzenet):</b> a játékosok eszközei között mennek közvetlenül, titkosított WebRTC-kapcsolaton, vagy a saját játékszerveren / nyilvános MQTT-szervereken át, titkosítva. Sehol nem tároljuk őket, a játék végével eltűnnek (a szerver egy megszakadt kapcsolatnál legfeljebb 1 percig tartja meg). <i>Jogalap: a játék nyújtása, amit te kértél (GDPR 6. cikk (1) b).</i></li>
+      <li><b>Játék közben (becenév, rajz, tippek, chat, hangüzenet):</b> két úton mehetnek. <b>(1) Saját játékszerveren át</b> (ha elérhető, ez az alapértelmezett): a kapcsolat titkosított (HTTPS/WSS), de ez a titkosítás csak az útvonalat védi — <b>a játékszerver maga technikailag látja az üzenetek tartalmát</b>, mert ő adja tovább őket a szobában; nincs végpontok közötti titkosítás. A szerver a tartalmat nem menti el, nem naplózza és nem nézi; csak egy megszakadt kapcsolatnál tartja meg legfeljebb 1 percig, hogy a visszatérő játékos megkapja. <b>(2) Közvetlenül a játékosok között</b> (WebRTC), vagy tartalék úton nyilvános MQTT-szervereken át: itt a tartalom a szobakódból képzett kulccsal titkosítva megy, ezek a szerverek nem látják. Egyik esetben sem tároljuk a játékot, a játék végével eltűnik. <i>Jogalap: a játék nyújtása, amit te kértél (GDPR 6. cikk (1) b).</i></li>
       <li><b>IP-cím a kapcsolódáshoz:</b> a jelzőszerverek (Nostr / BitTorrent tracker / MQTT), a közvetítő (TURN) és a saját játékszerver látja, mert e nélkül nem jön létre a kapcsolat. Mi nem mentjük el. <i>Jogalap: jogos érdek a játék működtetéséhez (6. cikk (1) f).</i></li>
       <li><b>Nyilvános szobák listája:</b> a szoba neve, a szobanyitó beceneve és a létszám, amíg a szoba nyitva van. Zárt szoba nem jelenik meg névvel. <i>Jogalap: 6. cikk (1) b.</i></li>
       <li><b>Közös ranglista:</b> a befejezett játékokból a becenevek és a pontszámok kerülnek a saját játékszerverre, <b>1 évig</b>. Valódi nevet nem kérünk — ha a becenevedet törölnéd, írj a fenti címre. <i>Jogalap: jogos érdek (6. cikk (1) f) — tiltakozhatsz ellene.</i></li>
@@ -2797,7 +2797,7 @@
     <ul>
       <li><b>Netlify Inc.</b> (USA) — a weboldal tárhelye, a feliratkozók, a kitiltások és a visszajelzések tárolása.</li>
       <li><b>Google LLC</b> (USA) — a Gmail küldi ki az értesítő leveleket a picasso.ertesito@gmail.com fiókból.</li>
-      <li><b>GitHub Inc.</b> (USA) és a <b>jsDelivr / esm.run</b> CDN — a szólista, a zenék és a játék programkönyvtárainak betöltése; ezek a letöltéskor látják az IP-címedet.</li>
+      <li><b>GitHub Inc.</b> (USA) és a <b>jsDelivr</b> CDN — a szólista és a zenék betöltése; ezek a letöltéskor látják az IP-címedet. A játék programkönyvtárai a játék saját tárhelyéről töltődnek be (az esm.run CDN csak akkor, ha onnan nem sikerül).</li>
       <li><b>Tailscale Inc.</b> (USA) — a saját játékszerver internetes elérése.</li>
       <li><b>Metered / Cloudflare</b> — közvetítő (TURN) szerver, ha a közvetlen kapcsolat nem jön létre.</li>
       <li><b>ntfy.sh</b> — az üzemeltető telefonjára küld értesítést új szobáról (csak a szoba nevét és a szobanyitó becenevét).</li>
@@ -3321,7 +3321,7 @@
       A játékosok visszajelzései a Netlify Forms-ban gyűlnek (privát, csak a te Netlify fiókodból érhetők el).
       Az itteni olvasáshoz egy
       <a href="https://app.netlify.com/user/applications#personal-access-tokens" target="_blank" rel="noopener">Netlify Personal Access Token</a>
-      kell — csak ezen az eszközön, a böngésző munkamenet-tárolójában (a fül bezárásáig).
+      kell — csak a memóriában tartjuk, az admin panel bezárásakor töröljük (sehova nem mentjük).
       <strong style="color:var(--yellow);">Figyelem:</strong> ez egy statikus oldal, saját kiszolgáló nélkül — a tokent
       így nem lehet valóban biztonságosan tárolni, bármely, ezen az oldalon futó kód hozzáfér. Csak a legszűkebb
       jogosultságú tokent használd, és ha végeztél, vond vissza a fiókodban.
@@ -3417,7 +3417,20 @@
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
 // relays that never find each other.
-import * as Trystero from 'https://esm.run/trystero@0.25.4';
+// v4.11: the libraries are served from THIS site (/vendor, built from the same
+// pinned 0.25.4 packages), not from a third-party CDN: no outside code runs in
+// the page, and loading no longer depends on esm.run being reachable. The CDN
+// copy is only a fallback if the local file cannot be loaded at all.
+const VENDOR_V = '0.25.4';
+async function vendorImport(local, cdn, ms){
+  const t = (p)=>Promise.race([p, new Promise((_, rej)=>setTimeout(()=>rej(new Error('timeout')), ms))]);
+  try{ return await t(import(local)); }catch(e){ return await t(import(cdn)); }
+}
+// the three are fetched AT THE SAME TIME (they used to be one after the other: up to 18 s)
+const _trysteroP = vendorImport('./vendor/trystero.js', 'https://esm.run/trystero@' + VENDOR_V, 12000);
+const _torrentP = vendorImport('./vendor/trystero-torrent.js', 'https://esm.run/@trystero-p2p/torrent@' + VENDOR_V, 8000).catch(()=>null);
+const _mqttP = vendorImport('./vendor/trystero-mqtt.js', 'https://esm.run/@trystero-p2p/mqtt@' + VENDOR_V, 10000).catch(()=>null);
+const Trystero = await _trysteroP;
 const {joinRoom, selfId} = Trystero;
 window.__picassoBooted = true;
 // v2.50: the Nostr relays stopped carrying the connection set-up messages
@@ -3429,10 +3442,7 @@ window.__picassoBooted = true;
 // selfId is identical — checked anyway; if not, we stay on Nostr.
 let TrysteroTorrent = null;
 try{
-  TrysteroTorrent = await Promise.race([
-    import('https://esm.run/@trystero-p2p/torrent@0.25.4'),
-    new Promise((_, rej)=>setTimeout(()=>rej(new Error('timeout')), 8000))
-  ]);
+  TrysteroTorrent = await _torrentP;
   if(!TrysteroTorrent || TrysteroTorrent.selfId !== selfId || typeof TrysteroTorrent.joinRoom !== 'function') TrysteroTorrent = null;
 }catch(e){ TrysteroTorrent = null; }
 // v2.65: MQTT — a third, different kind of signalling network for the room
@@ -3441,10 +3451,7 @@ try{
 // trackers. Same shared core, so the same selfId — checked like above.
 let TrysteroMqtt = null;
 try{
-  TrysteroMqtt = await Promise.race([
-    import('https://esm.run/@trystero-p2p/mqtt@0.25.4'),
-    new Promise((_, rej)=>setTimeout(()=>rej(new Error('timeout')), 10000))
-  ]);
+  TrysteroMqtt = await _mqttP;
   if(!TrysteroMqtt || TrysteroMqtt.selfId !== selfId || typeof TrysteroMqtt.joinRoom !== 'function') TrysteroMqtt = null;
 }catch(e){ TrysteroMqtt = null; }
 // v2.51: the game rooms themselves go back to Nostr — they worked there on
@@ -3813,8 +3820,14 @@ const SRV = (function(){
 (function(){
   "use strict";
 
-  // Right-click is disabled everywhere (annoying while drawing on a touchpad/mouse).
-  document.addEventListener('contextmenu', (e)=>{ e.preventDefault(); });
+  // v4.11: the right-click menu is only blocked on the drawing surfaces
+  // (where it got in the way of drawing with a touchpad / mouse) and on the
+  // game's buttons (a long press on a phone). Everywhere else — links, text,
+  // input fields — the browser's own menu works again.
+  document.addEventListener('contextmenu', (e)=>{
+    const t = e.target;
+    if(t && t.closest && t.closest('canvas, #fd-canvas-wrap, button, .swatch')) e.preventDefault();   // long-press on a button must not pop a menu
+  });
 
   function normalize(s){
     return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
@@ -4200,6 +4213,7 @@ const SRV = (function(){
   function closeAdmin(){
     if(adminIsDirty() && !confirm('Vannak mentetlen módosítások a szólistában. Így is bezárod? (A módosítások ezen az eszközön megmaradnak, amíg újra nem töltöd az oldalt.)')) return;
     document.getElementById('admin-overlay').classList.add('hidden');
+    try{ adminTokensWipe(); }catch(e){}
     if(location.hash === '#admin'){
       history.replaceState(null, '', location.pathname + location.search);
     }
@@ -4404,23 +4418,20 @@ const SRV = (function(){
   // NOT real protection — a static page has no safe place for a token at
   // all (see the admin panel note). Tokens written by older versions are
   // migrated over and deleted from localStorage on first use.
+  // v4.11: the tokens no longer go into ANY browser storage — only into this
+  // variable, and closing the admin panel wipes them. Old copies left in
+  // localStorage / sessionStorage by earlier versions are deleted on start.
   const ADMIN_TOKEN_KEYS = { gh:'picasso-admin-gh-token', netlify:'picasso-admin-netlify-token' };
-  function adminTokenGet(kind){
-    const key = ADMIN_TOKEN_KEYS[kind];
-    try{
-      const legacy = localStorage.getItem(key);
-      if(legacy){
-        try{ sessionStorage.setItem(key, legacy); }catch(e){}
-        localStorage.removeItem(key);
-        return legacy;
-      }
-    }catch(e){}
-    try{ return sessionStorage.getItem(key) || ''; }catch(e){ return ''; }
-  }
-  function adminTokenSet(kind, token){
-    const key = ADMIN_TOKEN_KEYS[kind];
-    try{ sessionStorage.setItem(key, token); }catch(e){}
-    try{ localStorage.removeItem(key); }catch(e){}
+  const adminTokens = {};
+  Object.values(ADMIN_TOKEN_KEYS).forEach(k=>{
+    try{ localStorage.removeItem(k); }catch(e){}
+    try{ sessionStorage.removeItem(k); }catch(e){}
+  });
+  function adminTokenGet(kind){ return adminTokens[kind] || ''; }
+  function adminTokenSet(kind, token){ adminTokens[kind] = String(token || ''); }
+  function adminTokensWipe(){
+    Object.keys(adminTokens).forEach(k=>{ delete adminTokens[k]; });
+    document.querySelectorAll('#admin-overlay input[type=password]').forEach(el=>{ if(el.id !== 'admin-password-input') el.value = ''; });
   }
 
   function currentWordsJson(){
@@ -4856,9 +4867,14 @@ const SRV = (function(){
   }
   function notifyRoomOpened(roomName, hostName, isPublic, code){
     // v4.10: e-mail értesítés a feliratkozóknak (csak nyilvános szobáról)
-    if(isPublic){
-      try{ fetch(SUBSCRIBE_URL, { method:'POST', keepalive:true, headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'notify', name:String(roomName).slice(0,60), host:String(hostName).slice(0,24), code }) }).catch(()=>{}); }catch(e){}
+    // v4.11: the e-mail service checks the room on the game server's public
+    // list (and takes the name/host from there), so it only works for rooms on
+    // the server, and only after the server has seen the announcement
+    if(isPublic && currentRoomMode === 'srv'){
+      setTimeout(()=>{
+        try{ fetch(SUBSCRIBE_URL, { method:'POST', keepalive:true, headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ action:'notify', code }) }).catch(()=>{}); }catch(e){}
+      }, 2000);
     }
     if(!notifyCfg.on || !notifyCfg.topic) return;
     try{ if(localStorage.getItem(NOTIFY_SKIP_OWN_KEY) === '1') return; }catch(e){}
@@ -5038,8 +5054,13 @@ const SRV = (function(){
     const k = squash(word); if(!k) return;
     usedEverKeys.add(k);
   }
+  // v4.11: every device of the round reports the word with its own id; the
+  // server only marks it used once 2 different devices reported it
+  const postedUsedEver = new Set();
   async function postUsedEver(word){
-    try{ await fetch(WORDUSED_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ word }) }); }catch(e){}
+    const k = squash(word); if(!k || postedUsedEver.has(k)) return;
+    postedUsedEver.add(k);
+    try{ await fetch(WORDUSED_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ word, dev: String(selfId) }) }); }catch(e){}
   }
   async function refreshHeldWords(){
     try{
@@ -6034,8 +6055,8 @@ const SRV = (function(){
   // must not hang because the TURN provider is slow.
   // v2.93: creating or joining a room waits longer (9 s): a room connection
   // started without the relay never gets it later.
-  function turnReady(maxMs){
-    if(SRV.up) return Promise.resolve(turnIceServers);   // v4.00: szerver módban nincs WebRTC, nem kell közvetítő
+  function turnReady(maxMs, forP2P){
+    if(SRV.up && !forP2P) return Promise.resolve(turnIceServers);   // v4.00: szerver módban nincs WebRTC, nem kell közvetítő
     return Promise.race([ loadTurnServers(), new Promise(r=>setTimeout(r, maxMs || 4000)) ]);
   }
 
@@ -8256,6 +8277,12 @@ const SRV = (function(){
       const ws = document.getElementById('lobby-words-summary'); if(ws) ws.textContent = '';
   }
 
+  // v4.11: which network THIS room uses ('srv' = own game server, 'p2p' =
+  // direct/hybrid). Fixed when the room is created or joined, and every
+  // reconnect of the same room uses the same one. It used to be re-decided on
+  // every call from the server's state at that moment, so a host and a guest
+  // (or a reconnect) could end up on two different networks that never meet.
+  let currentRoomMode = null;
   function connect(code, opts){
     const expectPeer = opts && opts.expectPeer;
     const timeoutMs = (opts && opts.timeoutMs) || 7000;
@@ -8281,7 +8308,8 @@ const SRV = (function(){
           joinOrderIds = [selfId];
         }
         setConnStatus('connecting', 'Kapcsolódás a hálózathoz…');
-        const viaSrv = SRV.up;   // v4.00: saját szerver, ha elérhető
+        const viaSrv = (opts && opts.mode) ? opts.mode === 'srv' : SRV.up;   // v4.00: saját szerver, ha elérhető
+        currentRoomMode = viaSrv ? 'srv' : 'p2p';
         clog('J01', `szoba ${code}: ${expectPeer ? 'belépés vendégként' : (meta ? 'újrakapcsolódás játék közben' : 'szobanyitóként')} · hálózat: ${viaSrv ? 'saját szerver' : ROOM_NET} · TURN: ${turnIceServers.length ? 'van' : 'nincs'}`);
         room = viaSrv ? makeServerRoom(code) : makeHybridRoom(roomJoin(ROOM_NET === 'mqtt' ? MQTT_CFG : TRYSTERO_CFG, code, {
           handshakeTimeoutMs: HANDSHAKE_TIMEOUT_MS,
@@ -8885,7 +8913,8 @@ const SRV = (function(){
   // v4.00: a játékszoba a saját szerveren (lásd SRV fent). Ugyanaz a felület,
   // mint a "hibrid szobáé" (makeAction / getPeers / onPeerJoin / onPeerLeave /
   // leave), így a játék kódja nem tudja, és nem is kell tudnia, melyik úton megy.
-  // A szerver a szobakódot nem kapja meg, csak egy hash-t belőle.
+  // A szerver a szobakódot nem kapja meg, csak egy lassított (PBKDF2) lenyomatát.
+  // Az üzenetek tartalmát viszont látja (nincs végpontok közötti titkosítás).
   // =====================================================================
   function makeServerRoom(code){
     const r = { rid:null, members:new Set(), actions:new Map(), closed:false };
@@ -8909,9 +8938,14 @@ const SRV = (function(){
     };
     function out(obj){ if(r.rid) SRV.send(obj); else pre.push(obj); }
     (async ()=>{
-      const t = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('picasso-srv-room|' + APP_ID + '|' + code));
+      // v4.11: the server room id is a SLOW (PBKDF2, 150 000 rounds) fingerprint of
+      // the code, like the room-list fingerprint — a plain SHA-256 could be
+      // brute-forced back to the 5-letter code in moments by anyone who saw it.
+      const enc = new TextEncoder();
+      const key = await crypto.subtle.importKey('raw', enc.encode(code), 'PBKDF2', false, ['deriveBits']);
+      const t = await crypto.subtle.deriveBits({ name:'PBKDF2', salt: enc.encode('picasso-srv-room-v2|' + APP_ID), iterations:150000, hash:'SHA-256' }, key, 256);
       if(r.closed) return;
-      r.rid = Array.from(new Uint8Array(t)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      r.rid = 'v2:' + Array.from(new Uint8Array(t)).map(b=>b.toString(16).padStart(2,'0')).join('');
       SRV.attach(r);
       SRV.send({ t:'join', room: r.rid });
       pre.splice(0).forEach(o=>SRV.send(o));
@@ -9293,7 +9327,7 @@ const SRV = (function(){
       addSystemChatMessage(`🔄 Megszakadt a kapcsolat${names ? ' ' + names + ' felé' : ''}, de még itt van — újraépítem… (K08)`);
       broken.forEach(id=>diagnoseInChat(id));
       clog('K08', `szobakapcsolat újraépítése — elérhetetlen: ${names || broken.join(',')} (MQTT szerint a szobában vannak)`);
-      try{ await connect(roomCode); }catch(e){}
+      try{ await connect(roomCode, { mode: currentRoomMode || undefined }); }catch(e){}
     }
   }, 4000);
   // =====================================================================
@@ -9511,7 +9545,7 @@ const SRV = (function(){
     let lib = null;
     try{
       const mod = await Promise.race([
-        import('https://esm.run/mqtt@5.15.2'),
+        import('./vendor/mqtt.js').catch(()=>import('https://esm.run/mqtt@5.15.2')),
         new Promise((_, rej)=>setTimeout(()=>rej(new Error('timeout')), 12000))
       ]);
       lib = (mod && mod.default && typeof mod.default.connect === 'function') ? mod.default : mod;
@@ -10840,6 +10874,8 @@ const SRV = (function(){
     const activeVis = document.querySelector('#visibility-row .pill.active');
     roomIsPublic = !!activeVis && activeVis.dataset.visibility === 'public';
     try{
+      // v4.11: give the game server a moment before deciding where the room lives
+      if(SRV.enabled && !SRV.up){ try{ await SRV.ready(2500); }catch(e){} }
       await connect(roomCode);
       if(roomIsPublic){
         myHostedRoomAnnouncement = { code:roomCode, name:roomName, hostName:myName };
@@ -10953,13 +10989,24 @@ const SRV = (function(){
         // v3.10: still not in after 15 s → swap diagnostics with the host
         const diagTimer = setTimeout(()=>{ if(pendingKnockKey) requestDiag(pendingKnockKey, 'nem sikerül csatlakozni'); }, 15000);
         try{
-          let result = await connect(roomCode, { expectPeer:true, timeoutMs:JOIN_WAIT_MS });
+          // v4.11: the room may live on the game server or on the direct (P2P)
+          // network, depending on what the HOST could reach when it opened it.
+          // Try the server first (it answers within seconds), then the direct way.
+          if(SRV.enabled && !SRV.up){ try{ await SRV.ready(3000); }catch(e){} }
+          const firstMode = SRV.up ? 'srv' : 'p2p';
+          let result = await connect(roomCode, { expectPeer:true, timeoutMs: firstMode === 'srv' ? 9000 : JOIN_WAIT_MS, mode:firstMode });
+          if(!result.metPeer && firstMode === 'srv' && roomCode){
+            clog('J05', 'a szoba nem válaszolt a játékszerveren — próbálom a közvetlen (P2P) úton');
+            warn.style.color = 'var(--chalk-dim)';
+            try{ await turnReady(9000, true); }catch(e){}
+            result = await connect(roomCode, { expectPeer:true, timeoutMs:JOIN_WAIT_MS, mode:'p2p' });
+          }
           // the host demonstrably hears us, but no connection came of it:
           // one fresh attempt (new connection offers) before giving up
           if(!result.metPeer && (knockAckedAt || result.metOther) && roomCode){
             joinRetried = true; joinRetriedEver = true;
             warn.style.color = 'var(--chalk-dim)';
-            result = await connect(roomCode, { expectPeer:true, timeoutMs:35000 });
+            result = await connect(roomCode, { expectPeer:true, timeoutMs:35000, mode: currentRoomMode || undefined });
           }
           if(result.metPeer) joined = true;
         } finally {
@@ -10987,8 +11034,8 @@ const SRV = (function(){
         document.getElementById('chat-toggle-btn').classList.add('hidden');
         document.getElementById('reaction-toggle-btn').classList.add('hidden');
         warn.style.color = 'var(--red)';
-        const appleCase = !SRV.up && IS_APPLE_WEBKIT && !IS_STANDALONE && !appleNetUnlocked && turnIceServers.length === 0;
-        warn.textContent = SRV.up
+        const appleCase = currentRoomMode !== 'srv' && IS_APPLE_WEBKIT && !IS_STANDALONE && !appleNetUnlocked && turnIceServers.length === 0;
+        warn.textContent = currentRoomMode === 'srv'
           ? 'Ez a szoba nem található a játékszerveren — lehet, hogy már megszűnt, vagy elírtad a kódot. Kérj új meghívót a szobanyitótól.'
           : roomConnErrors > 0
           ? (appleCase
@@ -13216,6 +13263,8 @@ const SRV = (function(){
     if(result.word){
       result.word = String(result.word).slice(0,60);
       noteUsedWords([result.word]);
+      // v4.11: the guessers report the drawn word too (the drawer already did, in finishRoundAsDrawer)
+      if(currentRound.drawerId !== selfId && currentRound.tier !== 'sajat' && !amSpectator){ markUsedEver(result.word); postUsedEver(result.word); }
       if(!doneWords.includes(result.word)) doneWords.push(result.word);   // finished, public words
     }
     if(Array.isArray(result.offered)){
@@ -13907,8 +13956,10 @@ const SRV = (function(){
       : 'Győztes: '+(winners[0]?winners[0].name:'—')+' 🏆';
     renderScoreTable('gameend-scores', rows);
     if(!quiet) recordPersonalStats(rows);
-    // v4.00: közös ranglista a szerveren — csak a szobanyitó küldi, egyszer
-    if(!quiet && isHost && SRV.up && room && room.viaServer && rows.length >= 2){
+    // v4.00: közös ranglista a szerveren. v4.11: MINDEN játékos elküldi, és a
+    // szerver csak akkor rögzíti, ha többen ugyanazt az eredményt küldték be
+    // (egy játékos egyedül nem tud kitalált eredményt felvinni)
+    if(!quiet && !amSpectator && SRV.up && room && room.viaServer && rows.length >= 2){
       SRV.send({ t:'result', rows: rows.map(r=>({ name: String(r.name || '').slice(0,40), score: Math.round(Number(r.score) || 0) })) });
     }
     renderGameStatsAwards();
@@ -14392,6 +14443,17 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.11', changes:[
+      'Gyorsreakciók az 1–7 számbillentyűkkel (a szám ott van a gombokon), és új reakció: 🤦 homlokra csapás.',
+      'Biztonság — közös ranglista: a játék végén már minden játékos elküldi az eredményt, és a szerver csak azt rögzíti, amit legalább ketten (és a szobában lévők legalább fele) ugyanúgy küldtek be. Egyetlen játékos így nem tud kitalált neveket vagy pontokat felvinni.',
+      'Biztonság — szólisták: egy szó csak akkor számít „már lerajzoltnak” vagy „felfüggesztettnek”, ha legalább két különböző eszköz jelzi, rajta van a hivatalos szólistán, és egy hálózatról naponta csak korlátozott számú jelzés jöhet. Így automatikus kérésekkel sem lehet kiüríteni vagy elrontani a szólistát.',
+      'Biztonság — e-mail értesítő: levél csak akkor megy ki, ha a játékszerveren tényleg megnyílt egy új nyilvános szoba; a szoba nevét is a szerverről vesszük, nem a kérésből.',
+      'Javítás: ha a játékszerver az egyik eszközről elérhető volt, a másikról épp nem, a két játékos más-más hálózatra került, és jó kóddal sem találták meg egymást. A szoba hálózata most a létrehozáskor rögzül, a belépő pedig előbb a szerveren, aztán közvetlen úton is keresi a szobát.',
+      'Gyorsabb indulás: a játék programkönyvtárai a saját tárhelyről, egyszerre töltődnek be (eddig egy külső CDN-ről, egymás után — rossz hálózaton akár 18 mp-ig).',
+      'A jobb kattintásos menü újra működik az oldalon (linkek, szövegek, mezők); csak a rajzlapon és a gombokon marad letiltva.',
+      'Adatvédelem: a tájékoztató egyértelműen leírja, hogy a saját játékszerver továbbítás közben látja az üzenetek tartalmát (nem menti el). A szerveres szobaazonosító lassított lenyomattal készül, az admin tokenek pedig már semmilyen böngészőtárhelyre nem kerülnek.',
+      'Szerver: szigorúbb korlátok (csak a játék saját oldalairól lehet csatlakozni, bájtalapú forgalmi korlát, IP-nkénti kapcsolatszám).'
+    ]},
     { version:'4.10', changes:[
       'Rajz-visszajátszás: nagyjából olyan tempóban játssza le a rajzot, ahogy készült, és lejátszás közben állítható a sebesség (0,5× – 4×). A kép már nem nyúlik meg, pontosan a rajz arányában jelenik meg.',
       'Tippelés hanggal: a tippmező melletti 🎙️ gombbal gépelés helyett ki is mondhatod a tippjeidet. Amíg be van kapcsolva, folyamatosan figyel; ha gyorsan több szót mondasz egymás után, mindegyik külön tippként megy el, és ha a gép rosszul hallotta, de valamelyik másik olvasata jó, az is számít. A kör végén magától kikapcsol. (Chrome-ban és iPhone-on Safariban működik.)',
@@ -15476,7 +15538,7 @@ const SRV = (function(){
   async function holdWordGlobally(f){
     try{
       const r = await fetch(WORDBLOCK_URL, { method:'POST', headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ word: f.word, votes: f.ids.size, players: activePlayerIds.size }) });
+        body: JSON.stringify({ word: f.word, dev: String(selfId) }) });
       clog('W03', `szó felfüggesztve minden játékban: ${f.word} (HTTP ${r.status})`);
     }catch(e){ clog('W04', 'a szó felfüggesztése nem ment el: ' + (e && e.message)); }
   }
@@ -15492,7 +15554,10 @@ const SRV = (function(){
     f.sent = true;
     heldWordKeys.add(squash(f.word));   // never offered again on this device, right away
     const sender = [...f.ids].sort()[0];
-    if(sender === selfId){ submitWordReport(f); holdWordGlobally(f); }
+    if(sender === selfId) submitWordReport(f);
+    // v4.11: every player who marked the word sends their OWN vote; the server
+    // counts different devices instead of believing a vote count
+    if(f.ids.has(selfId)) holdWordGlobally(f);
     if(reportableRound && reportableRound.rk === rk) renderReportUi();
   }
   function applyWordFlag(rk, word, on, pid){

@@ -10,6 +10,11 @@ const METERED_HOST = 'https://picasso-rajzjatek.metered.live';
 // kiszolgálja (így a legtöbb kérés a függvényt sem indítja el). Hiba esetén a régi adat használható.
 let cache = null, cacheAt = 0, inflight = null, lastTry = 0;
 const FRESH_MS = 600000, STALE_OK_MS = 3600000;
+// v4.11: a TURN-hitelesítő 6 óráig érvényes (régen 24), így egy kiszivárgott példány
+// hamar lejár. Ennek az ablaknak hosszabbnak kell lennie, mint FRESH + CDN-újrahasznosítás
+// (10 perc + 1 óra + 1 óra CDN) plusz egy hosszú játék, különben a játékosok lejárt adatot kaphatnának.
+// A forgalmi visszaélés ellen a szolgáltatónál beállított havi keret és riasztás véd.
+const CRED_TTL_S = 6 * 3600;
 
 export default async (req) => {
   const json = (body, status = 200, cacheable = false) => new Response(JSON.stringify(body), {
@@ -44,7 +49,7 @@ async function fetchList() {
       const res = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(cfId)}/credentials/generate-ice-servers`, {
         method: 'POST',
         headers: { authorization: 'Bearer ' + cfToken, 'content-type': 'application/json' },
-        body: JSON.stringify({ ttl: 86400 }),
+        body: JSON.stringify({ ttl: CRED_TTL_S }),
         signal: ctrl.signal
       });
       clearTimeout(timer);
