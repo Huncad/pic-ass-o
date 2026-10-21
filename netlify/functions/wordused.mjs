@@ -2,14 +2,13 @@
 // A word that was the puzzle once is not offered again in any game, until
 // every word of a level has been used (the game itself then falls back).
 //   GET                            -> { words: ["ajto", ...] } (normalised keys)
-//   POST { word, dev }             -> one device reports a finished drawing's word
-//   v4.11: a szó csak akkor lesz "elhasznált", ha (1) rajta van a hivatalos
-//   szólistán, és (2) legalább 2 KÜLÖNBÖZŐ eszköz jelenti 30 percen belül
-//   (a rajzoló és a tippelők is jelentik). Egy IP naponta legfeljebb 200
-//   jelentést küldhet — egy támadó így sem tudja kiüríteni a szólistát.
+//   POST { word } + header x-picasso-secret -> CSAK a saját játékszerver (v4.12):
+//        a szerver akkor küldi, ha egy szobában legalább 2 játékos jelezte
+//        ugyanazt a lerajzolt szót. Böngészőből érkező jelzést nem fogad el.
+//        A szónak rajta kell lennie a hivatalos szólistán.
 //   POST { action:"reset" } + header x-netlify-token -> admin: start over
 import { getStore } from '@netlify/blobs';
-import { norm, ipHash, cleanDev, officialWords, dailyQuota } from '../lib/words.mjs';
+import { norm, officialWords, fromGameServer } from '../lib/words.mjs';
 
 const KEY = 'used';
 
@@ -24,7 +23,6 @@ function limited(key, max, windowMs) {
   return arr.length > max;
 }
 const ipOf = req => req.headers.get('x-nf-client-connection-ip') || (req.headers.get('x-forwarded-for') || '').split(',')[0] || 'x';
-const PEND = 'pending', QUOTA = 'quota', CONFIRM_MS = 30 * 60 * 1000;
 let listCache = null, listCacheAt = 0;
 
 export default async (req) => {
@@ -44,7 +42,8 @@ export default async (req) => {
     return json({ words: listCache, n: listCache.length }, 200, 'public, max-age=20');
   }
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
-  if (limited('p|' + ipOf(req), 40, 60000)) return json({ error: 'slow down' }, 429);
+  const trusted = fromGameServer(req);
+  if (!trusted && limited('p|' + ipOf(req), 40, 60000)) return json({ error: 'slow down' }, 429);
   let body = {};
   try { body = await req.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
 
@@ -61,29 +60,17 @@ export default async (req) => {
     return json({ ok: true, n: 0 });
   }
 
+  if (!trusted) return json({ error: 'forbidden', why: 'csak a játékszerver jelezhet' }, 403);
   const k = norm(body.word);
-  const dev = cleanDev(body.dev);
   if (!k) return json({ error: 'no word' }, 400);
-  if (!dev) return json({ error: 'no device' }, 400);
   const official = await officialWords();
   if (!official) return json({ ok: false, skipped: 'wordlist unavailable' }, 503);
   if (!official.has(k)) return json({ ok: false, skipped: 'not an official word' });
   const used = await read();
   if (used[k]) return json({ ok: true, already: true });
   if (Object.keys(used).length > 40000) return json({ error: 'full' }, 429);
-  if (!(await dailyQuota(store, QUOTA, ipHash(req), 200))) return json({ error: 'daily limit' }, 429);
-  const now = Date.now();
-  const pv = await store.get(PEND, { type: 'json' }).catch(() => null);
-  const pend = (pv && typeof pv === 'object' && !Array.isArray(pv)) ? pv : {};
-  for (const w of Object.keys(pend)) if (now - (pend[w].at || 0) > CONFIRM_MS) delete pend[w];
-  const e = pend[k] || { at: now, devs: [] };
-  if (!e.devs.includes(dev)) e.devs.push(dev);
-  if (e.devs.length >= 2) {
-    delete pend[k];
-    used[k] = now;
-    await store.setJSON(KEY, used);
-    listCache = null;
-  } else pend[k] = e;
-  if (Object.keys(pend).length < 5000) await store.setJSON(PEND, pend);
+  used[k] = Date.now();
+  await store.setJSON(KEY, used);
+  listCache = null;
   return json({ ok: true });
 };

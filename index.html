@@ -11,7 +11,7 @@
 }catch(e){} })();
 </script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!-- v3.18: basic hardening that cannot break the P2P / CDN traffic: no plugins, no <base> hijack, forms only to this site -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>PIC-ASS-O — party rajzjáték (több eszközön)</title>
@@ -618,6 +618,10 @@
   #screen-fulldraw, #fd-prepare{ overscroll-behavior:none; }
   #screen-fulldraw .fd-status, #screen-fulldraw #fd-roster{ touch-action:none; }
   #screen-fulldraw .fd-guess-feed{ touch-action:pan-y; overscroll-behavior:contain; }
+  /* v4.12: the page can be zoomed again (accessibility); the drawing surfaces
+     keep touch-action:none, and the drawing screen's toolbar and the buttons
+     only skip the double-tap zoom, so drawing is not disturbed */
+  #screen-fulldraw .fd-toolbar, button, .swatch, .pill{ touch-action:manipulation; }
 
   /* ============ v2.69: phone (portrait) game layout ============
      One principle: the canvas is the game, so nothing may sit on top of it
@@ -2704,7 +2708,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.11</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.12</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -2774,7 +2778,7 @@
       <h2 id="privacy-title">🔒 Adatvédelem</h2>
       <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
     </div>
-    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. október 17-től · v4.10</p>
+    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. október 21-től · v4.12</p>
     <h3 class="pv-h">Ki kezeli az adatokat?</h3>
     <p><b>Adatkezelő:</b> Ádám, magánszemély, a PIC-ASS-O hobbiprojekt fejlesztője és üzemeltetője.<br>
     <b>Kapcsolat:</b> <a href="mailto:picasso.ertesito@gmail.com" style="color:var(--blue);">picasso.ertesito@gmail.com</a> — minden adatvédelmi kérdéssel és kéréssel ide írhatsz.</p>
@@ -3432,7 +3436,6 @@ const _torrentP = vendorImport('./vendor/trystero-torrent.js', 'https://esm.run/
 const _mqttP = vendorImport('./vendor/trystero-mqtt.js', 'https://esm.run/@trystero-p2p/mqtt@' + VENDOR_V, 10000).catch(()=>null);
 const Trystero = await _trysteroP;
 const {joinRoom, selfId} = Trystero;
-window.__picassoBooted = true;
 // v2.50: the Nostr relays stopped carrying the connection set-up messages
 // reliably (Sept 2026): phones — which only used Nostr — saw no rooms and
 // couldn't join any, while PCs still worked through their second,
@@ -3465,6 +3468,9 @@ try{
 // a second one (two pools are exactly what iOS Safari struggles with).
 // Every device must run v2.79+: an older one would still look on Nostr.
 const ROOM_NET = TrysteroMqtt ? 'mqtt' : 'nostr';
+// v4.12: "booted" only once ALL network modules are settled (loaded or given up),
+// so the start-up watchdog still shows its message if one of them hangs
+window.__picassoBooted = true;
 const roomJoin = TrysteroMqtt ? TrysteroMqtt.joinRoom : joinRoom;
 
 // =====================================================================
@@ -4874,7 +4880,7 @@ const SRV = (function(){
       setTimeout(()=>{
         try{ fetch(SUBSCRIBE_URL, { method:'POST', keepalive:true, headers:{'Content-Type':'application/json'},
           body: JSON.stringify({ action:'notify', code }) }).catch(()=>{}); }catch(e){}
-      }, 2000);
+      }, 4000);
     }
     if(!notifyCfg.on || !notifyCfg.topic) return;
     try{ if(localStorage.getItem(NOTIFY_SKIP_OWN_KEY) === '1') return; }catch(e){}
@@ -5054,13 +5060,14 @@ const SRV = (function(){
     const k = squash(word); if(!k) return;
     usedEverKeys.add(k);
   }
-  // v4.11: every device of the round reports the word with its own id; the
-  // server only marks it used once 2 different devices reported it
+  // v4.12: every player of the round reports the word to the GAME SERVER; the
+  // server passes it on to the shared list only once 2 players of the same
+  // room reported it. Rooms that don't run on the server keep it local.
   const postedUsedEver = new Set();
   async function postUsedEver(word){
     const k = squash(word); if(!k || postedUsedEver.has(k)) return;
     postedUsedEver.add(k);
-    try{ await fetch(WORDUSED_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ word, dev: String(selfId) }) }); }catch(e){}
+    try{ if(SRV.up && room && room.viaServer) SRV.send({ t:'wordrep', k:'used', w: String(word).slice(0,60) }); }catch(e){}
   }
   async function refreshHeldWords(){
     try{
@@ -8425,7 +8432,9 @@ const SRV = (function(){
     // v4.00: szerver módban a szoba csak a szerveren (és a többi fülön) jelenik meg,
     // így régi, P2P-s eszközök nem próbálnak olyan szobába lépni, amit nem érnek el
     if(SRV.up){
-      SRV.send({ t:'dir', d: msg });
+      if(room && room.viaServer && typeof room.whenJoined === 'function' && !msg.removed){
+        room.whenJoined().then(()=>SRV.send({ t:'dir', d: msg }));
+      } else SRV.send({ t:'dir', d: msg });
       try{ if(dirChannel) dirChannel.postMessage(Object.assign({}, msg, { srv:1 })); }catch(e){}
       return;
     }
@@ -8909,6 +8918,25 @@ const SRV = (function(){
     if(!from || from === selfId) return;
     ch.onRaw(from, m);
   }
+  // v4.12: one slow derivation for everything public that is computed from a
+  // room code (fallback topic + key, knock key). 150 000 PBKDF2 rounds: about
+  // 0.1 s once per room on a phone, but trying all ~33 million codes becomes
+  // very expensive. Results are cached, so each value is computed once.
+  const slowCodeCache = new Map();
+  function slowCodeBits(label, code, nBits){
+    const ck = label + '|' + code + '|' + nBits;
+    if(slowCodeCache.has(ck)) return slowCodeCache.get(ck);
+    const p = (async ()=>{
+      const enc = new TextEncoder();
+      const key = await crypto.subtle.importKey('raw', enc.encode(String(code)), 'PBKDF2', false, ['deriveBits']);
+      const bits = await crypto.subtle.deriveBits({ name:'PBKDF2', salt: enc.encode('picasso-' + label + '-v412|' + APP_ID), iterations:150000, hash:'SHA-256' }, key, nBits);
+      return new Uint8Array(bits);
+    })();
+    p.catch(()=>slowCodeCache.delete(ck));
+    if(slowCodeCache.size > 200) slowCodeCache.clear();
+    slowCodeCache.set(ck, p);
+    return p;
+  }
   // =====================================================================
   // v4.00: a játékszoba a saját szerveren (lásd SRV fent). Ugyanaz a felület,
   // mint a "hibrid szobáé" (makeAction / getPeers / onPeerJoin / onPeerLeave /
@@ -8937,7 +8965,7 @@ const SRV = (function(){
       if(act) act.deliver(d, from);
     };
     function out(obj){ if(r.rid) SRV.send(obj); else pre.push(obj); }
-    (async ()=>{
+    r.ready = (async ()=>{
       // v4.11: the server room id is a SLOW (PBKDF2, 150 000 rounds) fingerprint of
       // the code, like the room-list fingerprint — a plain SHA-256 could be
       // brute-forced back to the 5-letter code in moments by anyone who saw it.
@@ -8972,6 +9000,9 @@ const SRV = (function(){
       getPeers(){ const o = {}; r.members.forEach(id=>{ o[id] = { server:true }; }); return o; },
       fallbackPeerCount(){ return 0; },
       viaServer: true,
+      // v4.12: resolves once the server has been asked to put us in the room —
+      // the room list announcement must come AFTER that (the server checks it)
+      whenJoined(){ return r.ready.then(()=>{}, ()=>{}); },
       get onPeerJoin(){ return appJoin; },
       set onPeerJoin(h){ appJoin = h; if(h) pendingJoins.splice(0).forEach(fireJoin); },
       get onPeerLeave(){ return appLeave; },
@@ -9016,11 +9047,12 @@ const SRV = (function(){
     const fireJoin = id => { if(appJoin){ try{ appJoin(id); }catch(e){ console.error(e); } } else pendingJoins.push(id); };
     const fireLeave = id => { if(appLeave){ try{ appLeave(id); }catch(e){ console.error(e); } } };
     ch.ready = (async ()=>{
-      const enc = new TextEncoder();
-      const t = await crypto.subtle.digest('SHA-256', enc.encode('picasso-fb-topic|' + APP_ID + '|' + code));
-      ch.topic = 'picasso/' + APP_ID + '/fb/' + Array.from(new Uint8Array(t)).slice(0,12).map(b=>b.toString(16).padStart(2,'0')).join('');
-      const k = await crypto.subtle.digest('SHA-256', enc.encode('picasso-fb-key|' + APP_ID + '|' + code));
-      ch.key = await crypto.subtle.importKey('raw', k, 'AES-GCM', false, ['encrypt','decrypt']);
+      // v4.12: topic AND key come from a slow PBKDF2 of the code (they used to be
+      // plain SHA-256, so anyone reading the public MQTT broker could try all
+      // codes against the topic in moments and then decrypt the room)
+      const bits = await slowCodeBits('fb', code, 96 + 256);
+      ch.topic = 'picasso/' + APP_ID + '/fb2/' + Array.from(bits.slice(0,12), b=>b.toString(16).padStart(2,'0')).join('');
+      ch.key = await crypto.subtle.importKey('raw', bits.slice(12), 'AES-GCM', false, ['encrypt','decrypt']);
       if(ch.closed) return;
       fbCur = ch;
       dirqClients.forEach(c=>fbSubscribeOn(c.client));
@@ -9525,11 +9557,13 @@ const SRV = (function(){
     return best;
   }
   // the room code is never sent in the clear, only a short hash of it
+  // v4.12: slow (PBKDF2) like every other value derived from a room code that
+  // goes out on a public network — a fast hash of a 5-letter code can be
+  // reversed by simply trying all ~33 million codes.
   async function knockKeyFor(code){
     try{
-      const data = new TextEncoder().encode(APP_ID + '|knock|' + String(code).toUpperCase());
-      const h = await crypto.subtle.digest('SHA-256', data);
-      return Array.from(new Uint8Array(h)).slice(0, 12).map(b=>b.toString(16).padStart(2,'0')).join('');
+      const b = await slowCodeBits('knock', String(code).toUpperCase(), 96);
+      return Array.from(b, x=>x.toString(16).padStart(2,'0')).join('');
     }catch(e){ return ''; }
   }
   // phones: once the direct list works, drop the WebRTC one (never while in a room —
@@ -14443,6 +14477,14 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.12', changes:[
+      'Biztonság — tartalék út: a nyilvános MQTT-szervereken át menő szobaforgalom titkosítókulcsa és csatornaneve mostantól lassított (PBKDF2) lenyomattal készül a szobakódból, így a kód végigpróbálgatásával nem lehet többé gyorsan visszafejteni. Ugyanez vonatkozik a „kopogtatás” jelzésre is. Fontos: régi és új verzió tartalék úton nem éri el egymást, ezért mindenki töltse újra az oldalt.',
+      'Biztonság — szobalista: a játékszerver csak attól fogad el szobahirdetést, aki tényleg abban a szobában van és ő nyitotta meg; nyilvános szobánál a szerver maga ellenőrzi, hogy a kód valóban ahhoz a szobához tartozik. Hamis szobát (és vele hamis e-mail értesítőt) így nem lehet bejelenteni.',
+      'Biztonság — szólisták: a „már lerajzolt” és „hibás” szavak jelzése a játékszerveren megy át, ami csak akkor továbbítja, ha ugyanabban a szobában legalább ketten (hibás szónál a játékosok legalább fele) jelezték. A közös listákat böngészőből közvetlenül már nem lehet módosítani.',
+      'Adatvédelem: a játékosnevek és pontszámok nem kerülnek a szerver naplójába.',
+      'Az oldal újra nagyítható (akadálymentesség); a rajzlapon és a gombokon a nagyítás továbbra sem zavarja a rajzolást.',
+      'Apró javítások: pontosabb bájtszámlálás és szigorúbb eredet- és IP-ellenőrzés a szerveren, megbízhatóbb betöltési hibajelzés.'
+    ]},
     { version:'4.11', changes:[
       'Gyorsreakciók az 1–7 számbillentyűkkel (a szám ott van a gombokon), és új reakció: 🤦 homlokra csapás.',
       'Biztonság — közös ranglista: a játék végén már minden játékos elküldi az eredményt, és a szerver csak azt rögzíti, amit legalább ketten (és a szobában lévők legalább fele) ugyanúgy küldtek be. Egyetlen játékos így nem tud kitalált neveket vagy pontokat felvinni.',
@@ -15537,9 +15579,10 @@ const SRV = (function(){
   }
   async function holdWordGlobally(f){
     try{
-      const r = await fetch(WORDBLOCK_URL, { method:'POST', headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ word: f.word, dev: String(selfId) }) });
-      clog('W03', `szó felfüggesztve minden játékban: ${f.word} (HTTP ${r.status})`);
+      // v4.12: through the game server, which counts the votes of the room itself
+      if(!(SRV.up && room && room.viaServer)){ clog('W03', `szó csak ezen az eszközön felfüggesztve (nem szerveres szoba): ${f.word}`); return; }
+      SRV.send({ t:'wordrep', k:'block', w: String(f.word).slice(0,60) });
+      clog('W03', `szó felfüggesztésének jelzése elküldve a szervernek: ${f.word}`);
     }catch(e){ clog('W04', 'a szó felfüggesztése nem ment el: ' + (e && e.message)); }
   }
   async function releaseHeldWord(word, token){

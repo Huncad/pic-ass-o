@@ -77,14 +77,28 @@ const directory = new Map();
 function log(...a){ console.log(new Date().toISOString(), ...a); }
 const isStr = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
 
+// v4.12: a továbbító fejlécekben csak akkor bízunk, ha a kérés helyi
+// proxyból (Tailscale Funnel / serve a gépen) jön; ilyenkor is a LEGUTOLSÓ
+// értéket vesszük, mert azt a proxy írta, az elejét a kliens is kitalálhatja.
+function clientIp(req){
+  const sock = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+  const local = sock === '127.0.0.1' || sock === '::1' || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(sock) || sock.startsWith('fd7a:115c:a1e0');
+  if(local){
+    const xff = String(req.headers['x-forwarded-for'] || '').split(',').map(x => x.trim()).filter(Boolean);
+    if(xff.length) return xff[xff.length - 1];
+  }
+  return sock || 'x';
+}
+
 function originAllowed(origin, forWs){
   if(!origin) return !forWs || ALLOW_NO_ORIGIN;   // curl / egészség-ellenőrzés: csak HTTP-n
   let host, proto;
-  try{ const u = new URL(origin); host = u.hostname; proto = u.protocol; }catch(e){ return false; }
+  let port;
+  try{ const u = new URL(origin); host = u.hostname; proto = u.protocol; port = u.port; }catch(e){ return false; }
   return ALLOWED_ORIGINS.some(rule => {
     if(rule === '*') return true;
-    if(rule.startsWith('*')) return host.endsWith(rule.slice(1)) && proto === 'https:';
-    try{ const r = new URL(rule); return r.hostname === host && r.protocol === proto; }catch(e){ return rule === host; }
+    if(rule.startsWith('*')) return host.endsWith(rule.slice(1)) && proto === 'https:' && !port;
+    try{ const r = new URL(rule); return r.hostname === host && r.protocol === proto && (r.port === port || r.hostname === 'localhost' || r.hostname === '127.0.0.1'); }catch(e){ return false; }
   });
 }
 
@@ -120,10 +134,11 @@ function leaveRoom(peer, why){
   if(!roomId) return;
   peer.room = null;
   peer.ring = []; peer.ringBytes = 0;
+  directory.forEach((e, k) => { if(e.room === roomId && e.from === peer.id){ directory.delete(k); broadcastDir({ code: e.d.code, id: e.d.id, removed: true, srv: 1 }, peer.id); } });
   const set = rooms.get(roomId);
   if(set){
     set.delete(peer.id);
-    if(set.size === 0){ rooms.delete(roomId); roomInfo.delete(roomId); pendingResults.delete(roomId); }
+    if(set.size === 0){ rooms.delete(roomId); roomInfo.delete(roomId); pendingResults.delete(roomId); wordReps.delete(roomId); }
     else set.forEach(id => { const p = peers.get(id); if(p) sendRaw(p, { t:'pleave', id: peer.id }); });
   }
   log('kilépés', peer.id.slice(0,6), why || '', 'szoba', roomId.slice(0,8), 'maradt', set ? set.size : 0);
@@ -135,6 +150,108 @@ function forget(peer, why){
   // a tőle származó szobahirdetések is mennek
   directory.forEach((e, k) => { if(e.from === peer.id){ directory.delete(k); broadcastDir({ code: e.d.code, id: e.d.id, removed: true, srv: 1 }, peer.id); } });
   peers.delete(peer.id);
+}
+
+// ---------------------------------------------------------------------
+// Szobalista-bejelentés hitelesítése (v4.12)
+// Nyilvános szobánál a kód úgyis publikus, ezért a szerver maga kiszámolja
+// belőle a szobaazonosítót (ugyanazzal a lassított PBKDF2-vel, mint a
+// böngésző), és csak akkor fogadja el a bejelentést, ha a bejelentő TÉNYLEG
+// abban a szobában van, és ő nyitotta meg (az első belépő). Zárt szobánál a
+// kódot nem ismerjük, ott annyit ellenőrzünk, hogy a bejelentő egy szoba
+// megnyitója, és szobánként csak egy bejegyzés lehet.
+// ---------------------------------------------------------------------
+const APP_ID = 'rajzold-ki-huncraft-party-jatek-v1';
+const ridCache = new Map();
+function ridForCode(code){
+  if(ridCache.has(code)) return ridCache.get(code);
+  const p = new Promise((res) => {
+    crypto.pbkdf2(code, 'picasso-srv-room-v2|' + APP_ID, 150000, 32, 'sha256', (err, key) => res(err ? null : 'v2:' + key.toString('hex')));
+  });
+  if(ridCache.size > 2000) ridCache.clear();
+  ridCache.set(code, p);
+  return p;
+}
+const clampStr = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+const clampInt = (v, lo, hi) => { const x = Math.floor(Number(v)); return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : 0; };
+
+async function handleDir(peer, d){
+  if(!d || typeof d !== 'object') return;
+  const code = /^[A-Z0-9]{4,8}$/.test(String(d.code || '')) ? String(d.code) : '';
+  const fp = !code && typeof d.id === 'string' && /^[a-z]:[0-9a-f]{8,64}$/.test(d.id) ? d.id : '';
+  const key = code || fp;
+  if(!key) return;
+  const prev = directory.get(key);
+  if(d.removed){
+    if(prev && prev.from !== peer.id) return;
+    if(directory.delete(key)) broadcastDir({ code: code || undefined, id: fp || undefined, removed: true, srv: 1 }, peer.id);
+    return;
+  }
+  const roomId = peer.room;
+  const info = roomId && roomInfo.get(roomId);
+  if(!info) return;
+  // csak a szoba megnyitója hirdethet; ha ő már nincs bent (átadta a szobát), a következő bent lévő
+  if(info.owner !== peer.id){
+    if(roomMembers(roomId).has(info.owner)) return;
+    info.owner = peer.id;
+  }
+  if(code){
+    const rid = await ridForCode(code);
+    if(!rid || rid !== peer.room) return;                      // a kód nem ehhez a szobához tartozik
+  }
+  if(prev && prev.from !== peer.id && Date.now() - prev.at < DIR_TTL_MS) return;   // más szobáját nem írhatja felül
+  // szobánként (és bejelentőnként) egyetlen bejegyzés
+  for(const [k, e] of directory){ if(k !== key && (e.from === peer.id || e.room === roomId)) directory.delete(k); }
+  if(directory.size > 300 && !prev) return;
+  const clean = { srv: 1, name: clampStr(d.name, 60), hostName: clampStr(d.hostName, 24),
+    players: clampInt(d.players, 0, 999), max: clampInt(d.max, 0, 999), inGame: !!d.inGame };
+  if(!clean.name) return;
+  if(code) clean.code = code; else { clean.id = fp; clean.isPrivate = true; }
+  directory.set(key, { d: clean, from: peer.id, room: roomId, at: Date.now(), firstAt: prev && prev.from === peer.id ? (prev.firstAt || prev.at) : Date.now() });
+  broadcastDir(clean, peer.id);
+}
+
+// ---------------------------------------------------------------------
+// Szójelentések (v4.12): a böngészők ide jelzik a lerajzolt / hibásnak jelölt
+// szavakat, és a szerver csak akkor továbbítja a Netlify felé (titkos kulccsal),
+// ha ugyanabban a szobában elég különböző játékos jelezte. Kitalált
+// eszközazonosítóval így nem lehet a közös szólistákat módosítani.
+// Beállítás: WORDS_SECRET (ugyanaz, mint a Netlify PICASSO_SERVER_SECRET).
+// ---------------------------------------------------------------------
+const WORDS_SECRET = process.env.WORDS_SECRET || '';
+const WORDS_API = String(process.env.WORDS_API_BASE || 'https://pic-ass-o.netlify.app').replace(/\/+$/, '');
+/** roomId -> Map("kind|szó" -> { word, peers:Set, sent }) */
+const wordReps = new Map();
+const wordNorm = w => String(w || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 60);
+function handleWordRep(peer, m){
+  if(!WORDS_SECRET || !peer.room) return;
+  const kind = m.k === 'used' ? 'used' : m.k === 'block' ? 'block' : '';
+  const word = typeof m.w === 'string' ? m.w.trim().slice(0, 60) : '';
+  const k = wordNorm(word);
+  if(!kind || !k) return;
+  const members = roomMembers(peer.room);
+  if(members.size < 2) return;
+  let map = wordReps.get(peer.room);
+  if(!map){ map = new Map(); wordReps.set(peer.room, map); }
+  const key = kind + '|' + k;
+  let e = map.get(key);
+  if(!e){
+    if(map.size >= 400) return;          // egy szobából ennél több különböző szó nem jöhet
+    e = { word, peers: new Set(), sent: false }; map.set(key, e);
+  }
+  if(e.sent) return;
+  e.peers.add(peer.id);
+  const live = [...e.peers].filter(id => members.has(id)).length;
+  const need = kind === 'used' ? 2 : Math.max(2, Math.ceil(members.size / 2));
+  if(live < need) return;
+  e.sent = true;
+  const fn = kind === 'used' ? 'wordused' : 'wordblock';
+  fetch(`${WORDS_API}/.netlify/functions/${fn}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-picasso-secret': WORDS_SECRET },
+    body: JSON.stringify({ word: e.word, votes: live, players: members.size }),
+    signal: AbortSignal.timeout(8000)
+  }).then(r => log('szójelentés', kind, r.status)).catch(err => log('szójelentés hiba', kind, err && err.message));
 }
 
 function broadcastDir(d, fromId){
@@ -228,7 +345,7 @@ function recordGame(peer, rows){
   pruneOldGames();
   if(games.length > 20000) games.splice(0, games.length - 20000);
   saveGames();
-  log('játék rögzítve', e.rows.map(r => `${r.name}:${r.score}`).join(', '), `(${live} megerősítés)`);
+  log('játék rögzítve', `${e.rows.length} játékos, ${live} megerősítés`);   // nevek/pontok nem kerülnek a naplóba
   return 'ok';
 }
 
@@ -347,7 +464,7 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_PAYLOAD, 
 
 wss.on('connection', (ws, req) => {
   if(!originAllowed(req.headers.origin, true)){ ws.close(4003, 'origin'); return; }
-  const ip = String(req.headers['cf-connecting-ip'] || String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'x');
+  const ip = clientIp(req);
   const nConn = (connPerIp.get(ip) || 0) + 1;
   if(nConn > MAX_CONN_PER_IP){ ws.close(4029, 'túl sok kapcsolat'); return; }
   connPerIp.set(ip, nConn);
@@ -424,7 +541,7 @@ wss.on('connection', (ws, req) => {
         set.add(peer.id);
         peer.room = m.room;
         let info = roomInfo.get(m.room);
-        if(!info){ info = { createdAt: Date.now(), ever: new Set(), ips: new Set() }; roomInfo.set(m.room, info); }
+        if(!info){ info = { createdAt: Date.now(), ever: new Set(), ips: new Set(), owner: peer.id }; roomInfo.set(m.room, info); }
         info.ever.add(peer.id); if(info.ips.size < 50) info.ips.add(peer.ip);
         ws.send(JSON.stringify({ t:'joined', room: m.room, peers: others }));
         others.forEach(id => { const p = peers.get(id); if(p) sendRaw(p, { t:'pjoin', id: peer.id }); });
@@ -443,7 +560,7 @@ wss.on('connection', (ws, req) => {
         const set = roomMembers(peer.room);
         const out = JSON.stringify({ t:'msg', a: m.a, d: m.d, f: peer.id });
         const targets = Array.isArray(m.to) ? m.to.filter(id => typeof id === 'string' && set.has(id)).length : Math.max(0, set.size - 1);
-        fanTokens -= out.length * targets;
+        fanTokens -= Buffer.byteLength(out, 'utf8') * targets;
         if(fanTokens < 0){ return; }   // túl sok továbbítandó adat: eldobjuk (normál játékban ide nem jut el)
         if(Array.isArray(m.to)){
           m.to.slice(0, MAX_ROOM_PEERS).forEach(id => {
@@ -455,23 +572,12 @@ wss.on('connection', (ws, req) => {
         return;
       }
       case 'dir': {
-        const d = m.d;
-        if(!d || typeof d !== 'object') return;
-        const key = String(d.code || d.id || '').slice(0, 64);
-        if(!key) return;
-        const str = JSON.stringify(d);
-        if(str.length > 4000) return;
-        const tagged = Object.assign({}, d, { srv: 1 });
-        const prev = directory.get(key);
-        if(d.removed){ if(prev && prev.from !== peer.id) return; directory.delete(key); }
-        else {
-          if(prev && prev.from !== peer.id && Date.now() - prev.at < DIR_TTL_MS) return;   // más szobáját nem írhatja felül
-          if(directory.size > 300 && !prev) return;
-          directory.set(key, { d: tagged, from: peer.id, at: Date.now(), firstAt: prev && prev.from === peer.id ? (prev.firstAt || prev.at) : Date.now() });
-        }
-        broadcastDir(tagged, peer.id);
+        handleDir(peer, m.d);
         return;
       }
+      case 'wordrep':
+        handleWordRep(peer, m);
+        return;
       case 'dirsync': {
         const now2 = Date.now();
         directory.forEach((e) => { if(now2 - e.at <= DIR_TTL_MS && e.from !== peer.id) ws.send(JSON.stringify({ t:'dir', d: e.d })); });
