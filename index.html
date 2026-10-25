@@ -2232,10 +2232,15 @@
   .tab-count{ background:var(--green); color:#0f2a1d; border-radius:999px; font-size:.75rem; padding:1px 7px; font-weight:900; }
   .home-label{ display:block; font-size:.74rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:var(--green); margin:0 0 6px; }
   #player-card .spectate-toggle{ margin:6px 0 12px; }
-  .home-avatars{ display:grid; grid-template-columns:repeat(6, minmax(0, 46px)); gap:10px; margin:0 0 14px; }
+  .home-avatars{ display:grid; grid-template-columns:repeat(12, minmax(0, 46px)); justify-content:center; gap:8px; margin:0 0 14px; }
   .home-av{ width:100%; aspect-ratio:1; height:auto; border-radius:12px; padding:0; box-shadow:none; display:inline-flex; align-items:center; justify-content:center;
     font-family:'Kalam',cursive; font-weight:700; font-size:1.25rem; color:#16302A; border:3px solid transparent; outline:2px solid rgba(var(--line-rgb),.15); outline-offset:2px; }
   .home-av:hover{ transform:translateY(-2px); }
+  /* v4.22: the avatar's colour only tints a dark tile and draws the frame, so
+     the figure never melts into a same-coloured background */
+  .home-av{ background:color-mix(in srgb, var(--avc) 22%, #0f2018) !important; border:2px solid color-mix(in srgb, var(--avc) 70%, transparent) !important; outline:none !important; }
+  .home-av[aria-checked="true"]{ background:color-mix(in srgb, var(--avc) 45%, #0f2018) !important; border-color:var(--chalk) !important; box-shadow:0 0 0 3px var(--green) !important; transform:scale(1.06); }
+  .rav.rav-emoji{ background:color-mix(in srgb, var(--c) 25%, #0f2018); box-shadow:inset 0 0 0 2px var(--c); }
   .home-av{ font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif; font-size:1.7rem; }
   .rav.rav-emoji{ font-size:.95em; line-height:1; }
   .name-av{ display:inline-block; margin-right:4px; font-size:1em; line-height:1; vertical-align:-1px; }
@@ -2246,7 +2251,7 @@
   #player-card .create-wrap{ margin-top:2px; }
   .home-howto{ display:block; margin:12px auto 0; background:transparent; box-shadow:none; color:var(--chalk-dim); font-weight:700; font-size:.88rem; padding:6px 10px; }
   .home-howto:hover{ color:var(--chalk); transform:none; }
-  @media (max-width:640px){ #player-card{ padding:14px 14px 10px; } .home-avatars{ gap:8px; grid-template-columns:repeat(6, minmax(0, 1fr)); } .home-av{ font-size:1.35rem; border-width:2px; outline-offset:1px; } }
+  @media (max-width:640px){ #player-card{ padding:14px 14px 10px; } .home-avatars{ gap:6px; grid-template-columns:repeat(8, minmax(0, 1fr)); } .home-av{ font-size:1.25rem; } }
 
   /* v4.10: "egyedül maradtál" kártya és kilépés gomb */
   .alone-card{ display:flex; align-items:center; gap:16px; max-width:520px; margin:14px auto 4px; padding:16px 18px; text-align:left;
@@ -2806,7 +2811,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.21</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.22</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -4966,7 +4971,7 @@ const SRV = (function(){
       AVATARS.forEach((av)=>{
         const c = av.c;
         const b = document.createElement('button');
-        b.type = 'button'; b.className = 'home-av'; b.style.background = c;
+        b.type = 'button'; b.className = 'home-av'; b.style.setProperty('--avc', c);
         b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', c === myAvatarColor ? 'true' : 'false');
         b.setAttribute('aria-label', av.n);
         b.title = av.n;
@@ -6022,7 +6027,12 @@ const SRV = (function(){
     { c:'#FFD166', e:'🐱', n:'Cica' },   { c:'#5FB6DE', e:'🐧', n:'Pingvin' }, { c:'#7BD389', e:'🐸', n:'Béka' },
     { c:'#C79CF0', e:'🦄', n:'Unikornis' }, { c:'#FF6B5B', e:'🐙', n:'Polip' }, { c:'#4FD6E8', e:'🐳', n:'Bálna' },
     { c:'#F5A623', e:'🦊', n:'Róka' },   { c:'#A8D86E', e:'🐢', n:'Teknős' },  { c:'#E0B48A', e:'🐻', n:'Maci' },
-    { c:'#9FB0FF', e:'🐼', n:'Panda' },  { c:'#F4A9A0', e:'🐷', n:'Malac' },   { c:'#D7C49E', e:'🦉', n:'Bagoly' }
+    { c:'#9FB0FF', e:'🐼', n:'Panda' },  { c:'#F4A9A0', e:'🐷', n:'Malac' },   { c:'#D7C49E', e:'🦉', n:'Bagoly' },
+    // v4.22: funny ones
+    { c:'#FF8FB1', e:'🤡', n:'Bohóc' },  { c:'#8EF0A0', e:'👽', n:'Ufó' },     { c:'#B8C4D6', e:'🤖', n:'Robot' },
+    { c:'#E6E6FA', e:'👻', n:'Szellem' }, { c:'#6FCF7F', e:'🦖', n:'Dínó' },    { c:'#E9C46A', e:'🥸', n:'Álruhás' },
+    { c:'#D9A066', e:'🤠', n:'Cowboy' }, { c:'#B07A4F', e:'💩', n:'Kaki' },    { c:'#FFE08A', e:'🐔', n:'Csirke' },
+    { c:'#7FD8FF', e:'🥶', n:'Fagyos' }, { c:'#FF9966', e:'🤪', n:'Bolondos' }, { c:'#C9A0FF', e:'😎', n:'Laza' }
   ];
   const AVATAR_COLORS = AVATARS.map(a=>a.c);
   const AVATAR_BY_COLOR = new Map(AVATARS.map(a=>[a.c.toUpperCase(), a.e]));
@@ -14780,6 +14790,10 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.22', changes:[
+      '12 új, vicces avatar (bohóc, ufó, robot, szellem, dínó, álruhás, cowboy, kaki, csirke, fagyos, bolondos, laza).',
+      'Az avatarok középre kerültek, és sötét, enyhén színezett hátteret kaptak, így egyik sem olvad bele a saját színébe.'
+    ]},
     { version:'4.21', changes:[
       'Javítás iPhone-ra: elfeketedő rajzvászon. A Safari kevés memóriát enged a rajzvásznaknak; mostantól kisebb felbontással dolgozunk iPhone-on (szemre nem látszik), a nem látható vásznat felszabadítjuk, és ha a vászon mégis „meghal”, a játék észreveszi, és pár tized másodperc alatt újraépíti a rajzzal együtt.'
     ]},
