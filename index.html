@@ -2708,7 +2708,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.13</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.14</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -7332,7 +7332,12 @@ const SRV = (function(){
         applyCloseMark(gid);
         try{ if(closeMarkAction) closeMarkAction.send({ gid, r: rk }); }catch(err){}
       }
-      if(!correct) return;
+      if(!correct){
+        // v4.14: every wrong guess costs the guesser WRONG_GUESS_PENALTY points
+        if(roundWrong.key !== rk) roundWrong = { key: rk, counts:{} };
+        roundWrong.counts[peerId] = (roundWrong.counts[peerId]||0) + 1;
+        return;
+      }
       // Timing uses the drawer's own clock.
       const elapsedMs = Date.now() - currentRound.roundStartAt;
       if(multi){
@@ -7376,6 +7381,11 @@ const SRV = (function(){
       if(Number.isFinite(data.idx) && data.idx !== currentRound.idx) return;   // v3.62: a result of another drawing
       const type = data.type === 'correct' ? 'correct' : (data.type === 'pass' ? 'pass' : 'timeout');
       const clean = { type, word: cleanText(data.word, 60) };
+      clean.wrong = {};   // v4.14
+      if(isPlainObject(data.wrong)) Object.keys(data.wrong).slice(0, 40).forEach(k=>{
+        const pid = cleanPeerId(k);
+        if(meta && meta.playerNames[pid] && pid !== peerId) clean.wrong[pid] = clampNum(data.wrong[k], 0, 200, 0);
+      });
       clean.offered = (Array.isArray(data.offered) ? data.offered : []).slice(0, 12).map(w=>cleanText(w, 60)).filter(Boolean);
       const maxMsAll = Math.max(1, Number(settings && settings.roundTime) || 1) * 1000;
       if(type === 'correct' && settings.guessMode === 'all'){
@@ -13191,6 +13201,7 @@ const SRV = (function(){
       currentRound.word = lockedWord.w;
     }
     result.word = currentRound.word;
+    result.wrong = roundWrong.key === roundKey(currentRound) ? Object.assign({}, roundWrong.counts) : {};   // v4.14
     result.idx = currentRound.idx;   // v3.62: which drawing this result belongs to
     // v3.28: the other offered words, so no device offers them again (the round is over, nothing to give away)
     result.offered = (Array.isArray(currentRound.offeredWords) ? currentRound.offeredWords : (Array.isArray(currentRound.choices) ? currentRound.choices : []).map(c=>c && c.w)).filter(Boolean).slice(0, 12);
@@ -13208,8 +13219,19 @@ const SRV = (function(){
   // THEY found the word; the drawer on how fast they finished the drawing:
   // the moment of their last change (stroke, fill, undo, clear…). The
   // drawer only scores if at least one person found the word.
+  // v4.14: wrong guesses — counted by the drawer, -5 points each, for
+  // everyone who guessed wrong (found the word later or not). Only the
+  // guesser causes this, so the drawer can't use it to sabotage anyone.
+  const WRONG_GUESS_PENALTY = 5;
+  let roundWrong = { key:'', counts:{} };
+  function roundPenalties(result){
+    const w = (result && isPlainObject(result.wrong)) ? result.wrong : {};
+    return Object.keys(w).map(pid=>({ pid, n: clampNum(w[pid], 0, 200, 0) }))
+      .filter(x=>x.n > 0 && (!currentRound || x.pid !== currentRound.drawerId))
+      .map(x=>({ pid:x.pid, n:x.n, pts: x.n * WRONG_GUESS_PENALTY }));
+  }
   function roundAward(result){
-    if(!result || result.type !== 'correct') return { guessers:[], drawerPts:0 };
+    if(!result || result.type !== 'correct') return { guessers:[], drawerPts:0, penalties: roundPenalties(result) };
     const hits = Array.isArray(result.hits) && result.hits.length
       ? result.hits
       : [{ pid: result.correctPlayerId, ms: Number(result.elapsedMs) || 0 }];
@@ -13222,7 +13244,7 @@ const SRV = (function(){
       // v3.29: a word the drawer sent in themselves earns the drawer nothing
       drawerPts = (currentRound && authors.has(currentRound.drawerId)) ? 0 : roundPoints(drawMs / 1000);
     }
-    return { guessers, drawerPts, drawMs };
+    return { guessers, drawerPts, drawMs, penalties: roundPenalties(result) };
   }
   // "Everyone can guess" mode, on the drawer's device: the round is over as
   // soon as every guesser still in the game has found the word.
@@ -13305,6 +13327,10 @@ const SRV = (function(){
       noteUsedWords(result.offered);
     }
     let myDelta = 0;
+    (award.penalties || []).forEach(pe=>{
+      if(pe.pid === selfId) myDelta -= pe.pts;
+      else if(meta.playerNames[pe.pid]) scores[pe.pid] = Math.max(0, (scores[pe.pid]||0) - pe.pts);
+    });
     if(result.type === 'correct'){
       // v2.72: every device books the points of the guessers and the drawer
       // itself, from the verified result — nobody's self-reported total is
@@ -13317,8 +13343,8 @@ const SRV = (function(){
       award.guessers.forEach(g=>book(g.pid, g.pts));
       book(currentRound.drawerId, award.drawerPts);
     }
-    if(myDelta > 0){
-      scores[selfId] = (scores[selfId]||0) + myDelta;
+    if(myDelta !== 0){
+      scores[selfId] = Math.max(0, (scores[selfId]||0) + myDelta);
       if(scoreAction){ try{ scoreAction.send({ playerId:selfId, total:scores[selfId] }); }catch(e){} }
     }
 
@@ -13721,6 +13747,10 @@ const SRV = (function(){
       wordEl.innerHTML = shownWord
         ? `A szó ez volt: <span class="word-reveal-final">${escapeHtml(shownWord)}</span> — senki sem kapott pontot.`
         : `A szót nem ismerjük (a rajzoló kapcsolata megszakadt) — senki sem kapott pontot.`;
+    }
+    const pens = (result.award || roundAward(result)).penalties || [];
+    if(pens.length){
+      wordEl.innerHTML += `<div style="margin-top:6px;font-size:.9rem;color:var(--red);">❌ Rossz tippek: ${pens.map(pe=>`${escapeHtml(displayNameFor(pe.pid, ''))} ${pe.n}× → −${pe.pts}`).join(', ')}</div>`;
     }
     renderScoreTable('roundend-scores', scoreRows());
     try{ recordRoundStats(result); }catch(e){}
@@ -14477,6 +14507,9 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.14', changes:[
+      'Pontozás: minden rossz tipp −5 pontot ér a tippelőnek (akkor is, ha később kitalálja, vagy ha végül senki sem találja ki). A kör végén látszik, kinek hány rossz tippje volt. A pontszám 0 alá nem mehet. A rajzoló pontjai nem változtak, a szabotázsvédelem megmarad.'
+    ]},
     { version:'4.13', changes:[
       'Javítás: a hibás szó felfüggesztése a játékszerveren elakadhatott, ha nézők is voltak a szobában (a szerver őket is beszámolta). Most a játékosok szavazatát a játék számolja, a szerver két különböző jelzést vár.',
       'Biztonság: napi összesített plafon a közös szólisták módosítására, és egy hálózatról egyszerre legfeljebb 3 hirdetett szoba.',
