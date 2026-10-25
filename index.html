@@ -2180,6 +2180,58 @@
     .home-hero{ margin-bottom:8px; }
   }
 
+  /* v4.17: scannable room rows */
+  #room-list .room-item{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; padding:10px 12px;
+    border:1.5px solid rgba(var(--line-rgb),.14); border-left-width:1.5px; border-radius:12px; background:rgba(0,0,0,.2); cursor:pointer; }
+  #room-list .room-item:hover, #room-list .room-item:focus-visible{ border-color:var(--green); background:rgba(0,0,0,.3); outline:none; }
+  #room-list .ri-av{ width:38px; height:38px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+    background:color-mix(in srgb, var(--green) 30%, transparent); color:var(--chalk); font-weight:900; font-size:1.05rem; }
+  #room-list .is-private .ri-av{ background:color-mix(in srgb, var(--yellow) 30%, transparent); }
+  #room-list .ri-main{ min-width:0; }
+  #room-list .room-item-name{ font-family:'Nunito',sans-serif; font-weight:900; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #room-list .room-item-meta{ font-size:.8rem; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #room-list .ri-tags{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .rs{ font-size:.72rem; font-weight:800; padding:2px 8px; border-radius:999px; background:rgba(var(--line-rgb),.1); color:var(--chalk); white-space:nowrap; }
+  .rs-wait{ background:color-mix(in srgb, var(--green) 25%, transparent); }
+  .rs-game{ background:color-mix(in srgb, var(--blue) 28%, transparent); }
+  .rs-priv{ background:color-mix(in srgb, var(--yellow) 25%, transparent); }
+  .rs-full{ background:color-mix(in srgb, var(--red) 28%, transparent); }
+  #room-list .ri-go{ font-weight:900; font-size:.9rem; padding:8px 14px; border-radius:10px; background:var(--green); color:#0f2a1d; white-space:nowrap; }
+  #room-list .is-private .ri-go{ background:transparent; color:var(--chalk); border:1.5px solid rgba(var(--line-rgb),.35); }
+  #room-list .room-item.full{ opacity:.5; cursor:not-allowed; }
+  #room-list .room-item.full .ri-go{ background:transparent; color:var(--chalk-dim); border:1.5px dashed rgba(var(--line-rgb),.3); }
+  @media (max-width:420px){ #room-list .ri-av{ display:none; } #room-list .room-item{ grid-template-columns:1fr auto; } }
+  @media (max-width:640px){
+    #rooms-card .rooms-h{ flex-wrap:nowrap; } #rooms-card .rooms-h > span:nth-of-type(2){ white-space:nowrap; flex-shrink:0; }
+    #rooms-card .rooms-refresh{ font-size:0 !important; padding:7px !important; margin-left:auto; flex-shrink:0; }
+    #rooms-card .rooms-refresh svg{ width:18px; height:18px; margin:0; }
+    #rooms-card .rooms-status{ font-size:.75rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+    #room-list .ri-tags{ gap:4px; } #room-list .ri-go{ padding:8px 12px; }
+  }
+
+  /* v4.17: lobby-style home card with tabs */
+  #player-card{ padding:18px 20px 14px; }
+  .home-tabs{ display:grid; grid-template-columns:1fr 1fr; margin:0 0 16px; border-bottom:2px solid rgba(var(--line-rgb),.14); }
+  .home-tab{ background:transparent; box-shadow:none; color:var(--chalk-dim); border-radius:0; padding:10px 6px 12px; font-size:1rem;
+    border-bottom:3px solid transparent; margin-bottom:-2px; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+  .home-tab:hover{ transform:none; color:var(--chalk); }
+  .home-tab.active{ color:var(--green); border-bottom-color:var(--green); }
+  .home-tab:focus-visible{ outline:2px solid var(--yellow); outline-offset:-2px; }
+  .tab-count{ background:var(--green); color:#0f2a1d; border-radius:999px; font-size:.75rem; padding:1px 7px; font-weight:900; }
+  .home-label{ display:block; font-size:.74rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:var(--green); margin:0 0 6px; }
+  #player-card .spectate-toggle{ margin:6px 0 12px; }
+  .home-avatars{ display:grid; grid-template-columns:repeat(7, minmax(0, 46px)); gap:10px; margin:0 0 14px; }
+  .home-av{ width:100%; aspect-ratio:1; height:auto; border-radius:12px; padding:0; box-shadow:none; display:inline-flex; align-items:center; justify-content:center;
+    font-family:'Kalam',cursive; font-weight:700; font-size:1.25rem; color:#16302A; border:3px solid transparent; outline:2px solid rgba(var(--line-rgb),.15); outline-offset:2px; }
+  .home-av:hover{ transform:translateY(-2px); }
+  .home-av[aria-checked="true"]{ border-color:var(--chalk); outline-color:var(--green); }
+  .home-panel.hidden{ display:none; }
+  #rooms-card .rooms-h{ margin-bottom:10px; }
+  #player-card .create-wrap{ margin-top:2px; }
+  .home-howto{ display:block; margin:12px auto 0; background:transparent; box-shadow:none; color:var(--chalk-dim); font-weight:700; font-size:.88rem; padding:6px 10px; }
+  .home-howto:hover{ color:var(--chalk); transform:none; }
+  @media (max-width:640px){ #player-card{ padding:14px 14px 10px; } .home-avatars{ gap:6px; grid-template-columns:repeat(7, minmax(0, 1fr)); } .home-av{ font-size:1rem; border-width:2px; outline-offset:1px; } }
+
   /* v4.10: "egyedül maradtál" kártya és kilépés gomb */
   .alone-card{ display:flex; align-items:center; gap:16px; max-width:520px; margin:14px auto 4px; padding:16px 18px; text-align:left;
     background:color-mix(in srgb, var(--yellow) 10%, rgba(0,0,0,.18)); border:1.5px solid color-mix(in srgb, var(--yellow) 45%, transparent); border-radius:16px; }
@@ -2414,25 +2466,31 @@
     </div>
 
     <section class="home-card" id="player-card">
-      <h3 class="home-card-h"><span class="hc-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4.2" fill="currentColor"/><path d="M3.5 21C4.5 15.5 8 13.6 12 13.6s7.5 1.9 8.5 7.4Z" fill="currentColor"/></svg></span>Játékos beállításai</h3>
+      <!-- v4.17: one card with two tabs (create / join), like a game lobby -->
+      <div class="home-tabs" role="tablist" aria-label="Mit szeretnél?">
+        <button type="button" role="tab" class="home-tab active" id="tab-create" aria-selected="true" aria-controls="panel-create">Új szoba</button>
+        <button type="button" role="tab" class="home-tab" id="tab-join" aria-selected="false" aria-controls="rooms-card">Csatlakozás <span class="tab-count hidden" id="tab-join-count"></span></button>
+      </div>
+      <label class="home-label" for="home-name">A neved</label>
             <span class="input-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4.2" fill="currentColor"/><path d="M3.5 21C4.5 15.5 8 13.6 12 13.6s7.5 1.9 8.5 7.4Z" fill="currentColor"/></svg>
       <input type="text" id="home-name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" maxlength="16" placeholder="pl. Anna" aria-label="A neved"></span>
       <label class="spectate-toggle" title="Nézőként mindent látsz, de nem rajzolsz, nem tippelsz és nem kapsz pontot — pl. kivetítőhöz">
         <input type="checkbox" id="join-as-spectator"><span>👀 Csak nézőként csatlakozom</span>
       </label>
+      <div class="home-label">Válassz színt</div>
+      <div class="home-avatars" id="home-avatars" role="radiogroup" aria-label="A színed a játékban"></div>
       <!-- v4.16: the main action sits right under the name — on a phone it is
            visible without scrolling; the open rooms follow below -->
       <div id="invite-join-wrap" class="hidden">
         <button class="big" id="btn-invite-join" style="background:var(--green);">Csatlakozás a partihoz 🚀</button>
       </div>
       <p class="center-note hidden" id="invite-or-label">— vagy —</p>
+      <div id="panel-create" class="home-panel" role="tabpanel" aria-labelledby="tab-create">
       <div class="create-wrap">
         <button class="big create-cta" id="card-create"><span class="cta-plus" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></span><span>Szoba létrehozása</span><svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4 L13 10 L7 16" fill="none" stroke="#0f2a1d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       </div>
-      <div id="home-warning" style="text-align:center;color:var(--red);font-weight:700;min-height:0;margin-top:10px;"></div>
-    </section>
-
-    <section class="home-card" id="rooms-card">
+      </div>
+      <div id="rooms-card" class="home-panel hidden" role="tabpanel" aria-labelledby="tab-join">
       <div class="home-card-h rooms-h">
         <span class="hc-ico"><svg viewBox="0 0 32 24" aria-hidden="true"><circle cx="11" cy="7" r="4.5" fill="currentColor"/><path d="M2 22c.8-6 4.5-8.5 9-8.5s8.2 2.5 9 8.5Z" fill="currentColor"/><circle cx="22" cy="8" r="3.8" fill="currentColor" opacity=".75"/><path d="M19 13.8c.9-.2 1.9-.3 3-.3 4 0 7.2 2.2 8 8.5h-8.2c-.3-3.5-1.3-6.2-2.8-8.2Z" fill="currentColor" opacity=".75"/></svg></span><span>Nyitott szobák</span>
         <span id="room-list-status" class="conn-status rooms-status"></span>
@@ -2445,6 +2503,9 @@
       <div id="room-list" class="room-list">
         <div class="room-empty"><span class="room-empty-ico"><svg viewBox="0 0 32 24" aria-hidden="true"><circle cx="11" cy="7" r="4.5" fill="currentColor"/><path d="M2 22c.8-6 4.5-8.5 9-8.5s8.2 2.5 9 8.5Z" fill="currentColor"/><circle cx="22" cy="8" r="3.8" fill="currentColor" opacity=".75"/><path d="M19 13.8c.9-.2 1.9-.3 3-.3 4 0 7.2 2.2 8 8.5h-8.2c-.3-3.5-1.3-6.2-2.8-8.2Z" fill="currentColor" opacity=".75"/></svg></span><span class="room-empty-txt"><b id="room-empty-title">Még nincs nyitva szoba</b><p id="room-list-empty">Hozz létre egyet, és hívd meg a többieket!</p></span></div>
       </div>
+      </div>
+      <div id="home-warning" style="text-align:center;color:var(--red);font-weight:700;min-height:0;margin-top:10px;"></div>
+      <button type="button" class="home-howto" id="home-howto">Új vagy a játékban? Így működik <span aria-hidden="true">▾</span></button>
     </section>
 
     <section class="home-card" id="subscribe-box">
@@ -2734,7 +2795,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.16</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.17</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -4826,6 +4887,48 @@ const SRV = (function(){
       el.classList.add('hidden');
       try{ sessionStorage.setItem('picasso-phone-hint', '0'); }catch(e){}
     });
+  })();
+  // v4.17: home card tabs, colour picker, open-room counter
+  (function(){
+    const tc = document.getElementById('tab-create'), tj = document.getElementById('tab-join');
+    const pc = document.getElementById('panel-create'), pj = document.getElementById('rooms-card');
+    function setTab(join){
+      tc.classList.toggle('active', !join); tj.classList.toggle('active', join);
+      tc.setAttribute('aria-selected', join ? 'false' : 'true'); tj.setAttribute('aria-selected', join ? 'true' : 'false');
+      pc.classList.toggle('hidden', join); pj.classList.toggle('hidden', !join);
+      try{ fitMainBoard(); }catch(e){}
+    }
+    tc.addEventListener('click', ()=>{ sndClick(); setTab(false); });
+    tj.addEventListener('click', ()=>{ sndClick(); setTab(true); });
+    document.getElementById('home-howto').addEventListener('click', ()=>{ const b = document.getElementById('btn-open-tutorial'); if(b) b.click(); });
+    // how many open rooms — shown on the "Join" tab
+    const list = document.getElementById('room-list'), cnt = document.getElementById('tab-join-count');
+    const upd = ()=>{ const n = list.querySelectorAll('.room-item').length; cnt.textContent = String(n); cnt.classList.toggle('hidden', !n); };
+    try{ new MutationObserver(upd).observe(list, { childList:true, subtree:true }); }catch(e){}
+    upd();
+    // colour picker (the colour others see next to your name)
+    const box = document.getElementById('home-avatars'), nameEl = document.getElementById('home-name');
+    function initial(){ return (Array.from((nameEl.value || '').trim())[0] || '?').toUpperCase(); }
+    function drawAv(){
+      box.innerHTML = '';
+      AVATAR_COLORS.forEach((c, i)=>{
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'home-av'; b.style.background = c;
+        b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', c === myAvatarColor ? 'true' : 'false');
+        b.setAttribute('aria-label', `${i+1}. szín`);
+        b.textContent = initial();
+        b.addEventListener('click', ()=>{
+          sndClick(); myAvatarColor = c; playerAvatars[selfId] = c;
+          try{ localStorage.setItem('picasso-avatar-color', c); }catch(e){}
+          drawAv();
+        });
+        box.appendChild(b);
+      });
+    }
+    nameEl.addEventListener('input', ()=>{ const t = initial(); box.querySelectorAll('.home-av').forEach(b=>{ b.textContent = t; }); });
+    // AVATAR_COLORS / myAvatarColor are declared further down in this script,
+    // so the picker is drawn once the whole script has run
+    setTimeout(()=>{ try{ drawAv(); }catch(e){ box.classList.add('hidden'); } }, 0);
   })();
   // v4.10: e-mail feliratkozás új szobákra
   const SUBSCRIBE_URL = '/.netlify/functions/subscribe';
@@ -9908,8 +10011,11 @@ const SRV = (function(){
   }
   function renderRoomList(){
     const listEl = document.getElementById('room-list');
+    // v4.17: joinable rooms first (public, waiting), full rooms last
+    const isFull = r => r.max > 0 && r.players >= r.max;
+    const rank = r => isFull(r) ? 3 : (r.isPrivate ? 2 : (r.inGame ? 1 : 0));
     const rooms = [...knownRooms.values()].sort((a,b)=>
-      (Number(a.isPrivate) - Number(b.isPrivate)) || a.name.localeCompare(b.name));
+      (rank(a) - rank(b)) || a.name.localeCompare(b.name, 'hu'));
     const sig = rooms.map(r=>[r.key,r.isPrivate?1:0,r.name,r.hostName,r.players,r.max,r.inGame?1:0].join('|')).join('~');
     if(sig === lastRoomListSig) return;
     lastRoomListSig = sig;
@@ -9917,24 +10023,31 @@ const SRV = (function(){
       listEl.innerHTML = ROOM_EMPTY_HTML;
       return;
     }
+    // v4.17: compact, scannable rows — name, host, head-count, status in
+    // words (not just colour) and one clear action
     listEl.innerHTML = rooms.map(r => {
-      const full = r.max > 0 && r.players >= r.max;
-      const count = r.players > 0 ? ` · 👥 ${r.players}${r.max>0 ? '/'+r.max : ''}` : '';
-      const badge = r.isPrivate
-        ? '<span class="room-badge private">🔒 Zárt</span>'
-        : '<span class="room-badge public">🌐 Nyilvános</span>';
-      const hint = (r.isPrivate ? ' · csak kóddal' : '') + (r.inGame && !full ? ' · menet közben is csatlakozhatsz' : '');
-      const gameBadge = r.inGame ? '<span class="room-badge ingame">🎮 Folyamatban</span>' : '';
-      const arrow = full ? 'megtelt' : (r.isPrivate ? '🔒' : '▶');
+      const full = isFull(r);
+      const players = Math.max(0, Number(r.players) || 0), max = Math.max(0, Number(r.max) || 0);
+      const count = `${players}${max ? '/' + max : ''} játékos`;
+      const status = full ? '<span class="rs rs-full">Megtelt</span>'
+        : (r.inGame ? '<span class="rs rs-game">Játék folyik</span>' : '<span class="rs rs-wait">Várakozik</span>');
+      const kind = r.isPrivate ? '<span class="rs rs-priv">🔒 Zárt</span>' : '';
+      const action = full ? 'Megtelt' : (r.isPrivate ? 'Kóddal' : 'Belépés');
+      const initial = escapeHtml((Array.from(String(r.hostName || '?').trim())[0] || '?').toUpperCase());
       return `
-      <div class="room-item ${r.isPrivate ? 'is-private' : 'is-public'}${full ? ' full' : ''}" data-key="${escapeHtml(r.key)}">
-        <div>
-          <div class="room-item-name">${escapeHtml(r.name)}${badge}${gameBadge}</div>
-          <div class="room-item-meta">Szobanyitó: ${escapeHtml(r.hostName)}${count}${hint}</div>
+      <div class="room-item ${r.isPrivate ? 'is-private' : 'is-public'}${full ? ' full' : ''}" data-key="${escapeHtml(r.key)}" role="button" tabindex="${full ? -1 : 0}" aria-disabled="${full ? 'true' : 'false'}">
+        <span class="ri-av" aria-hidden="true">${initial}</span>
+        <div class="ri-main">
+          <div class="room-item-name">${escapeHtml(r.name)}</div>
+          <div class="room-item-meta">${escapeHtml(r.hostName)} szobája</div>
+          <div class="ri-tags"><span class="rs rs-count">👥 ${count}</span>${status}${kind}</div>
         </div>
-        <div class="room-item-arrow">${arrow}</div>
+        <span class="ri-go">${action}</span>
       </div>`;
     }).join('');
+    listEl.querySelectorAll('.room-item:not(.full)').forEach(el=>{
+      el.addEventListener('keydown', (e)=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); el.click(); } });
+    });
     listEl.querySelectorAll('.room-item:not(.full)').forEach(el=>{
       el.addEventListener('click', ()=>{
         const info = knownRooms.get(el.dataset.key);
@@ -14546,6 +14659,10 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.17', changes:[
+      'Új kezdőkártya: két fül („Szoba létrehozása” és „Csatlakozás”), alatta a neved, a színed és egy nagy gomb. A Csatlakozás fülön a nyitott szobák listája van, a fülön pedig látszik, hány szoba nyitott.',
+      'Visszakerült a színválasztás: a nevednél ez a szín látszik a többieknek.'
+    ]},
     { version:'4.16', changes:[
       'Kezdőképernyő: a „Szoba létrehozása” gomb közvetlenül a név alá került, így telefonon is görgetés nélkül látszik. A nyitott szobák listája alatta van.',
       'Meghívó linkkel érkezve a „Csatlakozás a partihoz” a fő gomb, a szobanyitás visszafogottabb.',
