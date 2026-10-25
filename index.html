@@ -13973,10 +13973,6 @@ const SRV = (function(){
         ? `A szó ez volt: <span class="word-reveal-final">${escapeHtml(shownWord)}</span> — senki sem kapott pontot.`
         : `A szót nem ismerjük (a rajzoló kapcsolata megszakadt) — senki sem kapott pontot.`;
     }
-    const pens = (result.award || roundAward(result)).penalties || [];
-    if(pens.length){
-      wordEl.innerHTML += `<div style="margin-top:6px;font-size:.9rem;color:var(--red);">❌ Rossz tippek (azonnal levonva): ${pens.map(pe=>`${escapeHtml(displayNameFor(pe.pid, ''))} ${pe.n}× → −${pe.pts}`).join(', ')}</div>`;
-    }
     renderScoreTable('roundend-scores', scoreRows());
     try{ recordRoundStats(result); }catch(e){}
     try{ if(shownWord) rememberRecentWord(shownWord); }catch(e){}
@@ -14733,7 +14729,7 @@ const SRV = (function(){
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
     { version:'4.20', changes:[
-      'Pontozás: egy rossz tipp már csak 1 pontot ér, és azonnal levonódik, amint a rajzoló gépe elutasítja (a tipp mellett „−1” jelzi). A kör végén csak összesítés látszik. A pontszám 0 alá nem mehet.'
+      'Pontozás: egy rossz tipp már csak 1 pontot ér, és azonnal levonódik, amint a rajzoló gépe elutasítja (a tipp mellett „−1” jelzi).  A pontszám 0 alá nem mehet.'
     ]},
     { version:'4.19', changes:[
       'Admin: nem kell többé GitHub vagy Netlify tokent megadni. A jelszót a szerver ellenőrzi, a mentéseket is ő végzi a Netlify-on tárolt kulcsokkal (a belépés 4 óráig érvényes).',
