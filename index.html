@@ -2156,6 +2156,30 @@
   .home-foot .home-stats{ margin:0; }
   .home-foot .stats-open-btn{ padding:6px 14px; }
 
+  /* v4.16: a fő művelet a játékoskártyában, a név alatt */
+  #player-card .create-wrap{ margin-top:12px; animation:none; }
+  #player-card .create-cta{ width:100%; max-width:none; justify-content:space-between; padding:12px 18px; border-radius:14px; }
+  #player-card .create-cta > span:nth-child(2){ flex:1; text-align:center; font-size:1.2rem; }
+  #invite-join-wrap{ text-align:center; margin:12px 0 0; }
+  #invite-join-wrap .big{ width:100%; }
+  #player-card #invite-or-label{ margin:8px 0 0; }
+  /* invited: joining is the main action, creating a room is the secondary one */
+  #player-card:has(#invite-join-wrap:not(.hidden)) .create-cta{ background:transparent; color:var(--chalk);
+    border:2px solid rgba(var(--line-rgb),.35); box-shadow:none; padding:8px 16px; }
+  #player-card:has(#invite-join-wrap:not(.hidden)) .create-cta > span:nth-child(2){ font-size:1rem; }
+  #player-card:has(#invite-join-wrap:not(.hidden)) .create-cta .chev path{ stroke:currentColor; }
+  #player-card:has(#invite-join-wrap:not(.hidden)) .cta-plus{ width:26px; height:26px; }
+  .home-tiles{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+  .home-tile > span:nth-child(2){ min-width:0; }
+  @media (min-width:641px){ .home-tiles .tile-chev{ display:none; } .home-tile{ justify-content:center; } .home-tile > span:nth-child(2){ flex:0 1 auto; } }
+  .phone-hint{ align-items:center; padding:8px 12px; margin-bottom:10px; font-size:.88rem; }
+  .phone-hint-ico{ font-size:1.15rem; }
+  @media (max-width:640px){
+    .home-tiles{ grid-template-columns:1fr; }
+    .home-hero p{ display:none; }
+    .home-hero{ margin-bottom:8px; }
+  }
+
   /* v4.10: "egyedül maradtál" kártya és kilépés gomb */
   .alone-card{ display:flex; align-items:center; gap:16px; max-width:520px; margin:14px auto 4px; padding:16px 18px; text-align:left;
     background:color-mix(in srgb, var(--yellow) 10%, rgba(0,0,0,.18)); border:1.5px solid color-mix(in srgb, var(--yellow) 45%, transparent); border-radius:16px; }
@@ -2381,7 +2405,7 @@
     </div>
     <div id="phone-hint" class="phone-hint hidden" role="note">
       <span class="phone-hint-ico" aria-hidden="true">💻</span>
-      <span><b>Telefonról vagy itt?</b> A játék telefonon is működik, de rajzolni és tippelni sokkal kényelmesebb laptopon, számítógépen vagy tableten — ha van rá lehetőséged, használd azt!</span>
+      <span><b>Tipp:</b> gépen vagy tableten kényelmesebb rajzolni.</span>
       <button type="button" class="ghost small" id="phone-hint-close" aria-label="Értesítés bezárása">✕</button>
     </div>
     <div class="home-hero">
@@ -2396,14 +2420,21 @@
       <label class="spectate-toggle" title="Nézőként mindent látsz, de nem rajzolsz, nem tippelsz és nem kapsz pontot — pl. kivetítőhöz">
         <input type="checkbox" id="join-as-spectator"><span>👀 Csak nézőként csatlakozom</span>
       </label>
+      <!-- v4.16: the main action sits right under the name — on a phone it is
+           visible without scrolling; the open rooms follow below -->
+      <div id="invite-join-wrap" class="hidden">
+        <button class="big" id="btn-invite-join" style="background:var(--green);">Csatlakozás a partihoz 🚀</button>
+      </div>
+      <p class="center-note hidden" id="invite-or-label">— vagy —</p>
+      <div class="create-wrap">
+        <button class="big create-cta" id="card-create"><span class="cta-plus" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></span><span>Szoba létrehozása</span><svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4 L13 10 L7 16" fill="none" stroke="#0f2a1d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div id="home-warning" style="text-align:center;color:var(--red);font-weight:700;min-height:0;margin-top:10px;"></div>
     </section>
-    <div id="invite-join-wrap" class="hidden" style="text-align:center;margin:10px 0 20px;">
-      <button class="big" id="btn-invite-join" style="background:var(--green);">Csatlakozás a partihoz 🚀</button>
-    </div>
 
     <section class="home-card" id="rooms-card">
       <div class="home-card-h rooms-h">
-        <span class="hc-ico"><svg viewBox="0 0 32 24" aria-hidden="true"><circle cx="11" cy="7" r="4.5" fill="currentColor"/><path d="M2 22c.8-6 4.5-8.5 9-8.5s8.2 2.5 9 8.5Z" fill="currentColor"/><circle cx="22" cy="8" r="3.8" fill="currentColor" opacity=".75"/><path d="M19 13.8c.9-.2 1.9-.3 3-.3 4 0 7.2 2.2 8 8.5h-8.2c-.3-3.5-1.3-6.2-2.8-8.2Z" fill="currentColor" opacity=".75"/></svg></span><span>Elérhető szobák</span>
+        <span class="hc-ico"><svg viewBox="0 0 32 24" aria-hidden="true"><circle cx="11" cy="7" r="4.5" fill="currentColor"/><path d="M2 22c.8-6 4.5-8.5 9-8.5s8.2 2.5 9 8.5Z" fill="currentColor"/><circle cx="22" cy="8" r="3.8" fill="currentColor" opacity=".75"/><path d="M19 13.8c.9-.2 1.9-.3 3-.3 4 0 7.2 2.2 8 8.5h-8.2c-.3-3.5-1.3-6.2-2.8-8.2Z" fill="currentColor" opacity=".75"/></svg></span><span>Nyitott szobák</span>
         <span id="room-list-status" class="conn-status rooms-status"></span>
         <button type="button" class="ghost small rooms-refresh" id="btn-room-list-refresh" title="Újrakeresés az összes hálózaton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14.3 4.9M4 12A8 8 0 0 1 18.3 7.1" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M18.8 2.8v4.8H14M5.2 21.2v-4.8H10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Frissítés</button>
       </div>
@@ -2414,11 +2445,6 @@
       <div id="room-list" class="room-list">
         <div class="room-empty"><span class="room-empty-ico"><svg viewBox="0 0 32 24" aria-hidden="true"><circle cx="11" cy="7" r="4.5" fill="currentColor"/><path d="M2 22c.8-6 4.5-8.5 9-8.5s8.2 2.5 9 8.5Z" fill="currentColor"/><circle cx="22" cy="8" r="3.8" fill="currentColor" opacity=".75"/><path d="M19 13.8c.9-.2 1.9-.3 3-.3 4 0 7.2 2.2 8 8.5h-8.2c-.3-3.5-1.3-6.2-2.8-8.2Z" fill="currentColor" opacity=".75"/></svg></span><span class="room-empty-txt"><b id="room-empty-title">Még nincs nyitva szoba</b><p id="room-list-empty">Hozz létre egyet, és hívd meg a többieket!</p></span></div>
       </div>
-      <p class="center-note hidden" id="invite-or-label">— vagy —</p>
-      <div class="create-wrap">
-        <button class="big create-cta" id="card-create"><span class="cta-plus" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></span><span>Szoba létrehozása</span><svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4 L13 10 L7 16" fill="none" stroke="#0f2a1d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      </div>
-      <div id="home-warning" style="text-align:center;color:var(--red);font-weight:700;min-height:0;margin-top:10px;"></div>
     </section>
 
     <section class="home-card" id="subscribe-box">
@@ -2441,8 +2467,8 @@
     </section>
 
     <div class="home-tiles">
-      <button class="home-tile" id="btn-open-tutorial" type="button"><span class="tile-ico" style="background:var(--blue);">?</span><span>Hogyan működik?</span><span class="tile-chev">›</span></button>
-      <button class="home-tile" id="btn-open-feedback" type="button"><span class="tile-ico" style="background:var(--purple);">…</span><span>Visszajelzés · hibabejelentés</span><span class="tile-chev">›</span></button>
+      <button class="home-tile" id="btn-open-tutorial" type="button"><span class="tile-ico" style="background:var(--blue);">?</span><span>Súgó</span><span class="tile-chev">›</span></button>
+      <button class="home-tile" id="btn-open-feedback" type="button"><span class="tile-ico" style="background:var(--purple);">…</span><span>Visszajelzés</span><span class="tile-chev">›</span></button>
       <button class="home-tile" id="btn-open-privacy" type="button"><span class="tile-ico tile-emoji">🔒</span><span>Adatvédelem</span><span class="tile-chev">›</span></button>
     </div>
     <div class="home-foot">
@@ -2708,7 +2734,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.15</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.16</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -14520,6 +14546,11 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.16', changes:[
+      'Kezdőképernyő: a „Szoba létrehozása” gomb közvetlenül a név alá került, így telefonon is görgetés nélkül látszik. A nyitott szobák listája alatta van.',
+      'Meghívó linkkel érkezve a „Csatlakozás a partihoz” a fő gomb, a szobanyitás visszafogottabb.',
+      'Rövidebb telefonos tipp, rövidebb gombfeliratok; gépen már nem lógnak ki az alsó gombok.'
+    ]},
     { version:'4.15', changes:[
       'Biztonság: az új szobákról szóló telefonos értesítés csatornaneve már nincs a nyilvános tárhelyen — a Netlify szervere őrzi és küldi az értesítést (napi plafonnal). Az admin oldalon egyszer a Netlify tokennel be kell tölteni és el kell menteni a beállítást.',
       'Biztonság: tartalombiztonsági szabályzat (CSP) jelentő módban — egyelőre semmit nem tilt, csak naplózza a böngésző konzoljában, mit tiltana. Ha minden rendben, élesítjük.',
