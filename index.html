@@ -2708,7 +2708,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.14</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.15</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -2778,7 +2778,7 @@
       <h2 id="privacy-title">🔒 Adatvédelem</h2>
       <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
     </div>
-    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. október 21-től · v4.12</p>
+    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. október 25-től · v4.15</p>
     <h3 class="pv-h">Ki kezeli az adatokat?</h3>
     <p><b>Adatkezelő:</b> Ádám, magánszemély, a PIC-ASS-O hobbiprojekt fejlesztője és üzemeltetője.<br>
     <b>Kapcsolat:</b> <a href="mailto:picasso.ertesito@gmail.com" style="color:var(--blue);">picasso.ertesito@gmail.com</a> — minden adatvédelmi kérdéssel és kéréssel ide írhatsz.</p>
@@ -2787,13 +2787,14 @@
     <h3 class="pv-h">Milyen adatot, miért és meddig?</h3>
     <ul>
       <li><b>Játék közben (becenév, rajz, tippek, chat, hangüzenet):</b> két úton mehetnek. <b>(1) Saját játékszerveren át</b> (ha elérhető, ez az alapértelmezett): a kapcsolat titkosított (HTTPS/WSS), de ez a titkosítás csak az útvonalat védi — <b>a játékszerver maga technikailag látja az üzenetek tartalmát</b>, mert ő adja tovább őket a szobában; nincs végpontok közötti titkosítás. A szerver a tartalmat nem menti el, nem naplózza és nem nézi; csak egy megszakadt kapcsolatnál tartja meg legfeljebb 1 percig, hogy a visszatérő játékos megkapja. <b>(2) Közvetlenül a játékosok között</b> (WebRTC), vagy tartalék úton nyilvános MQTT-szervereken át: itt a tartalom a szobakódból képzett kulccsal titkosítva megy, ezek a szerverek nem látják. Egyik esetben sem tároljuk a játékot, a játék végével eltűnik. <i>Jogalap: a játék nyújtása, amit te kértél (GDPR 6. cikk (1) b).</i></li>
-      <li><b>IP-cím a kapcsolódáshoz:</b> a jelzőszerverek (Nostr / BitTorrent tracker / MQTT), a közvetítő (TURN) és a saját játékszerver látja, mert e nélkül nem jön létre a kapcsolat. Mi nem mentjük el. <i>Jogalap: jogos érdek a játék működtetéséhez (6. cikk (1) f).</i></li>
+      <li><b>IP-cím a kapcsolódáshoz:</b> a jelzőszerverek (Nostr / BitTorrent tracker / MQTT), a hálózati címet felderítő STUN-szerverek (Google, Cloudflare), a közvetítő (TURN) és a saját játékszerver látja, mert e nélkül nem jön létre a kapcsolat. Mi nem mentjük el. <i>Jogalap: jogos érdek a játék működtetéséhez (6. cikk (1) f).</i></li>
       <li><b>Nyilvános szobák listája:</b> a szoba neve, a szobanyitó beceneve és a létszám, amíg a szoba nyitva van. Zárt szoba nem jelenik meg névvel. <i>Jogalap: 6. cikk (1) b.</i></li>
       <li><b>Közös ranglista:</b> a befejezett játékokból a becenevek és a pontszámok kerülnek a saját játékszerverre, <b>1 évig</b>. Valódi nevet nem kérünk — ha a becenevedet törölnéd, írj a fenti címre. <i>Jogalap: jogos érdek (6. cikk (1) f) — tiltakozhatsz ellene.</i></li>
       <li><b>Kitiltás:</b> ha a szobanyitó kirúg, egy véletlen eszközazonosítót és az IP-címed titkos kulccsal képzett lenyomatát (nem magát a címet) tároljuk a Netlify-on, hogy ne tudj visszalépni. Szobás tiltás legfeljebb 30, egész játékból való tiltás 7 napig marad meg. <i>Jogalap: jogos érdek a játék rendjének védelméhez (6. cikk (1) f).</i></li>
       <li><b>E-mail értesítő új szobákról (csak ha feliratkozol):</b> az e-mail címedet, a feliratkozás és a megerősítés időpontját tároljuk a Netlify-on. Megerősítés nélkül 24 óra után, leiratkozáskor azonnal töröljük. Csak az új szobákról szóló értesítéshez használjuk, senkinek nem adjuk ki. Csak 16 éven felüliek iratkozhatnak fel. <i>Jogalap: a hozzájárulásod (6. cikk (1) a), amit bármikor visszavonhatsz a levelek alján lévő linkkel — a visszavonás az addigi küldések jogszerűségét nem érinti.</i></li>
       <li><b>Visszajelzés-űrlap:</b> amit beírsz (a név és az elérhetőség önkéntes), a Netlify Forms tárolja; a válasz után, de legkésőbb 1 év múlva töröljük. <i>Jogalap: hozzájárulás (6. cikk (1) a).</i></li>
-      <li><b>Az eszközödön marad:</b> beceneved, beállításaid, saját statisztikád és egy kapcsolódási hibanapló (24 óra után törlődik). Ezek a böngésződ helyi tárhelyén vannak, csak a működéshez kellenek, ezért nincs szükség süti-hozzájárulásra; nem kerülnek máshová, kivéve ha a naplót te magad kimásolod és elküldöd.</li>
+      <li><b>„Mi ez?” gomb:</b> ha megnyomod, a keresett szót a játék elküldi a magyar Wikipédiának (Wikimedia Foundation), hogy leírást és képet kérjen róla; ehhez a Wikipédia látja az IP-címedet. Csak a gomb megnyomásakor történik. <i>Jogalap: 6. cikk (1) b.</i></li>
+      <li><b>Az eszközödön marad:</b> a böngésződ helyi tárhelyén két fajta adat van. <b>A működéshez szükséges:</b> beceneved, beállításaid (például hang, téma) és egy kapcsolódási hibanapló (24 óra után törlődik). <b>Kényelmi funkció:</b> a saját statisztikád (játékok, győzelmek, pontok). Egyik sem kerül máshová, kivéve ha a naplót te magad kimásolod és elküldöd, és mindet bármikor törölheted az alábbi gombbal.</li>
       <li><b>Mikrofon:</b> csak akkor kér hozzáférést, ha hangüzenetet veszel fel, vagy bekapcsolod a hangos tippelést. A hangos tippelésnél a beszédet a böngésződ saját beszédfelismerője alakítja szöveggé (Chrome-ban a Google, Safariban az Apple szolgáltatása); a játék csak a felismert szavakat kapja meg, hangot nem rögzít és nem tárol.</li>
     </ul>
 
@@ -2804,7 +2805,10 @@
       <li><b>GitHub Inc.</b> (USA) és a <b>jsDelivr</b> CDN — a szólista és a zenék betöltése; ezek a letöltéskor látják az IP-címedet. A játék programkönyvtárai a játék saját tárhelyéről töltődnek be (az esm.run CDN csak akkor, ha onnan nem sikerül).</li>
       <li><b>Tailscale Inc.</b> (USA) — a saját játékszerver internetes elérése.</li>
       <li><b>Metered / Cloudflare</b> — közvetítő (TURN) szerver, ha a közvetlen kapcsolat nem jön létre.</li>
-      <li><b>ntfy.sh</b> — az üzemeltető telefonjára küld értesítést új szobáról (csak a szoba nevét és a szobanyitó becenevét).</li>
+      <li><b>ntfy.sh</b> — az üzemeltető telefonjára küld értesítést új szobáról (csak a szoba nevét és a szobanyitó becenevét). Az értesítést a Netlify szervere küldi, nem a te eszközöd.</li>
+      <li><b>Wikimedia Foundation</b> (USA) — a „Mi ez?” gomb leírásai és képei.</li>
+      <li><b>Google LLC és Cloudflare Inc.</b> (USA) — STUN-szerverek a közvetlen kapcsolat felépítéséhez (csak az IP-címet látják).</li>
+      <li><b>Google LLC / Apple Inc.</b> (USA) — a böngésző beszédfelismerője, ha bekapcsolod a hangos tippelést.</li>
       <li>Nyilvános jelzőszerverek (Nostr, BitTorrent tracker, MQTT) — csak kapcsolódáshoz, titkosított tartalommal.</li>
     </ul>
     <p>Az USA-beli szolgáltatóknál az adattovábbítás az EU–USA adatvédelmi keretrendszer, illetve az Európai Bizottság általános szerződési feltételei alapján történik.</p>
@@ -3239,7 +3243,8 @@
       <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> appon keresztül (regisztráció nem kell).
       <ol style="margin:6px 0 0 18px;padding:0;line-height:1.45;">
         <li>Telepítsd a telefonodra az <b>ntfy</b> appot (App Store / Google Play).</li>
-        <li>Kapcsold be lent az értesítést, és nyomd meg a <b>Mentés élesben</b> gombot.</li>
+        <li>Add meg lent (a Visszajelzéseknél) a Netlify tokent, és nyomd meg a <b>Betöltés</b> gombot.</li>
+        <li>Kapcsold be az értesítést, és nyomd meg a <b>Mentés a szerverre</b> gombot.</li>
         <li>Az appban a <b>+</b> gombbal iratkozz fel a lenti csatornanévre (szerver: ntfy.sh).</li>
         <li>A <b>Próbaértesítés</b> gombbal ellenőrizheted, hogy megérkezik-e.</li>
       </ol>
@@ -3255,13 +3260,15 @@
         <input type="checkbox" id="admin-notify-skipown"> Az ezen az eszközön nyitott szobáimról ne kapjak értesítést
       </label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-        <button class="secondary small" id="admin-notify-save" type="button">☁️ Mentés élesben</button>
+        <button class="ghost small" id="admin-notify-load" type="button">⬇️ Betöltés</button>
+        <button class="secondary small" id="admin-notify-save" type="button">☁️ Mentés a szerverre</button>
         <button class="ghost small" id="admin-notify-test" type="button">🔔 Próbaértesítés</button>
       </div>
       <div id="admin-notify-status" class="admin-warning" style="text-align:left;"></div>
       <div style="font-size:.78rem;color:var(--chalk-dim);margin-top:6px;line-height:1.35;">
-        A csatornanév az élő tárhelyre kerül, amit a játék minden eszköze beolvas — aki kinyomozza, küldhetne rá
-        értesítést. Ezért legyen hosszú és véletlen (🎲); ha kéretlen üzenetek jönnének, adj meg új nevet.
+        v4.15 óta a csatornanév csak a szerveren (Netlify) van, a játékosok eszközei nem kapják meg, és az
+        értesítést is a szerver küldi (naponta legfeljebb 80, sebességkorláttal). Ha a régi, nyilvános
+        csatornanevedre már jönnének kéretlen üzenetek, adj meg új nevet (🎲), és iratkozz fel rá az appban.
         Gépen az ntfy weboldalán (ntfy.sh/app) is feliratkozhatsz ugyanerre a névre. E-mailt az ntfy.sh 2026 óta
         csak regisztrált, hitelesített fiókkal küld, ezért azt a játék nem használja.
       </div>
@@ -4837,39 +4844,29 @@ const SRV = (function(){
   document.getElementById('sub-email').addEventListener('keydown', e=>{ if(e.key === 'Enter') doSubscribe(); });
 
   function cleanNotifyTopic(t){ const s = String(t || '').trim(); return /^[A-Za-z0-9_-]{8,64}$/.test(s) ? s : ''; }
+  // v4.15: the channel name no longer comes from the public gist — it lives
+  // only on the server (netlify/functions/roomnotify). The gist is only
+  // looked at to warn the admin if an old channel name is still in it.
+  let legacyGistTopic = '';
   function setNotifyCfg(raw){
     const c = isPlainObject(raw) ? raw : {};
-    // (an "email" saved by v2.98 is ignored: ntfy.sh rejects anonymous e-mail
-    // since March 2026, and would then reject the WHOLE notification)
-    notifyCfg = { on: c.on === true, topic: cleanNotifyTopic(c.topic) };
-    fillAdminNotifyForm(false);
+    legacyGistTopic = cleanNotifyTopic(c.topic);
+  }
+  const ROOMNOTIFY_URL = '/.netlify/functions/roomnotify';
+  async function roomNotifyAdmin(action, extra){
+    const token = (document.getElementById('admin-fb-token').value || '').trim();
+    if(!token) throw new Error('Add meg lent a Netlify tokent (a Visszajelzéseknél).');
+    const r = await fetch(ROOMNOTIFY_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'x-netlify-token': token },
+      body: JSON.stringify(Object.assign({ action }, extra || {})) });
+    const j = await r.json().catch(()=>({}));
+    if(r.status === 401) throw new Error('Érvénytelen Netlify token.');
+    if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    return j;
   }
   function newNotifyTopic(){
     const a = new Uint8Array(12);
     try{ crypto.getRandomValues(a); }catch(e){ for(let i=0;i<a.length;i++) a[i] = Math.floor(Math.random()*256); }
     return 'picasso-' + Array.from(a).map(b=>b.toString(36).padStart(2,'0')).join('').slice(0, 20);
-  }
-  // returns { ok, detail } — detail says what went wrong, in words
-  async function sendPush(cfg, title, message, clickUrl){
-    if(!cfg || !cfg.topic) return { ok:false, detail:'nincs csatornanév' };
-    // query parameters instead of headers: accents and emoji travel safely,
-    // and a plain-text POST needs no CORS pre-flight
-    const q = new URLSearchParams({ title, tags:'art,bell' });
-    if(clickUrl) q.set('click', clickUrl);
-    let res;
-    try{
-      res = await fetch(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}?${q.toString()}`, {
-        method:'POST', body: message, keepalive:true,
-        headers:{ 'Content-Type':'text/plain;charset=utf-8' }
-      });
-    }catch(e){
-      return { ok:false, detail:'a böngésző nem érte el az ntfy.sh-t (nincs internet, vagy tiltja egy reklámblokkoló / céges hálózat)' };
-    }
-    if(res.ok) return { ok:true, detail:'' };
-    let why = '';
-    try{ const j = await res.json(); why = (j && (j.error || j.message)) || ''; }catch(e){}
-    if(res.status === 429) why = 'túl sok üzenet ma erről a hálózatról (ntfy napi korlát) — holnap újra megy';
-    return { ok:false, detail:`az ntfy.sh visszautasította (HTTP ${res.status}${why ? ': ' + why : ''})` };
   }
   function notifyRoomOpened(roomName, hostName, isPublic, code){
     // v4.10: e-mail értesítés a feliratkozóknak (csak nyilvános szobáról)
@@ -4882,15 +4879,12 @@ const SRV = (function(){
           body: JSON.stringify({ action:'notify', code }) }).catch(()=>{}); }catch(e){}
       }, 4000);
     }
-    if(!notifyCfg.on || !notifyCfg.topic) return;
     try{ if(localStorage.getItem(NOTIFY_SKIP_OWN_KEY) === '1') return; }catch(e){}
-    const base = location.origin + location.pathname;
-    // the code of a closed room is not put in the message
-    const title = `🎨 Új szoba: ${String(roomName).slice(0, 60)}`;
-    const msg = isPublic
-      ? `${hostName} nyitott egy nyilvános szobát. Koppints ide a csatlakozáshoz!`
-      : `${hostName} nyitott egy zárt szobát.`;
-    sendPush(notifyCfg, title, msg, isPublic ? `${base}?join=${encodeURIComponent(code)}` : base);
+    // v4.15: the server decides whether notifications are on, and sends them
+    // (the code of a closed room is not sent at all)
+    try{ fetch(ROOMNOTIFY_URL, { method:'POST', keepalive:true, headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'notify', name: String(roomName).slice(0, 60), host: String(hostName).slice(0, 20),
+        public: !!isPublic, code: isPublic ? code : '' }) }).catch(()=>{}); }catch(e){}
   }
   function fillAdminNotifyForm(force){
     const on = document.getElementById('admin-notify-on');
@@ -4920,6 +4914,18 @@ const SRV = (function(){
       try{ localStorage.setItem(NOTIFY_SKIP_OWN_KEY, e.target.checked ? '1' : '0'); }catch(err){}
     });
     const formCfg = ()=>({ on: on.checked, topic: cleanNotifyTopic(tp.value) });
+    document.getElementById('admin-notify-load').addEventListener('click', async ()=>{
+      sndClick();
+      st.style.color = 'var(--chalk-dim)'; st.textContent = 'Betöltés…';
+      try{
+        const j = await roomNotifyAdmin('get');
+        notifyCfg = { on: j.on === true, topic: cleanNotifyTopic(j.topic) };
+        if(!notifyCfg.topic && legacyGistTopic) notifyCfg.topic = legacyGistTopic;   // migration: offer the old name
+        fillAdminNotifyForm(true);
+        st.style.color = 'var(--green)';
+        st.textContent = j.topic ? '✅ Betöltve a szerverről.' : (legacyGistTopic ? 'A szerveren még nincs beállítás — betettem a régi csatornanevet, nyomd meg a Mentés gombot.' : 'A szerveren még nincs beállítás.');
+      }catch(e){ st.style.color = 'var(--red)'; st.textContent = e.message; }
+    });
     const check = (c)=>{
       if(!c.topic){ st.style.color = 'var(--red)'; st.textContent = 'A csatornanév 8–64 karakter legyen, csak betű, szám, - és _ (vagy nyomd meg: 🎲 Új név).'; return false; }
       return true;
@@ -4930,10 +4936,16 @@ const SRV = (function(){
       if(c.on && !check(c)) return;
       st.style.color = 'var(--chalk-dim)'; st.textContent = 'Mentés…';
       try{
-        await adminWriteGistFile('ertesites.json', JSON.stringify(c));
+        await roomNotifyAdmin('save', c);
         notifyCfg = c; tp.dataset.touched = '';
-        st.style.color = 'var(--green)';
-        st.textContent = c.on ? '✅ Elmentve — mostantól minden új szobáról értesítést kapsz (a többiek a következő betöltéskor kapják meg a beállítást).' : '✅ Elmentve — az értesítés ki van kapcsolva.';
+        let extra = '';
+        // v4.15: wipe the old, public copy of the channel name from the gist
+        if(legacyGistTopic){
+          try{ await adminWriteGistFile('ertesites.json', JSON.stringify({ on:false, moved:'v4.15: a szerveren van' })); legacyGistTopic = ''; extra = ' A régi, nyilvános példányt töröltem a Gistből.'; }
+          catch(e){ extra = ' ⚠️ A régi csatornanév még a nyilvános Gistben van — add meg fent a GitHub tokent, és mentsd el újra, hogy törölhessem.'; }
+        }
+        st.style.color = extra.includes('⚠️') ? 'var(--yellow)' : 'var(--green)';
+        st.textContent = (c.on ? '✅ Elmentve a szerveren — mostantól minden új szobáról értesítést kapsz.' : '✅ Elmentve — az értesítés ki van kapcsolva.') + extra;
       }catch(e){ st.style.color = 'var(--red)'; st.textContent = e.message; }
     });
     document.getElementById('admin-notify-test').addEventListener('click', async ()=>{
@@ -4941,10 +4953,11 @@ const SRV = (function(){
       const c = formCfg();
       if(!check(c)) return;
       st.style.color = 'var(--chalk-dim)'; st.textContent = 'Küldés…';
-      const r = await sendPush(c, '🔔 PIC-ASS-O próbaértesítés', 'Ha ezt látod, működik az értesítés! 🎨', location.origin + location.pathname);
+      let r;
+      try{ r = await roomNotifyAdmin('test'); }catch(e){ r = { ok:false, detail: e.message }; }
       st.style.color = r.ok ? 'var(--green)' : 'var(--red)';
       st.textContent = r.ok ? '✅ Elküldve — néhány másodpercen belül meg kell jelennie a telefonodon (ha már feliratkoztál a csatornára az ntfy appban).'
-                            : `Nem sikerült elküldeni: ${r.detail}.`;
+                            : `Nem sikerült elküldeni: ${r.detail || 'ismeretlen hiba'}. (A próba a SZERVEREN elmentett csatornára megy — előbb mentsd el.)`;
     });
   })();
   async function adminWriteGistFile(name, content){
@@ -14507,6 +14520,11 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.15', changes:[
+      'Biztonság: az új szobákról szóló telefonos értesítés csatornaneve már nincs a nyilvános tárhelyen — a Netlify szervere őrzi és küldi az értesítést (napi plafonnal). Az admin oldalon egyszer a Netlify tokennel be kell tölteni és el kell menteni a beállítást.',
+      'Biztonság: tartalombiztonsági szabályzat (CSP) jelentő módban — egyelőre semmit nem tilt, csak naplózza a böngésző konzoljában, mit tiltana. Ha minden rendben, élesítjük.',
+      'Adatvédelem: frissített tájékoztató — „Mi ez?” gomb (Wikipédia), STUN-szerverek, beszédfelismerés az adatfeldolgozók között, a helyben tárolt adatok szétválasztása.'
+    ]},
     { version:'4.14', changes:[
       'Pontozás: minden rossz tipp −5 pontot ér a tippelőnek (akkor is, ha később kitalálja, vagy ha végül senki sem találja ki). A kör végén látszik, kinek hány rossz tippje volt. A pontszám 0 alá nem mehet. A rajzoló pontjai nem változtak, a szabotázsvédelem megmarad.'
     ]},
