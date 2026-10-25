@@ -2181,7 +2181,11 @@
   }
 
   /* v4.20: wrong guess penalty marker */
-  .pen .gtext::after, .pen .gt::after{ content:' −1'; color:var(--red); font-weight:900; }
+  /* v4.24: inside the chip, right after the score (the roster strip clips anything outside) */
+  .rdelta{ display:inline-block; background:var(--red); color:#fff; font-weight:900; font-size:.74rem; line-height:1.2;
+    padding:1px 6px; border-radius:999px; margin-left:-3px; pointer-events:none; animation:rdeltaPop 1.6s ease-out forwards; }
+  @keyframes rdeltaPop{ 0%{ opacity:0; transform:scale(.6); } 15%{ opacity:1; transform:scale(1.15); } 30%{ transform:scale(1); } 75%{ opacity:1; } 100%{ opacity:0; } }
+  @media (prefers-reduced-motion: reduce){ .rdelta{ animation:none; } }
 
   /* v4.19: admin tabs */
   .admin-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 16px; padding-bottom:10px; border-bottom:2px solid rgba(var(--line-rgb),.14); position:sticky; top:-26px; z-index:2; background:var(--panel); padding-top:8px; }
@@ -2811,7 +2815,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.23</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.24</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -13134,6 +13138,16 @@ const SRV = (function(){
       if(chip) castVoteKick(chip.dataset.id);
     });
   });
+  // v4.24: a short "−1" badge on the player's score chip
+  function popRosterDelta(peerId, text){
+    document.querySelectorAll('.rchip').forEach(el=>{
+      if(el.dataset.id !== peerId) return;
+      const b = document.createElement('span');
+      b.className = 'rdelta'; b.textContent = text; b.setAttribute('aria-hidden', 'true');
+      el.appendChild(b);
+      setTimeout(()=>{ try{ b.remove(); }catch(e){} }, 1700);
+    });
+  }
   function pulseRosterChip(peerId){
     document.querySelectorAll('.rchip').forEach(el=>{
       if(el.dataset.id !== peerId) return;
@@ -13542,8 +13556,8 @@ const SRV = (function(){
     const before = scores[pid] || 0;
     scores[pid] = Math.max(0, before - WRONG_GUESS_PENALTY);
     if(pid === selfId && scoreAction && scores[pid] !== before){ try{ scoreAction.send({ playerId:selfId, total:scores[selfId] }); }catch(e){} }
-    try{ document.querySelectorAll(`[data-gid="${Number(gid)}"]`).forEach(el=>el.classList.add('pen')); }catch(e){}
     try{ renderRosters(); }catch(e){}
+    try{ popRosterDelta(pid, '−' + WRONG_GUESS_PENALTY); }catch(e){}   // v4.24: shown next to the score, briefly
   }
   function roundPenalties(result){
     const w = (result && isPlainObject(result.wrong)) ? result.wrong : {};
@@ -14824,6 +14838,9 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.24', changes:[
+      'Rossz tippnél a „−1” már nem a tipp mellett, hanem a játékos pontszáma mellett villan fel rövid időre.'
+    ]},
     { version:'4.23', changes:[
       'Javítás iPhone-ra: a festékes vödör nem önti el többé az egész lapot. Ha a telefon memóriagond miatt nem látja a vonalakat, a játék újraépíti a lapot és újra próbál; ha így sem megy, inkább kihagyja a kitöltést.'
     ]},
@@ -14835,7 +14852,7 @@ const SRV = (function(){
       'Javítás iPhone-ra: elfeketedő rajzvászon. A Safari kevés memóriát enged a rajzvásznaknak; mostantól kisebb felbontással dolgozunk iPhone-on (szemre nem látszik), a nem látható vásznat felszabadítjuk, és ha a vászon mégis „meghal”, a játék észreveszi, és pár tized másodperc alatt újraépíti a rajzzal együtt.'
     ]},
     { version:'4.20', changes:[
-      'Pontozás: egy rossz tipp már csak 1 pontot ér, és azonnal levonódik, amint a rajzoló gépe elutasítja (a tipp mellett „−1” jelzi).  A pontszám 0 alá nem mehet.'
+      'Pontozás: egy rossz tipp már csak 1 pontot ér, és azonnal levonódik, amint a rajzoló gépe elutasítja (a játékos pontszáma mellett rövid időre „−1” jelenik meg).  A pontszám 0 alá nem mehet.'
     ]},
     { version:'4.19', changes:[
       'Admin: nem kell többé GitHub vagy Netlify tokent megadni. A jelszót a szerver ellenőrzi, a mentéseket is ő végzi a Netlify-on tárolt kulcsokkal (a belépés 4 óráig érvényes).',
