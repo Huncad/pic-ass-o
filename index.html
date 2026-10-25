@@ -2815,7 +2815,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.24</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.25</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -3385,7 +3385,7 @@
         <strong style="color:var(--chalk);">♻️ Már lerajzolt szavak <span id="admin-ue-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
         <button class="ghost small" id="admin-ue-reset" type="button">♻️ Nullázás</button>
       </div>
-      Egy szó, ami bármelyik játékban már feladvány volt, többet nem kerül elő, amíg az adott szint összes szava el nem fogyott. A nullázással minden szó újra „friss” lesz (ehhez a lenti Netlify token kell).
+      Egy szó, ami bármelyik játékban már feladvány volt, <b>30 napig</b> nem kerül elő újra (vagy amíg az adott szint összes szava el nem fogy). 30 nap után magától visszakerül. A nullázással minden szó azonnal újra „friss” lesz.
       <div id="admin-ue-status" class="admin-warning" style="text-align:left;"></div>
     </div>
 
@@ -14838,6 +14838,9 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.25', changes:[
+      'A már lerajzolt szavak ismétlésvédelme 30 napig tart: utána a szó magától újra előkerülhet.'
+    ]},
     { version:'4.24', changes:[
       'Rossz tippnél a „−1” már nem a tipp mellett, hanem a játékos pontszáma mellett villan fel rövid időre.'
     ]},

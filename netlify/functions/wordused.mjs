@@ -12,6 +12,10 @@ import { norm, officialWords, fromGameServer } from '../lib/words.mjs';
 import { isAdminRequest } from '../lib/adminauth.mjs';
 
 const KEY = 'used';
+// v4.25: a drawn word is protected from repeats for 30 days only, then it
+// can come up again (the stored value is the time it was drawn)
+const TTL_MS = 30 * 24 * 3600 * 1000;
+const fresh = (used) => { const now = Date.now(); const out = {}; for (const [k, t] of Object.entries(used)) { if (Number(t) > now - TTL_MS) out[k] = t; } return out; };
 
 
 // sebességkorlát és gyorsítótár (példányonként; a meleg függvénypéldány újrahasználja)
@@ -39,7 +43,7 @@ export default async (req) => {
   };
 
   if (req.method === 'GET') {
-    if (!listCache || Date.now() - listCacheAt > 20000) { listCache = Object.keys(await read()); listCacheAt = Date.now(); }
+    if (!listCache || Date.now() - listCacheAt > 20000) { listCache = Object.keys(fresh(await read())); listCacheAt = Date.now(); }
     return json({ words: listCache, n: listCache.length }, 200, 'public, max-age=20');
   }
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
@@ -61,7 +65,8 @@ export default async (req) => {
   const official = await officialWords();
   if (!official) return json({ ok: false, skipped: 'wordlist unavailable' }, 503);
   if (!official.has(k)) return json({ ok: false, skipped: 'not an official word' });
-  const used = await read();
+  const all = await read();
+  const used = fresh(all);                       // expired words are dropped here
   if (used[k]) return json({ ok: true, already: true });
   if (Object.keys(used).length > 40000) return json({ error: 'full' }, 429);
   used[k] = Date.now();
