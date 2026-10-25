@@ -2180,6 +2180,13 @@
     .home-hero{ margin-bottom:8px; }
   }
 
+  /* v4.26: quick reaction cooldown */
+  .react-cooling{ opacity:.4; filter:grayscale(.6); }
+  #reaction-cool-hint{ position:fixed; left:50%; bottom:90px; transform:translate(-50%, 10px); z-index:9500; background:rgba(0,0,0,.78);
+    color:#fff; font-weight:800; font-size:.86rem; padding:8px 14px; border-radius:999px; opacity:0; pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease; white-space:nowrap; }
+  #reaction-cool-hint.show{ opacity:1; transform:translate(-50%, 0); }
+
   /* v4.20: wrong guess penalty marker */
   /* v4.24: inside the chip, right after the score (the roster strip clips anything outside) */
   .rdelta{ display:inline-block; background:var(--red); color:#fff; font-weight:900; font-size:.74rem; line-height:1.2;
@@ -2815,7 +2822,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.25</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.26</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -7240,6 +7247,7 @@ const SRV = (function(){
       if(gameEnded) refreshRematchUI();
     }
     const lastActionAt = new Map();   // peerId+':'+kind -> timestamp
+    const peerReactTimes = new Map();
     function tooOften(peerId, kind, minGapMs){
       const k = peerId + ':' + kind;
       const now = Date.now();
@@ -7393,6 +7401,10 @@ const SRV = (function(){
     reactionAction.onMessage = (data, {peerId})=>{
       if(!isPlainObject(data)) return;
       if(tooOften(peerId, 'reaction', 400)) return;        // no reaction spam
+      // v4.26: and at most 4 per 10 s from one player, whatever their client does
+      const now = Date.now(), arr = (peerReactTimes.get(peerId) || []).filter(t=>now - t < 10000);
+      if(arr.length >= 4){ peerReactTimes.set(peerId, arr); return; }
+      arr.push(now); peerReactTimes.set(peerId, arr);
       spawnFloatingReaction(data.emoji, displayNameFor(peerId, lobbyPlayers[peerId]));
     };
     settingsAction.onMessage = (data, {peerId})=>{
@@ -10740,13 +10752,47 @@ const SRV = (function(){
     sndClick();
     document.getElementById('reaction-picker').classList.toggle('hidden');
   });
-  let lastMyReactionAt = 0;
+  // v4.26: at most REACT_MAX quick reactions per REACT_WINDOW_MS — after
+  // that the button rests until the window frees up (no endless spamming
+  // from the keyboard). The other devices enforce a limit too.
+  const REACT_MAX = 3, REACT_WINDOW_MS = 10000;
+  let myReactTimes = [], reactCoolTimer = null;
+  function reactCooldownLeft(){
+    const now = Date.now();
+    myReactTimes = myReactTimes.filter(t=>now - t < REACT_WINDOW_MS);
+    if(myReactTimes.length < REACT_MAX) return 0;
+    return REACT_WINDOW_MS - (now - myReactTimes[0]);
+  }
+  function showReactCooldown(){
+    const btn = document.getElementById('reaction-toggle-btn');
+    let hint = document.getElementById('reaction-cool-hint');
+    if(!hint){
+      hint = document.createElement('div'); hint.id = 'reaction-cool-hint'; hint.setAttribute('role', 'status');
+      document.body.appendChild(hint);
+    }
+    clearInterval(reactCoolTimer);
+    const tick = ()=>{
+      const left = reactCooldownLeft();
+      if(left <= 0){
+        clearInterval(reactCoolTimer); hint.classList.remove('show');
+        if(btn) btn.classList.remove('react-cooling');
+        document.querySelectorAll('.reaction-pick-btn').forEach(b=>b.classList.remove('react-cooling'));
+        return;
+      }
+      hint.textContent = `⏳ Lassíts egy kicsit — újabb reakció ${Math.ceil(left/1000)} mp múlva`;
+      hint.classList.add('show');
+      if(btn) btn.classList.add('react-cooling');
+      document.querySelectorAll('.reaction-pick-btn').forEach(b=>b.classList.add('react-cooling'));
+    };
+    tick(); reactCoolTimer = setInterval(tick, 250);
+  }
   function sendMyReaction(emoji){
     if(!reactionAction || !REACTION_EMOJIS.includes(emoji)) return false;
-    if(Date.now() - lastMyReactionAt < 400) return false;   // the others drop faster ones anyway
-    lastMyReactionAt = Date.now();
+    if(reactCooldownLeft() > 0){ showReactCooldown(); return false; }
+    myReactTimes.push(Date.now());
     reactionAction.send({ emoji, name: myName });
     spawnFloatingReaction(emoji, myName);
+    if(reactCooldownLeft() > 0) showReactCooldown();   // that was the last one for now
     return true;
   }
   document.querySelectorAll('.reaction-pick-btn').forEach((btn, i)=>{
@@ -14838,6 +14884,9 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.26', changes:[
+      'Gyorsreakció-korlát: 10 másodperc alatt legfeljebb 3 reakciót lehet küldeni (gombbal és billentyűvel is), utána egy kis felirat mutatja, mikor lehet újra. A többiek gépe is legfeljebb 4-et mutat 10 másodpercenként egy játékostól.'
+    ]},
     { version:'4.25', changes:[
       'A már lerajzolt szavak ismétlésvédelme 30 napig tart: utána a szó magától újra előkerülhet.'
     ]},
