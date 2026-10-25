@@ -13,6 +13,7 @@
 // A Netlify token ugyanaz, amit az admin oldal a Visszajelzéseknél kér; azt
 // ellenőrizzük, hogy hozzáfér-e ehhez a Netlify-projekthez.
 import { getStore } from '@netlify/blobs';
+import { isAdminRequest } from '../lib/adminauth.mjs';
 
 const KEY = 'cfg';
 const GAME_SERVER_URL = String(process.env.GAME_SERVER_URL || 'https://picasso.taile8c93.ts.net').replace(/\/+$/, '');
@@ -34,15 +35,7 @@ export const cleanTopic = t => { const s = String(t || '').trim(); return /^[A-Z
 export const cleanText = (t, n) => String(t || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
 const cleanCode = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
 
-async function isAdmin(req) {
-  const token = req.headers.get('x-netlify-token') || '';
-  const site = process.env.SITE_ID;
-  if (!token || !site) return false;
-  try {
-    const r = await fetch(`https://api.netlify.com/api/v1/sites/${encodeURIComponent(site)}`, { headers: { authorization: 'Bearer ' + token } });
-    return r.ok;
-  } catch (e) { return false; }
-}
+const isAdmin = isAdminRequest;   // v4.19: admin munkamenet (vagy régi Netlify token)
 
 async function sendPush(topic, title, message, click) {
   const q = new URLSearchParams({ title, tags: 'art,bell' });

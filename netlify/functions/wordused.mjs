@@ -9,6 +9,7 @@
 //   POST { action:"reset" } + header x-netlify-token -> admin: start over
 import { getStore } from '@netlify/blobs';
 import { norm, officialWords, fromGameServer } from '../lib/words.mjs';
+import { isAdminRequest } from '../lib/adminauth.mjs';
 
 const KEY = 'used';
 
@@ -48,13 +49,7 @@ export default async (req) => {
   try { body = await req.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
 
   if (body.action === 'reset') {
-    const token = req.headers.get('x-netlify-token') || '';
-    const site = process.env.SITE_ID;
-    if (!token || !site) return json({ error: 'unauthorized' }, 401);
-    try {
-      const r = await fetch(`https://api.netlify.com/api/v1/sites/${encodeURIComponent(site)}`, { headers: { authorization: 'Bearer ' + token } });
-      if (!r.ok) return json({ error: 'unauthorized' }, 401);
-    } catch (e) { return json({ error: 'netlify unreachable' }, 502); }
+    if (!(await isAdminRequest(req))) return json({ error: 'unauthorized' }, 401);   // v4.19
     await store.setJSON(KEY, {});
     listCache = null;
     return json({ ok: true, n: 0 });

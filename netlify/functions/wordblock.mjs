@@ -11,6 +11,7 @@
 // read THIS site, i.e. it belongs to the site's owner/team.
 import { getStore } from '@netlify/blobs';
 import { norm, officialWords, fromGameServer } from '../lib/words.mjs';
+import { isAdminRequest } from '../lib/adminauth.mjs';
 
 const KEY = 'held';
 
@@ -54,14 +55,7 @@ export default async (req) => {
   if (!k) return json({ error: 'no word' }, 400);
 
   if (body.action === 'release') {
-    const token = req.headers.get('x-netlify-token') || '';
-    const site = process.env.SITE_ID;
-    if (!token || !site) return json({ error: 'unauthorized' }, 401);
-    try {
-      const r = await fetch(`https://api.netlify.com/api/v1/sites/${encodeURIComponent(site)}`,
-        { headers: { authorization: 'Bearer ' + token } });
-      if (!r.ok) return json({ error: 'unauthorized' }, 401);
-    } catch (e) { return json({ error: 'netlify unreachable' }, 502); }
+    if (!(await isAdminRequest(req))) return json({ error: 'unauthorized' }, 401);   // v4.19
     const held = await read();
     delete held[k];
     await store.setJSON(KEY, held);

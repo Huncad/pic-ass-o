@@ -2180,6 +2180,15 @@
     .home-hero{ margin-bottom:8px; }
   }
 
+  /* v4.19: admin tabs */
+  .admin-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 16px; padding-bottom:10px; border-bottom:2px solid rgba(var(--line-rgb),.14); position:sticky; top:-26px; z-index:2; background:var(--panel); padding-top:8px; }
+  .admin-tab{ background:rgba(0,0,0,.18); color:var(--chalk-dim); box-shadow:none; border:1.5px solid rgba(var(--line-rgb),.15); border-radius:10px; padding:8px 12px; font-size:.9rem; }
+  .admin-tab:hover{ transform:none; color:var(--chalk); border-color:rgba(var(--line-rgb),.35); }
+  .admin-tab.active{ background:var(--yellow); color:#16302A; border-color:var(--yellow); }
+  .admin-tabpanel.hidden{ display:none; }
+  .admin-tabpanel > .admin-note:first-child{ margin-top:0; }
+  @media (max-width:640px){ .admin-tab{ flex:1 1 calc(50% - 6px); padding:8px 6px; font-size:.82rem; } .admin-tabs{ top:-16px; } }
+
   /* v4.17: scannable room rows */
   #room-list .room-item{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; padding:10px 12px;
     border:1.5px solid rgba(var(--line-rgb),.14); border-left-width:1.5px; border-radius:12px; background:rgba(0,0,0,.2); cursor:pointer; }
@@ -2794,7 +2803,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.18</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.19</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -3250,43 +3259,20 @@
 
   <div id="admin-panel-box" class="admin-box admin-panel-box hidden">
     <div class="admin-panel-header">
-      <h2>🔧 Szókezelő admin</h2>
+      <h2>🔧 Admin</h2>
       <button class="ghost small" id="admin-close-btn-2">Bezárás ✕</button>
     </div>
 
-    <div id="admin-cloud-setup" class="admin-note hidden">
-      <strong>☁️ Élő tárhely beállítása (egyszeri lépés)</strong><br>
-      Ezzel a módosítások azonnal élesben lesznek mindenkinél, letöltés/feltöltés nélkül. Kell hozzá egy
-      <a href="https://github.com/settings/tokens/new?scopes=gist&description=PIC-ASS-O%20szolista" target="_blank" rel="noopener">GitHub Personal Access Token</a>,
-      csak <code>gist</code> jogosultsággal. A token ezen az eszközön, a böngésző munkamenet-tárolójában marad
-      (a fül bezárásáig) — statikus oldalon ennél biztonságosabban nem tárolható, ezért ha végeztél, érdemes
-      visszavonni a GitHubon.
-      <div class="admin-add-row" style="margin-top:10px;">
-        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-gh-token" autocomplete="off" placeholder="GitHub token (ghp_...)"></form>
-      </div>
-      <button class="secondary small" id="admin-create-gist-btn">☁️ Tárhely létrehozása</button>
-      <div id="admin-cloud-status" class="admin-warning"></div>
-      <div id="admin-gist-result" class="hidden" style="margin-top:8px;">
-        Kész! Másold be ezt az azonosítót a fájl tetején lévő <code>WORDS_GIST_ID</code> sorba, majd töltsd fel újra
-        a html-t a tárhelyedre — ezt csak most, egyszer kell megcsinálnod:
-        <div style="display:flex;gap:6px;margin-top:6px;">
-          <input type="text" id="admin-gist-id-output" readonly style="flex:1;">
-          <button class="small" id="admin-copy-gist-id">Másolás</button>
-        </div>
-      </div>
+    <div class="admin-tabs" role="tablist" aria-label="Admin kategóriák">
+      <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-attekintes" data-tab="attekintes" aria-controls="admin-tab-attekintes">📊 Áttekintés</button>
+      <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-szavak" data-tab="szavak" aria-controls="admin-tab-szavak">📝 Szavak</button>
+      <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-kozlemeny" data-tab="kozlemeny" aria-controls="admin-tab-kozlemeny">📢 Közlemény és értesítés</button>
+      <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-zene" data-tab="zene" aria-controls="admin-tab-zene">🎵 Zene</button>
+      <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-visszajelzes" data-tab="visszajelzes" aria-controls="admin-tab-visszajelzes">📬 Visszajelzések</button>
+      <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-beallitas" data-tab="beallitas" aria-controls="admin-tab-beallitas">⚙️ Beállítások</button>
     </div>
 
-    <div id="admin-cloud-save" class="admin-note hidden">
-      ☁️ Ez az oldal már élő tárhelyhez van kötve — a "Mentés élesben" gomb minden látogatónál azonnal frissíti a
-      szavakat.
-      <div class="admin-add-row" style="margin-top:10px;">
-        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-gh-token-2" autocomplete="off" placeholder="GitHub token (ghp_...)"></form>
-      </div>
-      <button class="secondary small" id="admin-save-live-btn">☁️ Mentés élesben</button>
-      <div id="admin-dirty-note" class="hidden" style="color:var(--yellow);font-weight:800;margin-top:6px;">⚠️ Mentetlen módosítások — a változások csak a „Mentés élesben” után jutnak el a játékosokhoz.</div>
-      <div id="admin-save-status" class="admin-warning"></div>
-    </div>
-
+    <div class="admin-tabpanel" id="admin-tab-attekintes" role="tabpanel" aria-labelledby="admin-tabbtn-attekintes">
     <div class="admin-note" id="admin-dash-box">
       <div class="admin-panel-header" style="margin-bottom:6px;">
         <strong style="color:var(--chalk);">📊 Élő áttekintés</strong>
@@ -3294,146 +3280,19 @@
       </div>
       <div id="admin-dash"></div>
     </div>
-
-    <div class="admin-note" id="admin-announce-box">
-      <strong style="color:var(--chalk);">📢 Közlemény a kezdőképernyőn</strong><br>
-      Rövid üzenet minden játékosnak (pl. „Péntek este 8-kor közös parti!”, „Új szavak érkeztek!”). Az élő tárhelyre kerül,
-      ugyanazzal a GitHub tokennel, mint a szavak. Aki bezárja, annak az adott közlemény nem jelenik meg újra.
-      <textarea id="admin-announce-text" rows="2" maxlength="200" placeholder="A közlemény szövege (max. 200 karakter)…" style="width:100%;margin-top:8px;"></textarea>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
-        <select id="admin-announce-days" aria-label="Meddig látszódjon">
-          <option value="1">1 napig</option><option value="3">3 napig</option><option value="7" selected>1 hétig</option>
-          <option value="30">30 napig</option><option value="0">levételig</option>
-        </select>
-        <button class="secondary small" id="admin-announce-publish" type="button">📢 Közzététel</button>
-        <button class="ghost small" id="admin-announce-remove" type="button">🗑️ Levétel</button>
-      </div>
-      <div id="admin-announce-status" class="admin-warning" style="text-align:left;"></div>
     </div>
 
-    <div class="admin-note" id="admin-password-box">
-      <strong style="color:var(--chalk);">🔑 Admin jelszó módosítása</strong><br>
-      Az új jelszó (pontosabban egy sózott, lassított ujjlenyomata) az élő tárhelyre kerül, ugyanazzal a GitHub tokennel, mint a szavak.
-      Mentés után minden eszközön az új jelszóval lehet belépni. Legalább 10 karakter legyen; egy hosszú, több szóból álló mondat a legjobb.
-      <div class="admin-add-row" style="margin-top:8px;flex-direction:column;align-items:stretch;gap:6px;">
-        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-newpw-1" placeholder="Új jelszó" autocomplete="new-password"></form>
-        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-newpw-2" placeholder="Új jelszó még egyszer" autocomplete="new-password"></form>
-      </div>
-      <button class="secondary small" id="admin-newpw-save" type="button" style="margin-top:6px;">🔑 Jelszó mentése élesben</button>
-      <div id="admin-newpw-status" class="admin-warning" style="text-align:left;"></div>
-    </div>
-
-    <div class="admin-note" id="admin-notify-box">
-      <strong style="color:var(--chalk);">🔔 Értesítés, ha valaki szobát nyit</strong><br>
-      Amikor bárki szobát nyit a játékban, egy értesítés érkezik a telefonodra (vagy a gépedre) az ingyenes
-      <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> appon keresztül (regisztráció nem kell).
-      <ol style="margin:6px 0 0 18px;padding:0;line-height:1.45;">
-        <li>Telepítsd a telefonodra az <b>ntfy</b> appot (App Store / Google Play).</li>
-        <li>Add meg lent (a Visszajelzéseknél) a Netlify tokent, és nyomd meg a <b>Betöltés</b> gombot.</li>
-        <li>Kapcsold be az értesítést, és nyomd meg a <b>Mentés a szerverre</b> gombot.</li>
-        <li>Az appban a <b>+</b> gombbal iratkozz fel a lenti csatornanévre (szerver: ntfy.sh).</li>
-        <li>A <b>Próbaértesítés</b> gombbal ellenőrizheted, hogy megérkezik-e.</li>
-      </ol>
-      <label style="display:flex;gap:8px;align-items:center;margin-top:8px;cursor:pointer;">
-        <input type="checkbox" id="admin-notify-on"> Értesítés bekapcsolva
-      </label>
-      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
-        <input type="text" id="admin-notify-topic" placeholder="Csatornanév" maxlength="64" autocomplete="off" spellcheck="false" style="flex:1;min-width:180px;font-family:monospace;">
-        <button class="ghost small" id="admin-notify-newtopic" type="button" title="Új, véletlen csatornanév">🎲 Új név</button>
-        <button class="ghost small" id="admin-notify-copy" type="button">📋 Másolás</button>
-      </div>
-      <label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer;font-size:.9rem;">
-        <input type="checkbox" id="admin-notify-skipown"> Az ezen az eszközön nyitott szobáimról ne kapjak értesítést
-      </label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-        <button class="ghost small" id="admin-notify-load" type="button">⬇️ Betöltés</button>
-        <button class="secondary small" id="admin-notify-save" type="button">☁️ Mentés a szerverre</button>
-        <button class="ghost small" id="admin-notify-test" type="button">🔔 Próbaértesítés</button>
-      </div>
-      <div id="admin-notify-status" class="admin-warning" style="text-align:left;"></div>
-      <div style="font-size:.78rem;color:var(--chalk-dim);margin-top:6px;line-height:1.35;">
-        v4.15 óta a csatornanév csak a szerveren (Netlify) van, a játékosok eszközei nem kapják meg, és az
-        értesítést is a szerver küldi (naponta legfeljebb 80, sebességkorláttal). Ha a régi, nyilvános
-        csatornanevedre már jönnének kéretlen üzenetek, adj meg új nevet (🎲), és iratkozz fel rá az appban.
-        Gépen az ntfy weboldalán (ntfy.sh/app) is feliratkozhatsz ugyanerre a névre. E-mailt az ntfy.sh 2026 óta
-        csak regisztrált, hitelesített fiókkal küld, ezért azt a játék nem használja.
-      </div>
-    </div>
-
-    <div class="admin-note" id="admin-health-box">
-      <div class="admin-panel-header" style="margin-bottom:6px;">
-        <strong style="color:var(--chalk);">🩺 Szólista-ellenőrzés</strong>
-        <button class="ghost small" id="admin-health-run" type="button">🔎 Ellenőrzés</button>
-      </div>
-      Megkeresi a mindkét listában szereplő, a túl hosszú (telefonon nehezen olvasható), a túl rövid és a furcsa
-      karaktereket (szám, írásjel) tartalmazó szavakat — egy kattintással törölheted őket.
-      <div id="admin-health" style="margin-top:8px;"></div>
-    </div>
-
-    <div class="admin-note" id="admin-music-box" style="margin-bottom:18px;">
-      <strong style="color:var(--chalk);">🎵 Háttérzene <span id="admin-music-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong><br>
-      A feltöltött mp3-ak egymás után szólnak a főmenüben és a szobában a játék indulásáig, induláskor elhalkulnak.
-      A fájlok egy <strong>nyilvános</strong> GitHub-tárolóba kerülnek, a lista az élő szótárhelyre. Kell hozzá egy
-      <a href="https://github.com/settings/tokens/new?scopes=gist,public_repo&description=PIC-ASS-O%20zene" target="_blank" rel="noopener">GitHub token</a>
-      <code>gist</code> és <code>public_repo</code> jogosultsággal (ugyanaz a token a szavakhoz is jó).
-      <div id="admin-music-nogist" class="hidden" style="color:var(--yellow);margin-top:8px;">Előbb állítsd be fent az élő tárhelyet.</div>
-      <div id="admin-music-form">
-        <div class="admin-add-row" style="margin-top:10px;">
-          <input type="text" id="admin-music-repo" placeholder="GitHub tároló: felhasznalo/tarolo" autocomplete="off">
-        </div>
-        <div class="admin-add-row">
-          <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-music-token" placeholder="GitHub token (ghp_...)" autocomplete="off"></form>
-        </div>
-        <div class="admin-add-row">
-          <input type="file" id="admin-music-file" accept=".mp3,audio/mpeg" multiple style="color:var(--chalk);">
-          <button class="secondary small" id="admin-music-upload">⬆️ Feltöltés</button>
-        </div>
-        <div id="admin-music-status" class="admin-warning" style="text-align:left;"></div>
-        <div id="admin-music-list"></div>
-      </div>
-    </div>
-
-    <div class="admin-note" id="admin-usedever-box" style="margin-bottom:18px;">
-      <div class="admin-panel-header" style="margin-bottom:6px;">
-        <strong style="color:var(--chalk);">♻️ Már lerajzolt szavak <span id="admin-ue-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
-        <button class="ghost small" id="admin-ue-reset" type="button">♻️ Nullázás</button>
-      </div>
-      Egy szó, ami bármelyik játékban már feladvány volt, többet nem kerül elő, amíg az adott szint összes szava el nem fogyott. A nullázással minden szó újra „friss” lesz (ehhez a lenti Netlify token kell).
-      <div id="admin-ue-status" class="admin-warning" style="text-align:left;"></div>
-    </div>
-    <div class="admin-note" id="admin-wordreport-box" style="margin-bottom:18px;">
-      <div class="admin-panel-header" style="margin-bottom:6px;">
-        <strong style="color:var(--chalk);">🚩 Bejelentett szavak <span id="admin-wr-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
-        <button class="secondary small" id="admin-wr-load" type="button">🚩 Betöltés</button>
-      </div>
-      Ezeket a szavakat egy játékban legalább 2 játékos, és a játékosok legalább fele hibásnak vagy értelmetlennek jelölte. Felülvizsgálatig egyik játékban sem jelennek meg. A betöltéshez a lenti Netlify tokent használjuk.
-      A javítás vagy törlés a szólistában történik: utána nyomd meg a <b>☁️ Mentés élesben</b> gombot. A bejelentés ilyenkor (és a „Marad” gombra is) törlődik a Netlify-ból.
-      <div id="admin-wr-status" class="admin-warning" style="text-align:left;"></div>
-      <div id="admin-wr-list"></div>
-    </div>
-    <div class="admin-note" id="admin-feedback-box" style="margin-bottom:18px;">
-      <div class="admin-panel-header" style="margin-bottom:6px;">
-        <strong style="color:var(--chalk);">📬 Visszajelzések <span id="admin-fb-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
-      </div>
-      A játékosok visszajelzései a Netlify Forms-ban gyűlnek (privát, csak a te Netlify fiókodból érhetők el).
-      Az itteni olvasáshoz egy
-      <a href="https://app.netlify.com/user/applications#personal-access-tokens" target="_blank" rel="noopener">Netlify Personal Access Token</a>
-      kell — csak a memóriában tartjuk, az admin panel bezárásakor töröljük (sehova nem mentjük).
-      <strong style="color:var(--yellow);">Figyelem:</strong> ez egy statikus oldal, saját kiszolgáló nélkül — a tokent
-      így nem lehet valóban biztonságosan tárolni, bármely, ezen az oldalon futó kód hozzáfér. Csak a legszűkebb
-      jogosultságú tokent használd, és ha végeztél, vond vissza a fiókodban.
+    <div class="admin-tabpanel" id="admin-tab-szavak" role="tabpanel" aria-labelledby="admin-tabbtn-szavak">
+    <div id="admin-cloud-save" class="admin-note hidden">
+      ☁️ A szólista módosításai a <b>Mentés élesben</b> gombbal jutnak el minden játékoshoz.
       <div class="admin-add-row" style="margin-top:10px;">
-        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-fb-token" placeholder="Netlify token (nfp_...)" autocomplete="off"></form>
-        <button class="secondary small" id="admin-fb-load">📬 Betöltés</button>
+        <form class="pw-form hidden" autocomplete="off" onsubmit="return false"><input type="password" id="admin-gh-token-2" autocomplete="off" placeholder="GitHub token (ghp_...)"></form>
       </div>
-      <div id="admin-fb-status" class="admin-warning" style="text-align:left;"></div>
-      <div id="admin-fb-list"></div>
+      <button class="secondary small" id="admin-save-live-btn">☁️ Mentés élesben</button>
+      <div id="admin-dirty-note" class="hidden" style="color:var(--yellow);font-weight:800;margin-top:6px;">⚠️ Mentetlen módosítások — a változások csak a „Mentés élesben” után jutnak el a játékosokhoz.</div>
+      <div id="admin-save-status" class="admin-warning"></div>
     </div>
 
-    <p class="admin-note">
-      A letöltés gombokkal is elmentheted a listákat tartalék/kézi megoldásként — ezeket kézzel kell feltöltened és
-      lecserélned a <code>szavak-konnyu.txt</code> / <code>szavak-kozepes.txt</code> / <code>szavak-nehez.txt</code> fájlokat a tárhelyeden.
-    </p>
     <div class="admin-columns">
       <div class="admin-col">
         <h3>Könnyű szavak (<span id="admin-count-konnyu">0</span>)</h3>
@@ -3486,6 +3345,178 @@
           <input type="file" id="admin-import-nehez" accept=".txt,text/plain" class="hidden">
         </div>
       </div>
+    </div>
+
+    <div class="admin-note" id="admin-health-box">
+      <div class="admin-panel-header" style="margin-bottom:6px;">
+        <strong style="color:var(--chalk);">🩺 Szólista-ellenőrzés</strong>
+        <button class="ghost small" id="admin-health-run" type="button">🔎 Ellenőrzés</button>
+      </div>
+      Megkeresi a mindkét listában szereplő, a túl hosszú (telefonon nehezen olvasható), a túl rövid és a furcsa
+      karaktereket (szám, írásjel) tartalmazó szavakat — egy kattintással törölheted őket.
+      <div id="admin-health" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="admin-note" id="admin-wordreport-box" style="margin-bottom:18px;">
+      <div class="admin-panel-header" style="margin-bottom:6px;">
+        <strong style="color:var(--chalk);">🚩 Bejelentett szavak <span id="admin-wr-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
+        <button class="secondary small" id="admin-wr-load" type="button">🚩 Betöltés</button>
+      </div>
+      Ezeket a szavakat egy játékban legalább 2 játékos, és a játékosok legalább fele hibásnak vagy értelmetlennek jelölte. Felülvizsgálatig egyik játékban sem jelennek meg.
+      A javítás vagy törlés a szólistában történik: utána nyomd meg a <b>☁️ Mentés élesben</b> gombot. A bejelentés ilyenkor (és a „Marad” gombra is) törlődik a Netlify-ból.
+      <div id="admin-wr-status" class="admin-warning" style="text-align:left;"></div>
+      <div id="admin-wr-list"></div>
+    </div>
+
+    <div class="admin-note" id="admin-usedever-box" style="margin-bottom:18px;">
+      <div class="admin-panel-header" style="margin-bottom:6px;">
+        <strong style="color:var(--chalk);">♻️ Már lerajzolt szavak <span id="admin-ue-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
+        <button class="ghost small" id="admin-ue-reset" type="button">♻️ Nullázás</button>
+      </div>
+      Egy szó, ami bármelyik játékban már feladvány volt, többet nem kerül elő, amíg az adott szint összes szava el nem fogyott. A nullázással minden szó újra „friss” lesz (ehhez a lenti Netlify token kell).
+      <div id="admin-ue-status" class="admin-warning" style="text-align:left;"></div>
+    </div>
+
+    <p class="admin-note">
+      A letöltés gombokkal is elmentheted a listákat tartalék/kézi megoldásként — ezeket kézzel kell feltöltened és
+      lecserélned a <code>szavak-konnyu.txt</code> / <code>szavak-kozepes.txt</code> / <code>szavak-nehez.txt</code> fájlokat a tárhelyeden.
+    </p>
+    </div>
+
+    <div class="admin-tabpanel" id="admin-tab-kozlemeny" role="tabpanel" aria-labelledby="admin-tabbtn-kozlemeny">
+    <div class="admin-note" id="admin-announce-box">
+      <strong style="color:var(--chalk);">📢 Közlemény a kezdőképernyőn</strong><br>
+      Rövid üzenet minden játékosnak (pl. „Péntek este 8-kor közös parti!”, „Új szavak érkeztek!”). Az élő tárhelyre kerül,
+      ugyanazzal a GitHub tokennel, mint a szavak. Aki bezárja, annak az adott közlemény nem jelenik meg újra.
+      <textarea id="admin-announce-text" rows="2" maxlength="200" placeholder="A közlemény szövege (max. 200 karakter)…" style="width:100%;margin-top:8px;"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+        <select id="admin-announce-days" aria-label="Meddig látszódjon">
+          <option value="1">1 napig</option><option value="3">3 napig</option><option value="7" selected>1 hétig</option>
+          <option value="30">30 napig</option><option value="0">levételig</option>
+        </select>
+        <button class="secondary small" id="admin-announce-publish" type="button">📢 Közzététel</button>
+        <button class="ghost small" id="admin-announce-remove" type="button">🗑️ Levétel</button>
+      </div>
+      <div id="admin-announce-status" class="admin-warning" style="text-align:left;"></div>
+    </div>
+
+    <div class="admin-note" id="admin-notify-box">
+      <strong style="color:var(--chalk);">🔔 Értesítés, ha valaki szobát nyit</strong><br>
+      Amikor bárki szobát nyit a játékban, egy értesítés érkezik a telefonodra (vagy a gépedre) az ingyenes
+      <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> appon keresztül (regisztráció nem kell).
+      <ol style="margin:6px 0 0 18px;padding:0;line-height:1.45;">
+        <li>Telepítsd a telefonodra az <b>ntfy</b> appot (App Store / Google Play).</li>
+        <li>Nyomd meg a <b>Betöltés</b> gombot.</li>
+        <li>Kapcsold be az értesítést, és nyomd meg a <b>Mentés a szerverre</b> gombot.</li>
+        <li>Az appban a <b>+</b> gombbal iratkozz fel a lenti csatornanévre (szerver: ntfy.sh).</li>
+        <li>A <b>Próbaértesítés</b> gombbal ellenőrizheted, hogy megérkezik-e.</li>
+      </ol>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:8px;cursor:pointer;">
+        <input type="checkbox" id="admin-notify-on"> Értesítés bekapcsolva
+      </label>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+        <input type="text" id="admin-notify-topic" placeholder="Csatornanév" maxlength="64" autocomplete="off" spellcheck="false" style="flex:1;min-width:180px;font-family:monospace;">
+        <button class="ghost small" id="admin-notify-newtopic" type="button" title="Új, véletlen csatornanév">🎲 Új név</button>
+        <button class="ghost small" id="admin-notify-copy" type="button">📋 Másolás</button>
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer;font-size:.9rem;">
+        <input type="checkbox" id="admin-notify-skipown"> Az ezen az eszközön nyitott szobáimról ne kapjak értesítést
+      </label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="ghost small" id="admin-notify-load" type="button">⬇️ Betöltés</button>
+        <button class="secondary small" id="admin-notify-save" type="button">☁️ Mentés a szerverre</button>
+        <button class="ghost small" id="admin-notify-test" type="button">🔔 Próbaértesítés</button>
+      </div>
+      <div id="admin-notify-status" class="admin-warning" style="text-align:left;"></div>
+      <div style="font-size:.78rem;color:var(--chalk-dim);margin-top:6px;line-height:1.35;">
+        v4.15 óta a csatornanév csak a szerveren (Netlify) van, a játékosok eszközei nem kapják meg, és az
+        értesítést is a szerver küldi (naponta legfeljebb 80, sebességkorláttal). Ha a régi, nyilvános
+        csatornanevedre már jönnének kéretlen üzenetek, adj meg új nevet (🎲), és iratkozz fel rá az appban.
+        Gépen az ntfy weboldalán (ntfy.sh/app) is feliratkozhatsz ugyanerre a névre. E-mailt az ntfy.sh 2026 óta
+        csak regisztrált, hitelesített fiókkal küld, ezért azt a játék nem használja.
+      </div>
+    </div>
+    </div>
+
+    <div class="admin-tabpanel" id="admin-tab-zene" role="tabpanel" aria-labelledby="admin-tabbtn-zene">
+    <div class="admin-note" id="admin-music-box" style="margin-bottom:18px;">
+      <strong style="color:var(--chalk);">🎵 Háttérzene <span id="admin-music-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong><br>
+      A feltöltött mp3-ak egymás után szólnak a főmenüben és a szobában a játék indulásáig, induláskor elhalkulnak.
+      A fájlok egy <strong>nyilvános</strong> GitHub-tárolóba kerülnek, a lista az élő szótárhelyre.
+      <div id="admin-music-nogist" class="hidden" style="color:var(--yellow);margin-top:8px;">Előbb állítsd be fent az élő tárhelyet.</div>
+      <div id="admin-music-form">
+        <div class="admin-add-row" style="margin-top:10px;">
+          <input type="text" id="admin-music-repo" placeholder="GitHub tároló: felhasznalo/tarolo" autocomplete="off">
+        </div>
+        <div class="admin-add-row">
+          <form class="pw-form hidden" autocomplete="off" onsubmit="return false"><input type="password" id="admin-music-token" placeholder="GitHub token (ghp_...)" autocomplete="off"></form>
+        </div>
+        <div class="admin-add-row">
+          <input type="file" id="admin-music-file" accept=".mp3,audio/mpeg" multiple style="color:var(--chalk);">
+          <button class="secondary small" id="admin-music-upload">⬆️ Feltöltés</button>
+        </div>
+        <div id="admin-music-status" class="admin-warning" style="text-align:left;"></div>
+        <div id="admin-music-list"></div>
+      </div>
+    </div>
+    </div>
+
+    <div class="admin-tabpanel" id="admin-tab-visszajelzes" role="tabpanel" aria-labelledby="admin-tabbtn-visszajelzes">
+    <div class="admin-note" id="admin-feedback-box" style="margin-bottom:18px;">
+      <div class="admin-panel-header" style="margin-bottom:6px;">
+        <strong style="color:var(--chalk);">📬 Visszajelzések <span id="admin-fb-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
+      </div>
+      A játékosok visszajelzései a Netlify Forms-ban gyűlnek (privát, csak a te Netlify fiókodból érhetők el).
+      <div class="admin-add-row" style="margin-top:10px;">
+        <form class="pw-form hidden" autocomplete="off" onsubmit="return false"><input type="password" id="admin-fb-token" placeholder="Netlify token (nfp_...)" autocomplete="off"></form>
+        <button class="secondary small" id="admin-fb-load">📬 Betöltés</button>
+      </div>
+      <div id="admin-fb-status" class="admin-warning" style="text-align:left;"></div>
+      <div id="admin-fb-list"></div>
+    </div>
+    </div>
+
+    <div class="admin-tabpanel" id="admin-tab-beallitas" role="tabpanel" aria-labelledby="admin-tabbtn-beallitas">
+    <div class="admin-note" id="admin-srv-box">
+      <strong style="color:var(--chalk);">🔐 Szerveres admin</strong><br>
+      Belépéskor a jelszót a szerver ellenőrzi, és minden mentést ő végez a Netlify-on tárolt kulcsokkal — itt soha
+      nem kell tokent megadnod. A belépés 4 óráig érvényes.
+      <div id="admin-srv-status" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="admin-note" id="admin-password-box">
+      <strong style="color:var(--chalk);">🔑 Admin jelszó módosítása</strong><br>
+      Az új jelszó (pontosabban egy sózott, lassított ujjlenyomata) az élő tárhelyre kerül (a szerver menti).
+      Mentés után minden eszközön az új jelszóval lehet belépni. Legalább 10 karakter legyen; egy hosszú, több szóból álló mondat a legjobb.
+      <div class="admin-add-row" style="margin-top:8px;flex-direction:column;align-items:stretch;gap:6px;">
+        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-newpw-1" placeholder="Új jelszó" autocomplete="new-password"></form>
+        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-newpw-2" placeholder="Új jelszó még egyszer" autocomplete="new-password"></form>
+      </div>
+      <button class="secondary small" id="admin-newpw-save" type="button" style="margin-top:6px;">🔑 Jelszó mentése élesben</button>
+      <div id="admin-newpw-status" class="admin-warning" style="text-align:left;"></div>
+    </div>
+
+    <div id="admin-cloud-setup" class="admin-note hidden">
+      <strong>☁️ Élő tárhely beállítása (egyszeri lépés)</strong><br>
+      Ezzel a módosítások azonnal élesben lesznek mindenkinél, letöltés/feltöltés nélkül. Kell hozzá egy
+      <a href="https://github.com/settings/tokens/new?scopes=gist&description=PIC-ASS-O%20szolista" target="_blank" rel="noopener">GitHub Personal Access Token</a>,
+      csak <code>gist</code> jogosultsággal. A token ezen az eszközön, a böngésző munkamenet-tárolójában marad
+      (a fül bezárásáig) — statikus oldalon ennél biztonságosabban nem tárolható, ezért ha végeztél, érdemes
+      visszavonni a GitHubon.
+      <div class="admin-add-row" style="margin-top:10px;">
+        <form class="pw-form hidden" autocomplete="off" onsubmit="return false"><input type="password" id="admin-gh-token" autocomplete="off" placeholder="GitHub token (ghp_...)"></form>
+      </div>
+      <button class="secondary small" id="admin-create-gist-btn">☁️ Tárhely létrehozása</button>
+      <div id="admin-cloud-status" class="admin-warning"></div>
+      <div id="admin-gist-result" class="hidden" style="margin-top:8px;">
+        Kész! Másold be ezt az azonosítót a fájl tetején lévő <code>WORDS_GIST_ID</code> sorba, majd töltsd fel újra
+        a html-t a tárhelyedre — ezt csak most, egyszer kell megcsinálnod:
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <input type="text" id="admin-gist-id-output" readonly style="flex:1;">
+          <button class="small" id="admin-copy-gist-id">Másolás</button>
+        </div>
+      </div>
+    </div>
     </div>
   </div>
 </div>
@@ -4297,6 +4328,28 @@ const SRV = (function(){
   }
   let adminLoginFails = 0, adminLockedUntil = 0;
   let adminUnlocked = false;
+  // v4.19: server-side admin. The password is checked by the server, which
+  // returns a session; every GitHub / Netlify action then goes through the
+  // server (netlify/functions/admin), which holds the tokens. No token is
+  // ever typed in or kept in the browser.
+  const ADMIN_FN_URL = '/.netlify/functions/admin';
+  let adminSession = '', adminSrvCaps = { gh:false, nf:false };
+  function adminSessionToken(){ return adminSession; }
+  async function adminServerLogin(pw){
+    let r;
+    try{ r = await fetch(ADMIN_FN_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ action:'login', password: pw }) }); }
+    catch(e){ return { offline:true }; }
+    if(r.status === 404) return { offline:true };
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok) return { error: j.error || ('HTTP ' + r.status) };
+    return j;
+  }
+  async function adminCall(payload){
+    if(!adminSession) throw new Error('Lépj be újra az admin oldalra.');
+    const r = await fetch(ADMIN_FN_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'x-admin-session': adminSession }, body: JSON.stringify(payload) });
+    if(r.status === 401){ const j = await r.clone().json().catch(()=>({})); throw new Error(j.error || 'A belépés lejárt — lépj be újra.'); }
+    return r;
+  }
 
   function showAdminLogin(){
     document.getElementById('admin-overlay').classList.remove('hidden');
@@ -4313,6 +4366,7 @@ const SRV = (function(){
     if(adminIsDirty() && !confirm('Vannak mentetlen módosítások a szólistában. Így is bezárod? (A módosítások ezen az eszközön megmaradnak, amíg újra nem töltöd az oldalt.)')) return;
     document.getElementById('admin-overlay').classList.add('hidden');
     try{ adminTokensWipe(); }catch(e){}
+    adminSession = ''; adminUnlocked = false;
     if(location.hash === '#admin'){
       history.replaceState(null, '', location.pathname + location.search);
     }
@@ -4329,7 +4383,13 @@ const SRV = (function(){
     }
     let ok = false;
     try{ await Promise.race([wordsLoadedPromise, new Promise(r=>setTimeout(r, 4000))]); }catch(e){}
-    try{ ok = await checkAdminPassword(input.value); }catch(e){ ok = false; }
+    warn.textContent = 'Ellenőrzés…';
+    const srv = await adminServerLogin(input.value);
+    if(srv.session){ ok = true; adminSession = srv.session; adminSrvCaps = { gh: !!srv.gh, nf: !!srv.nf }; }
+    else if(srv.offline){
+      // no server (e.g. opened as a local file): the panel opens, but nothing can be saved
+      try{ ok = await checkAdminPassword(input.value); }catch(e){ ok = false; }
+    } else if(srv.error && !/jelszó/i.test(srv.error)){ warn.textContent = srv.error; input.value = ''; return; }
     if(!ok && ++adminLoginFails >= 5){ adminLockedUntil = Date.now() + 60000; adminLoginFails = 0; }
     if(ok){
       adminLoginFails = 0;
@@ -4367,7 +4427,29 @@ const SRV = (function(){
     if(e.key === 'Enter') tryAdminLogin();
   });
 
+  // v4.19: admin tabs
+  function setAdminTab(t){
+    const tabs = [...document.querySelectorAll('#admin-panel-box .admin-tab')];
+    if(!tabs.some(b=>b.dataset.tab === t)) t = 'szavak';
+    tabs.forEach(b=>{ const on = b.dataset.tab === t; b.classList.toggle('active', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+    document.querySelectorAll('#admin-panel-box .admin-tabpanel').forEach(p=>p.classList.toggle('hidden', p.id !== 'admin-tab-' + t));
+    try{ sessionStorage.setItem('picasso-admin-tab', t); }catch(e){}
+  }
+  document.querySelectorAll('#admin-panel-box .admin-tab').forEach(b=>b.addEventListener('click', ()=>{ sndClick(); setAdminTab(b.dataset.tab); }));
+  function renderAdminSrvStatus(){
+    const el = document.getElementById('admin-srv-status');
+    if(!el) return;
+    const line = (ok, okText, badText)=>`<div style="color:${ok ? 'var(--green)' : 'var(--yellow)'};">${ok ? '✅' : '⚠️'} ${ok ? okText : badText}</div>`;
+    el.innerHTML = adminSession
+      ? line(adminSrvCaps.gh, 'GitHub kapcsolat beállítva (szavak, közlemény, zene, jelszó mentése).', 'Nincs GitHub token a Netlify-on (GITHUB_TOKEN) — mentés nem lehetséges.')
+        + line(adminSrvCaps.nf, 'Netlify kapcsolat beállítva (visszajelzések, szóbejelentések).', 'Nincs Netlify token a Netlify-on (NETLIFY_API_TOKEN) — a visszajelzések nem tölthetők be.')
+      : line(false, '', 'Nem szerveres belépés (az oldal nem a Netlify-ról fut) — csak nézelődni lehet, menteni nem.');
+  }
+
   function renderAdminPanel(){
+    let t = 'szavak'; try{ t = sessionStorage.getItem('picasso-admin-tab') || 'szavak'; }catch(e){}
+    setAdminTab(t);
+    renderAdminSrvStatus();
     if(adminSavedSnapshot === null) adminSavedSnapshot = currentWordsJson();
     renderAdminList('konnyu');
     renderAdminList('kozepes');
@@ -4547,7 +4629,7 @@ const SRV = (function(){
     const tokenInput = document.getElementById('admin-gh-token');
     const status = document.getElementById('admin-cloud-status');
     const token = tokenInput.value.trim();
-    if(!token){ status.textContent = 'Add meg a GitHub tokent.'; return; }
+    if(!token){ status.textContent = 'Ehhez a szerveres belépés kell — töltsd be az oldalt a Netlify-ról, és lépj be újra.'; return; }
     saveGithubToken(token);
     status.style.color = 'var(--chalk-dim)';
     status.textContent = 'Tárhely létrehozása…';
@@ -4595,13 +4677,10 @@ const SRV = (function(){
     el.style.color = kind === 'ok' ? 'var(--green)' : kind === 'err' ? 'var(--red)' : 'var(--chalk-dim)';
     el.textContent = text;
   }
+  // v4.19: through the server, which holds the GitHub token (the token argument is unused)
   async function ghApi(path, token, opts){
-    const res = await fetch('https://api.github.com' + path, Object.assign({}, opts || {}, {
-      cache:'no-store',
-      headers: Object.assign({ 'Authorization':'token ' + token, 'Accept':'application/vnd.github+json' },
-        (opts && opts.body) ? { 'Content-Type':'application/json' } : {})
-    }));
-    return res;
+    const o = opts || {};
+    return adminCall({ action:'gh', method: o.method || 'GET', path, body: o.body });
   }
   async function adminReadMusicManifest(token){
     const res = await ghApi(`/gists/${WORDS_GIST_ID}`, token);
@@ -4625,9 +4704,8 @@ const SRV = (function(){
     musicPlaylistChanged(manifest);
   }
   function adminMusicInputs(){
-    const token = document.getElementById('admin-music-token').value.trim();
+    const token = adminSession;   // v4.19
     const repo = document.getElementById('admin-music-repo').value.trim().replace(/^https:\/\/github\.com\//,'').replace(/\/+$/,'');
-    if(token) adminTokenSet('gh', token);
     return { token, repo };
   }
   function fileToBase64(file){
@@ -4652,7 +4730,7 @@ const SRV = (function(){
       method:'POST', body: JSON.stringify({ ref:`refs/heads/${MUSIC_BRANCH}`, sha: hj.object && hj.object.sha })
     });
     if(!mk.ok && mk.status !== 422) throw new Error((mk.status === 404 || mk.status === 403)
-      ? 'A tokennek nincs írási joga a tárolóhoz. Készíts új (klasszikus, ghp_ kezdetű) tokent gist ÉS public_repo jogosultsággal.'
+      ? 'A szerveren tárolt GitHub tokennek nincs írási joga a tárolóhoz (gist ÉS public_repo jogosultság kell). Cseréld le a Netlify GITHUB_TOKEN beállításában.'
       : `A „${MUSIC_BRANCH}” ág létrehozása nem sikerült (${mk.status}).`);
   }
   let adminPreviewAudio = null;
@@ -4695,7 +4773,7 @@ const SRV = (function(){
     if(!t) return;
     if(!confirm(`Biztosan törlöd ezt a zenét?\n\n${t.name}`)) return;
     const { token } = adminMusicInputs();
-    if(!token){ adminMusicStatus('Add meg a GitHub tokent.', 'err'); return; }
+    if(!token){ adminMusicStatus('Ehhez a szerveres belépés kell — töltsd be az oldalt a Netlify-ról, és lépj be újra.', 'err'); return; }
     adminMusicStatus('Törlés…');
     try{
       const manifest = await adminReadMusicManifest(token);
@@ -4727,7 +4805,7 @@ const SRV = (function(){
     const { token, repo } = adminMusicInputs();
     const files = Array.from(document.getElementById('admin-music-file').files || []);
     if(!WORDS_GIST_ID){ adminMusicStatus('Előbb állítsd be az élő tárhelyet.', 'err'); return; }
-    if(!token){ adminMusicStatus('Add meg a GitHub tokent.', 'err'); return; }
+    if(!token){ adminMusicStatus('Ehhez a szerveres belépés kell — töltsd be az oldalt a Netlify-ról, és lépj be újra.', 'err'); return; }
     if(!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)){ adminMusicStatus('A tároló formátuma: felhasznalo/tarolo', 'err'); return; }
     if(!files.length){ adminMusicStatus('Válassz ki legalább egy mp3 fájlt.', 'err'); return; }
     const btn = document.getElementById('admin-music-upload');
@@ -4780,25 +4858,14 @@ const SRV = (function(){
   });
 
   document.getElementById('admin-save-live-btn').addEventListener('click', async ()=>{
-    const tokenInput = document.getElementById('admin-gh-token-2');
     const status = document.getElementById('admin-save-status');
-    const token = tokenInput.value.trim();
-    if(!token){ status.style.color='var(--red)'; status.textContent = 'Add meg a GitHub tokent.'; return; }
-    saveGithubToken(token);
     status.style.color = 'var(--chalk-dim)';
     status.textContent = 'Mentés…';
     try{
-      const res = await fetch(`https://api.github.com/gists/${WORDS_GIST_ID}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': 'token ' + token,
-          'Content-Type': 'application/json',
-          'Accept': 'application/vnd.github+json'
-        },
-        body: JSON.stringify({ files: { 'szavak.json': { content: currentWordsJson() } } })
-      });
+      const res = await ghApi(`/gists/${WORDS_GIST_ID}`, '', { method:'PATCH', body: JSON.stringify({ files: { 'szavak.json': { content: currentWordsJson() } } }) });
       if(!res.ok){
-        const errText = res.status === 401 ? 'Érvénytelen token.' : res.status === 404 ? 'A tárhely nem található (rossz WORDS_GIST_ID?).' : `Hiba (${res.status}).`;
+        const j = await res.json().catch(()=>({}));
+        const errText = j.error || (res.status === 404 ? 'A tárhely nem található (rossz WORDS_GIST_ID?).' : `Hiba (${res.status}).`);
         status.style.color = 'var(--red)';
         status.textContent = errText;
         return;
@@ -4831,10 +4898,7 @@ const SRV = (function(){
       else if(Date.now() - t0 > 20000) clearInterval(iv);
     }, 300);
   });
-  function adminGhToken(){
-    const a = document.getElementById('admin-gh-token-2'), b = document.getElementById('admin-gh-token');
-    return ((a && a.value) || (b && b.value) || adminTokenGet('gh') || '').trim();
-  }
+  function adminGhToken(){ return adminSession; }   // v4.19: the server holds the token
 
   // ---- live overview ----
   function renderAdminDash(){
@@ -4969,9 +5033,9 @@ const SRV = (function(){
   }
   const ROOMNOTIFY_URL = '/.netlify/functions/roomnotify';
   async function roomNotifyAdmin(action, extra){
-    const token = (document.getElementById('admin-fb-token').value || '').trim();
-    if(!token) throw new Error('Add meg lent a Netlify tokent (a Visszajelzéseknél).');
-    const r = await fetch(ROOMNOTIFY_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'x-netlify-token': token },
+    const token = adminSessionToken();
+    if(!token) throw new Error('Lépj be újra az admin oldalra.');
+    const r = await fetch(ROOMNOTIFY_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'x-admin-session': token },
       body: JSON.stringify(Object.assign({ action }, extra || {})) });
     const j = await r.json().catch(()=>({}));
     if(r.status === 401) throw new Error('Érvénytelen Netlify token.');
@@ -5057,7 +5121,7 @@ const SRV = (function(){
         // v4.15: wipe the old, public copy of the channel name from the gist
         if(legacyGistTopic){
           try{ await adminWriteGistFile('ertesites.json', JSON.stringify({ on:false, moved:'v4.15: a szerveren van' })); legacyGistTopic = ''; extra = ' A régi, nyilvános példányt töröltem a Gistből.'; }
-          catch(e){ extra = ' ⚠️ A régi csatornanév még a nyilvános Gistben van — add meg fent a GitHub tokent, és mentsd el újra, hogy törölhessem.'; }
+          catch(e){ extra = ' ⚠️ A régi csatornanév még a nyilvános Gistben van — próbáld meg újra a mentést.'; }
         }
         st.style.color = extra.includes('⚠️') ? 'var(--yellow)' : 'var(--green)';
         st.textContent = (c.on ? '✅ Elmentve a szerveren — mostantól minden új szobáról értesítést kapsz.' : '✅ Elmentve — az értesítés ki van kapcsolva.') + extra;
@@ -5076,16 +5140,9 @@ const SRV = (function(){
     });
   })();
   async function adminWriteGistFile(name, content){
-    const token = adminGhToken();
-    if(!token) throw new Error('Add meg fent a GitHub tokent.');
     if(!WORDS_GIST_ID) throw new Error('Előbb állítsd be az élő tárhelyet.');
-    saveGithubToken(token);
-    const res = await fetch(`https://api.github.com/gists/${WORDS_GIST_ID}`, {
-      method:'PATCH',
-      headers:{ 'Authorization':'token ' + token, 'Content-Type':'application/json', 'Accept':'application/vnd.github+json' },
-      body: JSON.stringify({ files: { [name]: { content } } })
-    });
-    if(!res.ok) throw new Error(res.status === 401 ? 'Érvénytelen token.' : `Hiba (${res.status}).`);
+    const res = await ghApi(`/gists/${WORDS_GIST_ID}`, '', { method:'PATCH', body: JSON.stringify({ files: { [name]: { content } } }) });
+    if(!res.ok){ const j = await res.json().catch(()=>({})); throw new Error(j.error || `Hiba (${res.status}).`); }
   }
   async function adminAnnounce(remove){
     const st = document.getElementById('admin-announce-status');
@@ -14656,6 +14713,10 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.19', changes:[
+      'Admin: nem kell többé GitHub vagy Netlify tokent megadni. A jelszót a szerver ellenőrzi, a mentéseket is ő végzi a Netlify-on tárolt kulcsokkal (a belépés 4 óráig érvényes).',
+      'Admin: fülekre rendezve — Áttekintés, Szavak, Közlemény és értesítés, Zene, Visszajelzések, Beállítások.'
+    ]},
     { version:'4.18', changes:[
       'Visszavonva a fülek: a „Szoba létrehozása” gomb és a nyitott szobák listája megint egyszerre látszik.',
       'Szín helyett avatart választhatsz (12 állat) — a többiek a neved mellett ezt látják. Régebbi verzión a hozzá tartozó szín látszik.'
@@ -15643,10 +15704,9 @@ const SRV = (function(){
     return [];
   }
   async function netlifyApi(path, token, opts){
-    const res = await fetch('https://api.netlify.com/api/v1' + path, Object.assign({
-      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
-    }, opts || {}));
-    if(res.status === 401) throw new Error('A token érvénytelen vagy lejárt (401).');
+    // v4.19: through the server, which holds the Netlify token
+    const res = await adminCall({ action:'nf', method: (opts && opts.method) || 'GET', path });
+    if(res.status === 503){ const j = await res.json().catch(()=>({})); throw new Error(j.error || 'A szerveren nincs beállítva a Netlify token.'); }
     if(res.status === 403) throw new Error('A tokennek nincs joga ehhez (403).');
     if(!res.ok) throw new Error('A Netlify hibát jelzett (HTTP ' + res.status + ').');
     return res.status === 204 ? null : res.json();
@@ -15694,8 +15754,8 @@ const SRV = (function(){
     });
   }
   async function loadAdminFeedback(){
-    const token = document.getElementById('admin-fb-token').value.trim();
-    if(!token){ adminFbStatus('Add meg a Netlify tokent.', 'err'); return; }
+    const token = adminSessionToken();
+    if(!token){ adminFbStatus('Ehhez a szerveres belépés kell — töltsd be az oldalt a Netlify-ról, és lépj be újra.', 'err'); return; }
     adminTokenSet('netlify', token);
     const btn = document.getElementById('admin-fb-load');
     btn.disabled = true;
@@ -15791,7 +15851,7 @@ const SRV = (function(){
     }catch(e){ clog('W04', 'a szó felfüggesztése nem ment el: ' + (e && e.message)); }
   }
   async function releaseHeldWord(word, token){
-    const r = await fetch(WORDBLOCK_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'x-netlify-token': token },
+    const r = await fetch(WORDBLOCK_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'x-admin-session': token },
       body: JSON.stringify({ action:'release', word }) });
     if(!r.ok) throw new Error('A felfüggesztés feloldása nem sikerült (HTTP ' + r.status + ').');
     heldWordKeys.delete(squash(word));
@@ -15856,11 +15916,11 @@ const SRV = (function(){
   }
   document.getElementById('admin-ue-reset').addEventListener('click', async ()=>{
     const st = document.getElementById('admin-ue-status');
-    const token = document.getElementById('admin-fb-token').value.trim();
-    if(!token){ st.textContent = 'Add meg lent a Netlify tokent (a Visszajelzéseknél).'; st.style.color = 'var(--red)'; return; }
+    const token = adminSessionToken();
+    if(!token){ st.textContent = 'Ehhez a szerveres belépés kell — lépj be újra.'; st.style.color = 'var(--red)'; return; }
     if(!confirm('Biztosan nullázod a már lerajzolt szavak listáját? Ezután minden szó újra előkerülhet.')) return;
     try{
-      const r = await fetch(WORDUSED_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'x-netlify-token': token }, body: JSON.stringify({ action:'reset' }) });
+      const r = await fetch(WORDUSED_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'x-admin-session': token }, body: JSON.stringify({ action:'reset' }) });
       if(!r.ok) throw new Error('HTTP ' + r.status);
       usedEverKeys.clear();
       st.textContent = 'Nullázva — minden szó újra friss.'; st.style.color = 'var(--green)';
@@ -15933,8 +15993,8 @@ const SRV = (function(){
     };
   }
   document.getElementById('admin-wr-load').addEventListener('click', async ()=>{
-    const token = document.getElementById('admin-fb-token').value.trim();
-    if(!token){ adminWrStatus('Add meg lent a Netlify tokent (a Visszajelzéseknél).', 'err'); return; }
+    const token = adminSessionToken();
+    if(!token){ adminWrStatus('Ehhez a szerveres belépés kell — lépj be újra.', 'err'); return; }
     adminTokenSet('netlify', token);
     const btn = document.getElementById('admin-wr-load'); btn.disabled = true;
     adminWrStatus('Betöltés…', 'info');
