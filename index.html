@@ -2180,6 +2180,9 @@
     .home-hero{ margin-bottom:8px; }
   }
 
+  /* v4.20: wrong guess penalty marker */
+  .pen .gtext::after, .pen .gt::after{ content:' −1'; color:var(--red); font-weight:900; }
+
   /* v4.19: admin tabs */
   .admin-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 16px; padding-bottom:10px; border-bottom:2px solid rgba(var(--line-rgb),.14); position:sticky; top:-26px; z-index:2; background:var(--panel); padding-top:8px; }
   .admin-tab{ background:rgba(0,0,0,.18); color:var(--chalk-dim); box-shadow:none; border:1.5px solid rgba(var(--line-rgb),.15); border-radius:10px; padding:8px 12px; font-size:.9rem; }
@@ -2803,7 +2806,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.19</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.20</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -7531,6 +7534,7 @@ const SRV = (function(){
         // v4.14: every wrong guess costs the guesser WRONG_GUESS_PENALTY points
         if(roundWrong.key !== rk) roundWrong = { key: rk, counts:{} };
         roundWrong.counts[peerId] = (roundWrong.counts[peerId]||0) + 1;
+        applyWrongGuessPenalty(peerId, gid, rk);   // v4.20: right away, -1
         return;
       }
       // Timing uses the drawer's own clock.
@@ -7562,6 +7566,8 @@ const SRV = (function(){
       }
       if(data.correct && pid === selfId && settings.guessMode === 'all') markMyRoundHit(cleanText(data.w, 60) || text);
       routeGuessEntry(pid, cleanText(data.name, 16), text, !!data.correct, gid);
+      // v4.20: a wrong guess costs 1 point at once (only the drawer's verdict counts)
+      if(!data.correct && gid && data.r === roundKey(currentRound) && meta && meta.playerNames[pid]) applyWrongGuessPenalty(pid, gid, data.r);
     };
     resultAction.onMessage = (data, {peerId})=>{
       // v3.61: whatever my screen shows, a finished drawing's word (and the
@@ -13428,8 +13434,24 @@ const SRV = (function(){
   // v4.14: wrong guesses — counted by the drawer, -5 points each, for
   // everyone who guessed wrong (found the word later or not). Only the
   // guesser causes this, so the drawer can't use it to sabotage anyone.
-  const WRONG_GUESS_PENALTY = 5;
+  const WRONG_GUESS_PENALTY = 1;
   let roundWrong = { key:'', counts:{} };
+  // v4.20: the penalty is booked the moment the drawer rejects a guess, on
+  // every device, once per guess (gid), never below 0
+  const penalizedGuesses = new Set();
+  function applyWrongGuessPenalty(pid, gid, rk){
+    if(!pid || !gid || !meta || !meta.playerNames[pid]) return;
+    if(currentRound && pid === currentRound.drawerId) return;
+    const k = rk + '|' + gid;
+    if(penalizedGuesses.has(k)) return;
+    penalizedGuesses.add(k);
+    if(penalizedGuesses.size > 3000) penalizedGuesses.clear();
+    const before = scores[pid] || 0;
+    scores[pid] = Math.max(0, before - WRONG_GUESS_PENALTY);
+    if(pid === selfId && scoreAction && scores[pid] !== before){ try{ scoreAction.send({ playerId:selfId, total:scores[selfId] }); }catch(e){} }
+    try{ document.querySelectorAll(`[data-gid="${Number(gid)}"]`).forEach(el=>el.classList.add('pen')); }catch(e){}
+    try{ renderRosters(); }catch(e){}
+  }
   function roundPenalties(result){
     const w = (result && isPlainObject(result.wrong)) ? result.wrong : {};
     return Object.keys(w).map(pid=>({ pid, n: clampNum(w[pid], 0, 200, 0) }))
@@ -13533,10 +13555,7 @@ const SRV = (function(){
       noteUsedWords(result.offered);
     }
     let myDelta = 0;
-    (award.penalties || []).forEach(pe=>{
-      if(pe.pid === selfId) myDelta -= pe.pts;
-      else if(meta.playerNames[pe.pid]) scores[pe.pid] = Math.max(0, (scores[pe.pid]||0) - pe.pts);
-    });
+    // (v4.20: wrong guesses were already booked one by one during the round)
     if(result.type === 'correct'){
       // v2.72: every device books the points of the guessers and the drawer
       // itself, from the verified result — nobody's self-reported total is
@@ -13549,8 +13568,8 @@ const SRV = (function(){
       award.guessers.forEach(g=>book(g.pid, g.pts));
       book(currentRound.drawerId, award.drawerPts);
     }
-    if(myDelta !== 0){
-      scores[selfId] = Math.max(0, (scores[selfId]||0) + myDelta);
+    if(myDelta > 0){
+      scores[selfId] = (scores[selfId]||0) + myDelta;
       if(scoreAction){ try{ scoreAction.send({ playerId:selfId, total:scores[selfId] }); }catch(e){} }
     }
 
@@ -13956,7 +13975,7 @@ const SRV = (function(){
     }
     const pens = (result.award || roundAward(result)).penalties || [];
     if(pens.length){
-      wordEl.innerHTML += `<div style="margin-top:6px;font-size:.9rem;color:var(--red);">❌ Rossz tippek: ${pens.map(pe=>`${escapeHtml(displayNameFor(pe.pid, ''))} ${pe.n}× → −${pe.pts}`).join(', ')}</div>`;
+      wordEl.innerHTML += `<div style="margin-top:6px;font-size:.9rem;color:var(--red);">❌ Rossz tippek (azonnal levonva): ${pens.map(pe=>`${escapeHtml(displayNameFor(pe.pid, ''))} ${pe.n}× → −${pe.pts}`).join(', ')}</div>`;
     }
     renderScoreTable('roundend-scores', scoreRows());
     try{ recordRoundStats(result); }catch(e){}
@@ -14713,6 +14732,9 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.20', changes:[
+      'Pontozás: egy rossz tipp már csak 1 pontot ér, és azonnal levonódik, amint a rajzoló gépe elutasítja (a tipp mellett „−1” jelzi). A kör végén csak összesítés látszik. A pontszám 0 alá nem mehet.'
+    ]},
     { version:'4.19', changes:[
       'Admin: nem kell többé GitHub vagy Netlify tokent megadni. A jelszót a szerver ellenőrzi, a mentéseket is ő végzi a Netlify-on tárolt kulcsokkal (a belépés 4 óráig érvényes).',
       'Admin: fülekre rendezve — Áttekintés, Szavak, Közlemény és értesítés, Zene, Visszajelzések, Beállítások.'
