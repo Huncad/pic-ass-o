@@ -381,6 +381,7 @@
   .rav.sm{ width:20px; height:20px; font-size:.68rem; }
   .rname{ max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .rtag{ font-size:.66rem; font-weight:800; opacity:.7; text-transform:uppercase; letter-spacing:.3px; }
+  .rstreak{ font-weight:900; font-size:.74rem; white-space:nowrap; color:var(--yellow); }
   .rscore{ background:rgba(255,255,255,0.13); border-radius:999px; padding:1px 8px; font-variant-numeric:tabular-nums; }
   #fd-roster{ margin:0; padding:0 12px 8px; background:var(--panel); min-height:0; }
   .rchip{ flex-shrink:0; }
@@ -2822,7 +2823,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.26</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.27</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -7857,24 +7858,39 @@ const SRV = (function(){
     setTimeout(()=>{ el.classList.add('hidden'); }, durationMs);   // always hide, even after leaving
   }
 
+  // v4.27: the end-of-game badges, computed identically on every device
+  function computeAwards(){
+    const out = [];
+    if(!meta) return out;
+    const known = id=>!!meta.playerNames[id];
+    if(gameStats.fastestGuess && known(gameStats.fastestGuess.playerId)){
+      out.push({ key:'fast', title:'⚡ Leggyorsabb tippelő', ids:[gameStats.fastestGuess.playerId], note:`${(gameStats.fastestGuess.ms/1000).toFixed(1)} mp` });
+    }
+    const dr = Object.entries(gameStats.drawerPoints).filter(([id,pts])=>pts>0 && known(id)).sort((a,b)=>b[1]-a[1]);
+    if(dr.length) out.push({ key:'draw', title:'🎨 Legjobb rajzoló', ids:[dr[0][0]], note:`${dr[0][1]} pont rajzolásból` });
+    const top = (map, min)=>{
+      const e = Object.entries(map||{}).filter(([id,v])=>known(id) && v >= min);
+      if(!e.length) return null;
+      const mx = Math.max(...e.map(x=>x[1]));
+      return { ids: e.filter(x=>x[1] === mx).map(x=>x[0]), val: mx };
+    };
+    const st = top(gameStats.bestStreak, STREAK_SHOW);
+    if(st) out.push({ key:'streak', title:'🔥 Leghosszabb sorozat', ids:st.ids, note:`${st.val} jó tipp egymás után` });
+    const fh = top(gameStats.firstHits, 2);
+    if(fh) out.push({ key:'first', title:'🥇 Villámkezű', ids:fh.ids, note:`${fh.val}× ő találta ki elsőként` });
+    const flawless = Object.keys(gameStats.hits||{}).filter(id=>known(id) && gameStats.hits[id] >= 3 && !(gameStats.wrongs[id]||0));
+    if(flawless.length && flawless.length <= 3) out.push({ key:'flawless', title:'🎯 Hibátlan tippelő', ids:flawless, note:'egyetlen rossz tipp nélkül' });
+    const br = top(gameStats.wrongs, 3);
+    if(br) out.push({ key:'brave', title:'🤪 Legbátrabb tippelő', ids:br.ids, note:`${br.val} tévedés — de legalább próbálkozott` });
+    return out;
+  }
   function renderGameStatsAwards(){
     const el = document.getElementById('gameend-awards');
     if(!el) return;
-    const chips = [];
-    if(gameStats.fastestGuess && meta.playerNames[gameStats.fastestGuess.playerId]){
-      const name = meta.playerNames[gameStats.fastestGuess.playerId];
-      const secs = (gameStats.fastestGuess.ms/1000).toFixed(1);
-      chips.push(`<div class="award-chip"><span class="award-title">⚡ Leggyorsabb tippelő</span>${nameDotHtml(gameStats.fastestGuess.playerId)}${escapeHtml(name)} (${secs} mp)</div>`);
-    }
-    const drawerEntries = Object.entries(gameStats.drawerPoints).filter(([,pts])=>pts>0);
-    if(drawerEntries.length){
-      drawerEntries.sort((a,b)=>b[1]-a[1]);
-      const [topDrawerId, topDrawerPoints] = drawerEntries[0];
-      if(meta.playerNames[topDrawerId]){
-        chips.push(`<div class="award-chip"><span class="award-title">🎨 Legjobb rajzoló</span>${nameDotHtml(topDrawerId)}${escapeHtml(meta.playerNames[topDrawerId])} (${topDrawerPoints} pont rajzolásból)</div>`);
-      }
-    }
-    el.innerHTML = chips.join('');
+    el.innerHTML = computeAwards().map(a=>{
+      const who = a.ids.slice(0,3).map(id=>`${nameDotHtml(id)}${escapeHtml(meta.playerNames[id])}`).join(' és ');
+      return `<div class="award-chip"><span class="award-title">${a.title}</span>${who} (${a.note})</div>`;
+    }).join('');
   }
 
   function triggerAutoGameEnd(){
@@ -8318,6 +8334,11 @@ const SRV = (function(){
       delete gameStats.drawerPoints[oldId];
     }
     if(gameStats.fastestGuess && gameStats.fastestGuess.playerId === oldId) gameStats.fastestGuess.playerId = newId;
+    GS_COUNT_KEYS.forEach(k=>{
+      const m = gameStats[k]; if(!m || m[oldId] === undefined) return;
+      m[newId] = (k === 'streak' || k === 'bestStreak') ? Math.max(m[newId]||0, m[oldId]) : (m[newId]||0) + m[oldId];
+      delete m[oldId];
+    });
     if(playerAvatars[oldId] && !playerAvatars[newId]) playerAvatars[newId] = playerAvatars[oldId];
     const j = joinOrderIds.indexOf(oldId);
     if(j >= 0) joinOrderIds[j] = newId;
@@ -8437,11 +8458,14 @@ const SRV = (function(){
     noteOfferedKeys((Array.isArray(snap.offeredKeys) ? snap.offeredKeys : []).slice(0, 300));
     noteUsedWords((Array.isArray(snap.revealedWords) ? snap.revealedWords : []).slice(-700));   // v3.62: merged on a resync
     const gs = snap.gameStats || {};
-    gameStats = { fastestGuess:null, drawerPoints:{} };
+    gameStats = newGameStats();
     if(gs.fastestGuess && typeof gs.fastestGuess === 'object' && names[cleanPeerId(gs.fastestGuess.playerId)]){
       gameStats.fastestGuess = { playerId:cleanPeerId(gs.fastestGuess.playerId), ms:clampNum(gs.fastestGuess.ms, 0, 1e7, 0) };
     }
     Object.entries(gs.drawerPoints || {}).forEach(([id,v])=>{ if(names[cleanPeerId(id)]) gameStats.drawerPoints[cleanPeerId(id)] = clampNum(v, 0, 1e6, 0); });
+    GS_COUNT_KEYS.forEach(k=>{
+      Object.entries(isPlainObject(gs[k]) ? gs[k] : {}).forEach(([id,v])=>{ const c = cleanPeerId(id); if(names[c]) gameStats[k][c] = clampNum(v, 0, 1000, 0); });
+    });
     processedResultRounds = new Set();
     lateJoinApplied = true;
     pendingLateSnapshot = null;
@@ -11537,7 +11561,7 @@ const SRV = (function(){
     rematchYesVotes = new Set(); rematchDeadline = 0;
     processedResultRounds = new Set();
     revealedWords = []; doneWords = []; offeredKeySet = new Set();
-    gameStats = { fastestGuess:null, drawerPoints:{} };
+    gameStats = newGameStats();
     galleryItems = [];
     // A new game (or a rematch) starts from a clean slate — leftovers from
     // the previous game used to make late messages look "older" than the
@@ -13167,6 +13191,7 @@ const SRV = (function(){
       return `<div class="rchip${isMe?' me':''}${isDrawer?' drawer':''}${votable?' votable':''}${away?' away':''}" data-id="${escapeHtml(id)}" title="${escapeHtml(name)}${away?' — '+away:''}${isDrawer?' — most ő rajzol':''}${votable?' · koppints a kizárás megszavazásához':''}">
         ${avatarHtml(id, name)}
         <span class="rname">${escapeHtml(name)}</span>
+        ${(gameStats.streak[id]||0) >= STREAK_SHOW ? `<span class="rstreak" title="${gameStats.streak[id]} jó tipp egymás után">🔥${gameStats.streak[id]}</span>` : ''}
         ${isMe ? '<span class="rtag">Te</span>' : ''}${isDrawer ? '<span class="rtag">✏️</span>' : ''}
         ${away ? `<span class="raway">💤 ${away}</span>` : ''}<span class="rscore">${scores[id]||0}</span>
       </div>`;
@@ -13540,7 +13565,11 @@ const SRV = (function(){
   // =====================================================================
   // Round resolution (shared by drawer & watcher)
   // =====================================================================
-  let gameStats = { fastestGuess:null, drawerPoints:{} };
+  // v4.27: per-game counters for streaks and badges. Every device fills them
+  // from the same broadcast round results, so all screens agree.
+  const GS_COUNT_KEYS = ['streak','bestStreak','firstHits','wrongs','hits'];
+  function newGameStats(){ return { fastestGuess:null, drawerPoints:{}, streak:{}, bestStreak:{}, firstHits:{}, wrongs:{}, hits:{} }; }
+  let gameStats = newGameStats();
   // v2.48 fair scoring. A correct guess is worth 50 base points plus a speed
   // bonus of up to 50, scaled to the round length (so a 60 s and a 120 s game
   // are scored on the same 50–100 range). The drawer gets EXACTLY the same
@@ -13679,6 +13708,29 @@ const SRV = (function(){
     if(btn) btn.disabled = false;
     updateGuessLock();
   }
+  // v4.27: streaks (🔥) and the counters behind the end-of-game badges
+  const STREAK_SHOW = 3;                 // from this many in a row the 🔥 appears
+  const STREAK_ANNOUNCE = [3, 5, 7, 10];
+  function trackStreaksAndBadges(result, award){
+    if(!currentRound || !meta) return;
+    const gs = gameStats, drawerId = currentRound.drawerId;
+    const bump = (k, id, by)=>{ gs[k][id] = (gs[k][id]||0) + by; };
+    roundPenalties(result).forEach(p=>{ if(meta.playerNames[p.pid]) bump('wrongs', p.pid, p.n); });
+    if(result.type === 'pass') return;   // the drawer skipped: nobody's streak changes
+    const hit = new Set(award.guessers.map(g=>g.pid));
+    activePlayerIds.forEach(pid=>{
+      if(pid === drawerId || !meta.playerNames[pid]) return;
+      if(hit.has(pid)){
+        bump('streak', pid, 1); bump('hits', pid, 1);
+        if(gs.streak[pid] > (gs.bestStreak[pid]||0)) gs.bestStreak[pid] = gs.streak[pid];
+        if(STREAK_ANNOUNCE.includes(gs.streak[pid])){
+          try{ addSystemChatMessage(`🔥 ${meta.playerNames[pid]}: ${gs.streak[pid]} jó tipp egymás után!`); }catch(e){}
+        }
+      } else gs.streak[pid] = 0;
+    });
+    if(award.guessers.length) bump('firstHits', award.guessers[0].pid, 1);
+    try{ renderRosters(); }catch(e){}
+  }
   function onRoundResolved(result){
     if(!currentRound || !meta || !isPlainObject(result)) return;
     const key = roundKey(currentRound);
@@ -13737,6 +13789,7 @@ const SRV = (function(){
       });
       gameStats.drawerPoints[currentRound.drawerId] = (gameStats.drawerPoints[currentRound.drawerId]||0) + award.drawerPts;
     }
+    try{ trackStreaksAndBadges(result, award); }catch(e){}
 
     if(result.type === 'correct'){
       sndCorrect(); flash('green'); burstConfetti(120);
@@ -14201,6 +14254,12 @@ const SRV = (function(){
     st.points = N(st.points) + me.score;
     if(me.score >= N(st.best)){ st.best = me.score; st.bestAt = Date.now(); st.bestPlayers = rows.length; }
     st.biggestRoom = Math.max(N(st.biggestRoom), rows.length);
+    // v4.27: badges earned and the longest streak
+    try{
+      st.badges = isPlainObject(st.badges) ? st.badges : {};
+      computeAwards().forEach(a=>{ if(a.ids.includes(selfId)) st.badges[a.key] = N(st.badges[a.key]) + 1; });
+      st.bestStreak = Math.max(N(st.bestStreak), N(gameStats.bestStreak[selfId]));
+    }catch(e){}
     // v3.52: who you play with most (by name — ids change every game)
     st.mates = isPlainObject(st.mates) ? st.mates : {};
     rows.forEach(r=>{ if(r.id === selfId) return; const n = String(r.name||'').replace(/ \(kilépett\)$/,'').slice(0,16); if(n) st.mates[n] = N(st.mates[n]) + 1; });
@@ -14310,6 +14369,10 @@ const SRV = (function(){
         card('⏳', avgGuess, 'átlagos tippidő', '') +
         card('💎', N(st.guessPts), 'pont tippelésért', '')
       ) +
+      ((N(st.bestStreak) >= STREAK_SHOW || Object.keys(isPlainObject(st.badges) ? st.badges : {}).length) ? sec('🏅 Jelvényeid',
+        card('🔥', N(st.bestStreak), 'leghosszabb sorozatod', 'jó tipp egymás után egy játékban') +
+        [['fast','⚡','Leggyorsabb tippelő'],['draw','🎨','Legjobb rajzoló'],['streak','🔥','Leghosszabb sorozat'],['first','🥇','Villámkezű'],['flawless','🎯','Hibátlan tippelő'],['brave','🤪','Legbátrabb tippelő']]
+          .filter(b=>N((st.badges||{})[b[0]])).map(b=>card(b[1], N(st.badges[b[0]]) + '×', b[2], '')).join('')) : '') +
       (mates.length ? sec('👯 Akikkel a legtöbbet játszol', mates.map(([n, c], i)=>card(['🥇','🥈','🥉'][i], escapeHtml(n), `${c} közös játék`, '')).join('')) : '');
   }
   // v3.67: on a big screen the window is as wide as it needs to be and
@@ -14618,7 +14681,7 @@ const SRV = (function(){
     processedResultRounds = new Set();
     showingRoundEnd = false;
     revealedWords = []; doneWords = []; offeredKeySet = new Set();
-    gameStats = { fastestGuess:null, drawerPoints:{} };
+    gameStats = newGameStats();
     galleryItems = [];
     hintRevealedCount = 0;
     joinOrderIds = [];
@@ -14884,6 +14947,11 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.27', changes:[
+      'Sorozat: ha valaki 3 vagy több rajzot egymás után kitalál, a neve mellett megjelenik a 🔥 és a sorozat hossza (3, 5, 7 és 10 jó tippnél a chat is szól). Ha egy rajzot nem talál ki, a sorozata megszakad; ha a rajzoló passzol, nem változik semmi.',
+      'Új jelvények a játék végén a meglévő két mellett: 🔥 Leghosszabb sorozat, 🥇 Villámkezű (legtöbbször ő találta ki elsőként), 🎯 Hibátlan tippelő (legalább 3 találat, rossz tipp nélkül), 🤪 Legbátrabb tippelő (a legtöbb tévedés).',
+      'A statisztikád oldalon új „Jelvényeid” rész: hányszor nyerted el az egyes jelvényeket, és mi volt a leghosszabb sorozatod.'
+    ]},
     { version:'4.26', changes:[
       'Gyorsreakció-korlát: 10 másodperc alatt legfeljebb 3 reakciót lehet küldeni (gombbal és billentyűvel is), utána egy kis felirat mutatja, mikor lehet újra. A többiek gépe is legfeljebb 4-et mutat 10 másodpercenként egy játékostól.'
     ]},
