@@ -1758,10 +1758,10 @@
   body.fit-frame.in-game #main-board:not(.wide-mode) > *:not(.board-deco){ width:100%; }
   body.fit-frame.in-game #main-board > #screen-create,
   body.fit-frame.in-game #main-board > #screen-join,
-  body.fit-frame.in-game #main-board > #screen-lobby,
   body.fit-frame.in-game #main-board > #screen-roundend,
   body.fit-frame.in-game #main-board > #screen-gameend,
   body.fit-frame.in-game #main-board > #screen-error{ max-width:920px; margin:0 auto; box-sizing:border-box; padding:26px 34px; }
+  body.fit-frame.in-game #main-board > #screen-lobby{ max-width:820px; margin:0 auto; box-sizing:border-box; padding:26px 34px; }
   body.fit-frame.in-game #main-board > #conn-status{ width:auto; margin:0 auto 12px; }
   /* compact logo above every non-home card (same as on room setup) */
   body.fit-frame.in-game.show-deco .title-row{ display:flex; margin-bottom:18px; }
@@ -1775,6 +1775,15 @@
   body.fit-frame:not(.in-game) #main-board > #screen-home{ grid-area:home; margin:0; max-width:none; }
   body.fit-frame:not(.in-game) #main-board > footer.hint{ grid-area:foot; }
   body.fit-frame:not(.in-game) #main-board > #screen-error{ grid-column:1 / -1; }
+  /* v4.29: waiting room — one centred content column, readable disabled start button */
+  #screen-lobby > *{ max-width:760px; margin-left:auto; margin-right:auto; }
+  #screen-lobby #lobby-players{ justify-content:center; margin:18px auto 6px; }
+  #screen-lobby #lobby-count-note{ margin:4px auto 18px; }
+  #screen-lobby #lobby-host-controls{ margin-top:22px !important; }
+  #btn-start-match:disabled{ opacity:1 !important; transform:none !important; cursor:not-allowed;
+    background:transparent !important; color:var(--chalk-dim) !important; box-shadow:none !important;
+    border:2px dashed rgba(var(--line-rgb),.35) !important; }
+  #btn-start-match:disabled:hover{ transform:none !important; }
   body.fit-frame #screen-lobby h2{ margin:0 0 6px; }
   body.fit-frame #screen-lobby .lobby-words{ margin-top:10px; }
   body.fit-frame #screen-lobby .setup-hint{ font-size:.82rem; margin-top:4px; }
@@ -11544,13 +11553,18 @@ const SRV = (function(){
     if(amSpectator){
       note.textContent = `👀 Nézőként vagy itt — látsz mindent, de nem rajzolsz és nem tippelsz. Játékosok: ${ids.length} fő`;
     } else if(isHost && ids.length < 2){
-      note.textContent = `Csatlakozott: ${ids.length} fő — várj még valakit, legalább 2 játékos kell az induláshoz.`;
+      note.textContent = `Csatlakozott: ${ids.length} fő — az induláshoz legalább 2 játékos kell.`;
     } else if(isHost && settings.maxPlayers > 0){
       note.textContent = `Csatlakozott: ${ids.length} / ${settings.maxPlayers} fő`;
     } else {
       note.textContent = `Csatlakozott: ${ids.length} fő`;
     }
-    if(isHost) document.getElementById('btn-start-match').disabled = ids.length < 2;
+    if(isHost){
+      const sb = document.getElementById('btn-start-match');
+      sb.disabled = ids.length < 2;
+      // v4.29: a disabled button says what it is waiting for
+      sb.textContent = ids.length < 2 ? '⏳ Még 1 játékos kell' : 'Indítás! 🚀';
+    }
   }
 
   function buildTurnOrder(ids){
