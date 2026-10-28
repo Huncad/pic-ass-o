@@ -895,6 +895,16 @@
     background:var(--panel); border:2px solid rgba(var(--line-rgb),0.25); border-radius:12px;
     padding:8px; display:flex; gap:8px; box-shadow:0 10px 30px rgba(0,0,0,0.5); z-index:80;
   }
+  /* v4.29: each swatch shows the theme's board colour plus its accent, so dark themes stay tellable apart on a light menu */
+  .theme-swatch-btn[data-theme="forest"]{ background:linear-gradient(135deg, #16302A 0 56%, #FFD166 56% 100%) !important; }
+  .theme-swatch-btn[data-theme="ocean"]{ background:linear-gradient(135deg, #0B2D3A 0 56%, #4FD6E8 56% 100%) !important; }
+  .theme-swatch-btn[data-theme="neon"]{ background:linear-gradient(135deg, #150E2B 0 56%, #FF3FD1 56% 100%) !important; }
+  .theme-swatch-btn[data-theme="sunset"]{ background:linear-gradient(135deg, #2B1220 0 56%, #FFB454 56% 100%) !important; }
+  .theme-swatch-btn[data-theme="graphite"]{ background:linear-gradient(135deg, #1A1A1E 0 56%, #D9D9DE 56% 100%) !important; }
+  .theme-swatch-btn[data-theme="mocha"]{ background:linear-gradient(135deg, #2A1E16 0 56%, #C99A6B 56% 100%) !important; }
+  .theme-swatch-btn[data-theme="teal"]{ background:linear-gradient(135deg, #0E2E2B 0 56%, #5EE0B0 56% 100%) !important; }
+  .theme-swatch-btn[data-theme="whiteboard"]{ background:linear-gradient(135deg, #FFFFFF 0 56%, #2278A8 56% 100%) !important; }
+  .theme-swatch-btn[data-theme="cream"]{ background:linear-gradient(135deg, #F7EFDF 0 56%, #B07800 56% 100%) !important; }
   .theme-swatch-btn{
     width:30px; height:30px; border-radius:50%; padding:0; box-shadow:none;
     border:2px solid rgba(var(--line-rgb),0.3);
