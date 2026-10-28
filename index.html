@@ -895,16 +895,6 @@
     background:var(--panel); border:2px solid rgba(var(--line-rgb),0.25); border-radius:12px;
     padding:8px; display:flex; gap:8px; box-shadow:0 10px 30px rgba(0,0,0,0.5); z-index:80;
   }
-  /* v4.29: each swatch shows the theme's board colour plus its accent, so dark themes stay tellable apart on a light menu */
-  .theme-swatch-btn[data-theme="forest"]{ background:linear-gradient(135deg, #16302A 0 56%, #FFD166 56% 100%) !important; }
-  .theme-swatch-btn[data-theme="ocean"]{ background:linear-gradient(135deg, #0B2D3A 0 56%, #4FD6E8 56% 100%) !important; }
-  .theme-swatch-btn[data-theme="neon"]{ background:linear-gradient(135deg, #150E2B 0 56%, #FF3FD1 56% 100%) !important; }
-  .theme-swatch-btn[data-theme="sunset"]{ background:linear-gradient(135deg, #2B1220 0 56%, #FFB454 56% 100%) !important; }
-  .theme-swatch-btn[data-theme="graphite"]{ background:linear-gradient(135deg, #1A1A1E 0 56%, #D9D9DE 56% 100%) !important; }
-  .theme-swatch-btn[data-theme="mocha"]{ background:linear-gradient(135deg, #2A1E16 0 56%, #C99A6B 56% 100%) !important; }
-  .theme-swatch-btn[data-theme="teal"]{ background:linear-gradient(135deg, #0E2E2B 0 56%, #5EE0B0 56% 100%) !important; }
-  .theme-swatch-btn[data-theme="whiteboard"]{ background:linear-gradient(135deg, #FFFFFF 0 56%, #2278A8 56% 100%) !important; }
-  .theme-swatch-btn[data-theme="cream"]{ background:linear-gradient(135deg, #F7EFDF 0 56%, #B07800 56% 100%) !important; }
   .theme-swatch-btn{
     width:30px; height:30px; border-radius:50%; padding:0; box-shadow:none;
     border:2px solid rgba(var(--line-rgb),0.3);
@@ -14967,6 +14957,8 @@ const SRV = (function(){
       sndClick();
       const themeName = btn.dataset.theme;
       applyTheme(themeName);
+      // v4.29: picking a light theme only makes sense with dark mode off
+      try{ if((themeName === 'whiteboard' || themeName === 'cream') && darkMode) toggleDarkMode(); }catch(e){}
       try{ localStorage.setItem('picasso-theme', themeName); }catch(e){}
       document.getElementById('theme-picker').classList.add('hidden');
     });
@@ -15082,6 +15074,7 @@ const SRV = (function(){
     { version:'4.29', changes:[
       'A szavak megbízhatóbban töltődnek be, és gyenge kapcsolatnál vagy új eszközön sem fogynak el.',
       'Szoba létrehozásakor a gomb kiírja, ha még a kapcsolat készül elő.',
+      'Ha a Fehér tábla vagy a Krémpapír témát választod, a sötét mód magától kikapcsol, így a háttér tényleg világos lesz.',
       'Fehér tábla és Krémpapír témában sötétebb lett a sárga, zöld és kék szöveg, hogy jobban olvasható legyen; a gombok pedig világosabb hátteret kaptak, így a feliratuk is jól olvasható.',
       'Ha elküldöd a játék linkjét, az üzenetben saját előnézeti kép jelenik meg.',
       'Közös ranglista: a gomb megbízhatóan megjelenik a kezdőképernyőn, és a ranglista a játékon belül nyílik meg, a beállított színvilággal.'
