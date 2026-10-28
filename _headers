@@ -3,7 +3,7 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), geolocation=(), microphone=(self)
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' https://esm.run https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://upload.wikimedia.org; media-src 'self' data: blob: https://raw.githubusercontent.com https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https://picasso.taile8c93.ts.net wss://picasso.taile8c93.ts.net https://api.github.com https://api.netlify.com https://hu.wikipedia.org https://esm.run https://cdn.jsdelivr.net https://raw.githubusercontent.com wss:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' https://esm.run https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://upload.wikimedia.org; media-src 'self' data: blob: https://raw.githubusercontent.com https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https://picasso.taile8c93.ts.net wss://picasso.taile8c93.ts.net https://api.github.com https://api.netlify.com https://hu.wikipedia.org https://esm.run https://cdn.jsdelivr.net https://raw.githubusercontent.com https://gist.githubusercontent.com wss:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'
 
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable

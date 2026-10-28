@@ -4314,11 +4314,12 @@ const SRV = (function(){
         WORDS = cached; try{ clog('W12', 'szavak: utoljára mentett élő lista, ' + tally(WORDS)); }catch(e){} return;
       }
     }catch(e){}
-    const [easy, medium] = await Promise.all([
+    const [easy, medium, hard] = await Promise.all([
       loadWordFile('szavak-konnyu.txt', 'konnyu'),
-      loadWordFile('szavak-kozepes.txt', 'kozepes')
+      loadWordFile('szavak-kozepes.txt', 'kozepes'),
+      loadWordFile('szavak-nehez.txt', 'nehez')
     ]);
-    const combined = [...easy, ...medium];
+    const combined = [...easy, ...medium, ...hard];
     if(combined.length > 0) WORDS = combined;
     try{ clog('W11', combined.length ? 'szavak: tartalék .txt fájlok, ' + tally(combined) : 'szavak: CSAK A BEÉPÍTETT MINI LISTA (' + WORDS.length + ' szó) — az élő lista nem töltődött be'); }catch(e){}
     // else: keep FALLBACK_WORDS so the game still works if everything else is missing
@@ -14972,7 +14973,8 @@ const SRV = (function(){
       'Szólista: a nagy élő lista is hiánytalanul betöltődik, és az eszköz megjegyzi a legutóbbi sikeres listát, ha egyszer nem érhető el.',
       'Szoba létrehozásakor a gomb kiírja, ha még a kapcsolat készül elő.',
       'Fehér tábla és Krémpapír témában sötétebb lett a sárga, zöld és kék szöveg, hogy jobban olvasható legyen; a gombok pedig világosabb hátteret kaptak, így a feliratuk is jól olvasható.',
-      'Megosztáskor saját előnézeti kép jelenik meg a linknél.'
+      'Megosztáskor saját előnézeti kép jelenik meg a linknél.',
+      'A játék mellé teljes tartalék szólista került mindhárom szinttel, így új eszközön sem fogynak el a szavak, ha az élő lista épp nem érhető el.'
     ]},
     { version:'4.28', changes:[
       'Kezdőképernyő: kikerült az „Új vagy a játékban? Így működik” link, mert ugyanazt nyitotta meg, mint a Súgó gomb.'
