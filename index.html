@@ -15028,13 +15028,11 @@ const SRV = (function(){
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
     { version:'4.29', changes:[
-      'Admin: megszűnt a beépített tartalék jelszó. Ha az élő tárhely nem olvasható, a belépés nem sikerül, régi jelszóval nem lehet bejutni.',
-      'Szólista: a nagy élő lista is hiánytalanul betöltődik, és az eszköz megjegyzi a legutóbbi sikeres listát, ha egyszer nem érhető el.',
+      'A szavak megbízhatóbban töltődnek be, és gyenge kapcsolatnál vagy új eszközön sem fogynak el.',
       'Szoba létrehozásakor a gomb kiírja, ha még a kapcsolat készül elő.',
       'Fehér tábla és Krémpapír témában sötétebb lett a sárga, zöld és kék szöveg, hogy jobban olvasható legyen; a gombok pedig világosabb hátteret kaptak, így a feliratuk is jól olvasható.',
-      'Megosztáskor saját előnézeti kép jelenik meg a linknél.',
-      'Közös ranglista: a gomb akkor is megjelenik, ha a játékszerver csak az oldal betöltése után kapcsolódik, és a ranglista a játékon belül nyílik meg, a beállított színvilággal.',
-      'A játék mellé teljes tartalék szólista került mindhárom szinttel, így új eszközön sem fogynak el a szavak, ha az élő lista épp nem érhető el.'
+      'Ha elküldöd a játék linkjét, az üzenetben saját előnézeti kép jelenik meg.',
+      'Közös ranglista: a gomb megbízhatóan megjelenik a kezdőképernyőn, és a ranglista a játékon belül nyílik meg, a beállított színvilággal.'
     ]},
     { version:'4.28', changes:[
       'Kezdőképernyő: kikerült az „Új vagy a játékban? Így működik” link, mert ugyanazt nyitotta meg, mint a Súgó gomb.'
@@ -15054,21 +15052,17 @@ const SRV = (function(){
       'Rossz tippnél a „−1” már nem a tipp mellett, hanem a játékos pontszáma mellett villan fel rövid időre.'
     ]},
     { version:'4.23', changes:[
-      'Javítás iPhone-ra: a festékes vödör nem önti el többé az egész lapot. Ha a telefon memóriagond miatt nem látja a vonalakat, a játék újraépíti a lapot és újra próbál; ha így sem megy, inkább kihagyja a kitöltést.'
+      'Javítás iPhone-ra: a festékes vödör nem önti el többé az egész lapot.'
     ]},
     { version:'4.22', changes:[
       '12 új, vicces avatar (bohóc, ufó, robot, szellem, dínó, álruhás, cowboy, kaki, csirke, fagyos, bolondos, laza).',
       'Az avatarok középre kerültek, és sötét, enyhén színezett hátteret kaptak, így egyik sem olvad bele a saját színébe.'
     ]},
     { version:'4.21', changes:[
-      'Javítás iPhone-ra: elfeketedő rajzvászon. A Safari kevés memóriát enged a rajzvásznaknak; mostantól kisebb felbontással dolgozunk iPhone-on (szemre nem látszik), a nem látható vásznat felszabadítjuk, és ha a vászon mégis „meghal”, a játék észreveszi, és pár tized másodperc alatt újraépíti a rajzzal együtt.'
+      'Javítás iPhone-ra: nem feketedik el többé a rajzvászon. Ha mégis megtörténne, a játék pár tized másodperc alatt helyreállítja a rajzzal együtt.'
     ]},
     { version:'4.20', changes:[
       'Pontozás: egy rossz tipp már csak 1 pontot ér, és azonnal levonódik, amint a rajzoló gépe elutasítja (a játékos pontszáma mellett rövid időre „−1” jelenik meg).  A pontszám 0 alá nem mehet.'
-    ]},
-    { version:'4.19', changes:[
-      'Admin: nem kell többé GitHub vagy Netlify tokent megadni. A jelszót a szerver ellenőrzi, a mentéseket is ő végzi a Netlify-on tárolt kulcsokkal (a belépés 4 óráig érvényes).',
-      'Admin: fülekre rendezve — Áttekintés, Szavak, Közlemény és értesítés, Zene, Visszajelzések, Beállítások.'
     ]},
     { version:'4.18', changes:[
       'Visszavonva a fülek: a „Szoba létrehozása” gomb és a nyitott szobák listája megint egyszerre látszik.',
@@ -15084,36 +15078,22 @@ const SRV = (function(){
       'Rövidebb telefonos tipp, rövidebb gombfeliratok; gépen már nem lógnak ki az alsó gombok.'
     ]},
     { version:'4.15', changes:[
-      'Biztonság: az új szobákról szóló telefonos értesítés csatornaneve már nincs a nyilvános tárhelyen — a Netlify szervere őrzi és küldi az értesítést (napi plafonnal). Az admin oldalon egyszer a Netlify tokennel be kell tölteni és el kell menteni a beállítást.',
-      'Biztonság: tartalombiztonsági szabályzat (CSP) jelentő módban — egyelőre semmit nem tilt, csak naplózza a böngésző konzoljában, mit tiltana. Ha minden rendben, élesítjük.',
-      'Adatvédelem: frissített tájékoztató — „Mi ez?” gomb (Wikipédia), STUN-szerverek, beszédfelismerés az adatfeldolgozók között, a helyben tárolt adatok szétválasztása.'
+      'Frissített adatvédelmi tájékoztató.'
     ]},
     { version:'4.14', changes:[
       'Pontozás: minden rossz tipp −5 pontot ér a tippelőnek (akkor is, ha később kitalálja, vagy ha végül senki sem találja ki). A kör végén látszik, kinek hány rossz tippje volt. A pontszám 0 alá nem mehet. A rajzoló pontjai nem változtak, a szabotázsvédelem megmarad.'
     ]},
     { version:'4.13', changes:[
-      'Javítás: a hibás szó felfüggesztése a játékszerveren elakadhatott, ha nézők is voltak a szobában (a szerver őket is beszámolta). Most a játékosok szavazatát a játék számolja, a szerver két különböző jelzést vár.',
-      'Biztonság: napi összesített plafon a közös szólisták módosítására, és egy hálózatról egyszerre legfeljebb 3 hirdetett szoba.',
-      'Szerver: pontosabb (bájtalapú) számolás a visszacsatlakozáshoz megőrzött üzeneteknél; telepítési útmutató a szójelentések titkos kulcsáról.'
+      'Javítás: a hibás szavak jelölése akkor is jól működik, ha nézők is vannak a szobában.'
     ]},
     { version:'4.12', changes:[
-      'Biztonság — tartalék út: a nyilvános MQTT-szervereken át menő szobaforgalom titkosítókulcsa és csatornaneve mostantól lassított (PBKDF2) lenyomattal készül a szobakódból, így a kód végigpróbálgatásával nem lehet többé gyorsan visszafejteni. Ugyanez vonatkozik a „kopogtatás” jelzésre is. Fontos: régi és új verzió tartalék úton nem éri el egymást, ezért mindenki töltse újra az oldalt.',
-      'Biztonság — szobalista: a játékszerver csak attól fogad el szobahirdetést, aki tényleg abban a szobában van és ő nyitotta meg; nyilvános szobánál a szerver maga ellenőrzi, hogy a kód valóban ahhoz a szobához tartozik. Hamis szobát (és vele hamis e-mail értesítőt) így nem lehet bejelenteni.',
-      'Biztonság — szólisták: a „már lerajzolt” és „hibás” szavak jelzése a játékszerveren megy át, ami csak akkor továbbítja, ha ugyanabban a szobában legalább ketten (hibás szónál a játékosok legalább fele) jelezték. A közös listákat böngészőből közvetlenül már nem lehet módosítani.',
-      'Adatvédelem: a játékosnevek és pontszámok nem kerülnek a szerver naplójába.',
-      'Az oldal újra nagyítható (akadálymentesség); a rajzlapon és a gombokon a nagyítás továbbra sem zavarja a rajzolást.',
-      'Apró javítások: pontosabb bájtszámlálás és szigorúbb eredet- és IP-ellenőrzés a szerveren, megbízhatóbb betöltési hibajelzés.'
+      'Az oldal újra nagyítható (akadálymentesség); a rajzlapon és a gombokon a nagyítás továbbra sem zavarja a rajzolást.'
     ]},
     { version:'4.11', changes:[
       'Gyorsreakciók az 1–7 számbillentyűkkel (a szám ott van a gombokon), és új reakció: 🤦 homlokra csapás.',
-      'Biztonság — közös ranglista: a játék végén már minden játékos elküldi az eredményt, és a szerver csak azt rögzíti, amit legalább ketten (és a szobában lévők legalább fele) ugyanúgy küldtek be. Egyetlen játékos így nem tud kitalált neveket vagy pontokat felvinni.',
-      'Biztonság — szólisták: egy szó csak akkor számít „már lerajzoltnak” vagy „felfüggesztettnek”, ha legalább két különböző eszköz jelzi, rajta van a hivatalos szólistán, és egy hálózatról naponta csak korlátozott számú jelzés jöhet. Így automatikus kérésekkel sem lehet kiüríteni vagy elrontani a szólistát.',
-      'Biztonság — e-mail értesítő: levél csak akkor megy ki, ha a játékszerveren tényleg megnyílt egy új nyilvános szoba; a szoba nevét is a szerverről vesszük, nem a kérésből.',
-      'Javítás: ha a játékszerver az egyik eszközről elérhető volt, a másikról épp nem, a két játékos más-más hálózatra került, és jó kóddal sem találták meg egymást. A szoba hálózata most a létrehozáskor rögzül, a belépő pedig előbb a szerveren, aztán közvetlen úton is keresi a szobát.',
-      'Gyorsabb indulás: a játék programkönyvtárai a saját tárhelyről, egyszerre töltődnek be (eddig egy külső CDN-ről, egymás után — rossz hálózaton akár 18 mp-ig).',
-      'A jobb kattintásos menü újra működik az oldalon (linkek, szövegek, mezők); csak a rajzlapon és a gombokon marad letiltva.',
-      'Adatvédelem: a tájékoztató egyértelműen leírja, hogy a saját játékszerver továbbítás közben látja az üzenetek tartalmát (nem menti el). A szerveres szobaazonosító lassított lenyomattal készül, az admin tokenek pedig már semmilyen böngészőtárhelyre nem kerülnek.',
-      'Szerver: szigorúbb korlátok (csak a játék saját oldalairól lehet csatlakozni, bájtalapú forgalmi korlát, IP-nkénti kapcsolatszám).'
+      'Javítás: előfordult, hogy két játékos jó kóddal sem találta meg egymást. Most megbízhatóan összekerülnek.',
+      'Gyorsabb indulás, főleg rossz hálózaton.',
+      'A jobb kattintásos menü újra működik az oldalon (linkek, szövegek, mezők); csak a rajzlapon és a gombokon marad letiltva.'
     ]},
     { version:'4.10', changes:[
       'Rajz-visszajátszás: nagyjából olyan tempóban játssza le a rajzot, ahogy készült, és lejátszás közben állítható a sebesség (0,5× – 4×). A kép már nem nyúlik meg, pontosan a rajz arányában jelenik meg.',
@@ -15121,20 +15101,20 @@ const SRV = (function(){
       'Telefonos tippelő képernyő újratervezve: a visszaszámláló nem lóg bele a körszámlálóba, a rajzlap pontosan a rajz arányában jelenik meg (nincsenek üres sávok), a tipplista kitölti a maradék helyet, és a legújabb tipp közvetlenül a beíró mező fölött látszik. Nyitott billentyűzetnél semmi nem ugrál: a rajz és a lista arányosan zsugorodik.',
       'Megújult kezdőképernyő: áttekinthető kártyák (játékos beállításai, elérhető szobák, értesítő, súgó). A játékosszínt már nem kell választani — mindenki automatikusan kap egyet.',
       'Telefonról belépve egy bezárható jelzés javasolja, hogy ha lehet, laptopon, számítógépen vagy tableten játssz — rajzolni ott sokkal kényelmesebb.',
-      'Adatvédelem: új, részletes tájékoztató (ki kezeli az adatokat, milyen jogalapon, meddig, kik férnek hozzá, milyen jogaid vannak). A betűtípusok mostantól a játék saját tárhelyéről töltődnek be, nem a Google szervereiről. A közös ranglista bejegyzései 1 év után törlődnek.',
+      'Új, részletes adatvédelmi tájékoztató. A közös ranglista bejegyzései 1 év után törlődnek.',
       'Új szoba értesítő: a kezdőoldalon megadhatod az e-mail címedet, és szólunk, ha valaki új nyilvános szobát nyit (legfeljebb 15 percenként egy levél). Először egy megerősítő levél érkezik, így senki nem iratkoztathat fel mást. Leiratkozni bármelyik levél alján, vagy a cím újbóli beírásával lehet. A kezdőoldalon látszik, hányan vannak feliratkozva.'
     ]},
     { version:'4.01', changes:[
       'Javítás: ha egy játékos kapcsolata menet közben megakadt, a tippek és a rajz fél percig is késhettek, aztán egyszerre jelentek meg. Most a játék néhány másodpercen belül észreveszi, ha a kapcsolat elakadt, újracsatlakozik, és minden közben elküldött üzenet megérkezik, duplázás nélkül.'
     ]},
     { version:'4.00', changes:[
-      'Saját játékszerver: ha elérhető, a szobák és a játék egy otthoni szerveren keresztül mennek. Nincs többé WebRTC-s kapcsolatépítés, közvetítő (TURN) és iPhone-os mikrofon-trükk — mindenki ugyanúgy, gyorsan csatlakozik. Ha a szerver nem érhető el, minden a régi úton működik tovább.',
+      'Gyorsabb, stabilabb kapcsolat: a játék egy saját szerveren keresztül fut, így mindenki ugyanúgy, gyorsan csatlakozik. Ha a szerver épp nem érhető el, minden a régi úton működik tovább.',
       'Visszacsatlakozás: ha lezár a telefon vagy egy pillanatra elmegy a net, a szerver egy percig megtartja a helyedet, és a közben történteket visszatéréskor megkapod — a többiek észre sem veszik.',
       'Közös ranglista: a befejezett játékok eredménye (becenév + pont) a szerverre kerül, a kezdőképernyő „🏆 Közös ranglista” linkje mutatja az összesítést.',
       'Rajz-visszajátszás: a játék végi galériában egy rajzra koppintva a „▶️ Visszajátszás” gomb lejátssza, hogyan készült.'
     ]},
     { version:'3.86', changes:[
-      'Nyilvános indulásra felkészítés: gyorsabb és stabilabb működés akkor is, ha egyszerre sokan játszanak. A közvetítő-kapcsolat adatait és a szólistákat a játék kevesebb kéréssel tölti be, és a közvetítő kulcsa már nincs benne az oldal kódjában.',
+      'Stabilabb működés akkor is, ha egyszerre sokan játszanak.',
       'Frissített adatvédelmi tájékoztató.'
     ]},
     { version:'3.85', changes:[
@@ -15172,7 +15152,7 @@ const SRV = (function(){
       'A „📊 Statisztikáim” ablak nagy képernyőn a játék többi részével arányosan nagyobb lett, és a címe alatt látszik, mióta gyűjti az eszköz a statisztikát.'
     ]},
     { version:'3.65', changes:[
-      'Ami egyszer már feladvány volt bármelyik játékban (bármelyik eszközön), az többet nem kerül elő — csak akkor, ha az adott szint összes szava elfogyott. A lerajzolt szavak listáját egy közös tárhely őrzi; az admin felületen látszik, hány szó fogyott el, és ott nullázható is.'
+      'Ami egyszer már feladvány volt bármelyik játékban, az többet nem kerül elő, amíg az adott szint összes szava el nem fogy.'
     ]},
     { version:'3.64', changes:[
       'Sötét módban a nevek melletti színes karikák, az animált gyorsreakciók, a reakció- és chatgombok, valamint az ünneplő effektek (konfetti, emojik) is sötétebbek lettek, hogy illeszkedjenek a többihez.'
@@ -15181,18 +15161,17 @@ const SRV = (function(){
       'Szobanyitáskor a „Saját szavak a játékosoktól” résznél választható a „Nincsenek saját szavak” is: ilyenkor a váróteremben nem jelenik meg a saját szavak mezője, és csak a beépített szavakkal játszotok.'
     ]},
     { version:'3.62', changes:[
-      'Átnéztem a kör-, szó- és jelöléskezelést, és több rejtett hibát javítottam:',
+      'Több rejtett hiba javítva a körök és a szavak kezelésében:',
       '• A kör végén az „Én jövök” 10 másodperces visszaszámlálása a v3.54 óta 5 másodpercenként újraindult, így automatikusan sosem indult el a következő rajz.',
       '• Ha valaki menet közben belépett, a rajzoló eszköze ritkán újraszinkronizált, és ez eldobta a folyamatban lévő rajzát. Rajzolás (és szóválasztás) közben most soha nincs újraszinkron.',
-      '• Újraszinkronnál az eszköz elfelejtette a már lerajzolt szavakat — most megtartja őket, így ebből sem lehet ismétlődés.',
-      '• A kör eredménye most azt is tartalmazza, melyik rajzhoz tartozik, így egy késve érkező eredmény nem zárhat le egy másik kört.'
+      '• Újraszinkronnál az eszköz elfelejtette a már lerajzolt szavakat — most megtartja őket, így ebből sem lehet ismétlődés.'
     ]},
     { version:'3.61', changes:[
       'Javítva: néha magától „Megjelölted” állt egy szón, amit nem jelöltél meg. Egy korábbi játék jelölése „ragadt át” arra a körre, amelyik ugyanannál a rajzolónál ugyanannyiadik volt. A jelölés most a szóhoz és az adott játékhoz tartozik.',
       'Javítva: egy szó (pl. „kamionajtó”) egy játékon belül többször is előjöhetett. A többi felkínált szót a játék eddig elfelejtette elküldeni a többieknek, és aki lemaradt egy kör végéről, annál a lerajzolt szó sem került be a „már volt” listába. Most minden eszköz megjegyzi az összes lerajzolt és felkínált szót, akkor is, ha épp nem azt a kört nézte, és a szobanyitó pár másodpercenként egyezteti a lerajzolt szavak listáját.'
     ]},
     { version:'3.60', changes:[
-      'A hibás szó megjelölése visszavonható akkor is, ha a kör végi képernyő már továbblépett: az „📋 Előző kör” ablakban is ott van a jelölés gombja. A gomb felirata egyértelműbb lett („↩️ Jelölés visszavonása”). Ha a jelölések száma elérte a küszöböt, a bejelentés azonnal elmegy az adminnak — ezt már nem lehet visszavonni, és a játék ezt ki is írja.'
+      'A hibás szó megjelölése visszavonható akkor is, ha a kör végi képernyő már továbblépett: az „📋 Előző kör” ablakban is ott van a jelölés gombja. A gomb felirata egyértelműbb lett („↩️ Jelölés visszavonása”). Ha már elég jelölés gyűlt össze, a bejelentés nem vonható vissza, és ezt a játék ki is írja.'
     ]},
     { version:'3.59', changes:[
       'A kör végén a fő feliratban az is látszik, kinek a rajzáról volt szó, pl. „🎉 Kitti kitalálta Marci rajzát!”, „🎉 Eltaláltad Évi rajzát!”, „⌛ Lejárt az idő — senki nem találta ki Adam rajzát!”.'
@@ -15250,11 +15229,6 @@ const SRV = (function(){
       'Ha valaki kilép, a hátralévő körök rövidebbek lesznek: annyi rajz jut egy körre, ahány játékos maradt (pl. 3 helyett 2).',
       'A tippmezőben rövidebb lett a várakozó szöveg, hogy kiférjen: „Még nem rajzol…”.'
     ]},
-    { version:'3.44', changes:[
-      'Javítva: az admin felületen a visszajelzések és a bejelentett szavak betöltése HTTP 404 hibát adott (a Netlify megszüntette a régi lekérdezési módot) — most az oldalon keresztül olvassa be őket.',
-      'Javítva: a „Nehéz szavak” oszlop rossz helyre, a közepes lista alá csúszott az admin felületen.',
-      'Az admin felület új külsőt kapott, a játék többi képernyőjéhez illően: keretes kártyák, sötét beviteli mezők, színkódolt szólisták, és a fejléc görgetéskor is látszik.'
-    ]},
     { version:'3.43', changes:[
       'A „Mi ez?” nem mutat félrevezető fél-választ: összetett szónál csak akkor magyaráz, ha mindkét részt megtalálta, különben a képkeresést ajánlja. A leírás mindig egész mondatokból áll, nem vágódik el mondat közepén.'
     ]},
@@ -15266,8 +15240,7 @@ const SRV = (function(){
       'Új: „Mi ez?” segítség a rajzolónak. A felkínált szavak mellett és rajzolás közben a szó mellett is van egy kis ? gomb: rányomva megjelenik egy kép és egy rövid leírás a szóról (Wikipédiából), és egy gombbal képkeresés is indítható. Csak a rajzoló látja, a tippelők nem, és az óra közben megy tovább.'
     ]},
     { version:'3.40', changes:[
-      'Új: három nehézségi szint. A korábbi „Nehéz” lista neve mostantól „Közepes”, és van egy új, valóban „Nehéz” szint is — ritkább tárgyak, fogalmak és elvont szavak (pl. délibáb, kentaur, szerelem, visszhang). A szobanyitásnál bármelyik kombináció választható, alapból a könnyű és a közepes van bekapcsolva.',
-      'Az admin felületen a nehéz szavaknak is saját oszlopa van (hozzáadás, keresés, import, export).'
+      'Új: három nehézségi szint. A korábbi „Nehéz” lista neve mostantól „Közepes”, és van egy új, valóban „Nehéz” szint is — ritkább tárgyak, fogalmak és elvont szavak (pl. délibáb, kentaur, szerelem, visszhang). A szobanyitásnál bármelyik kombináció választható, alapból a könnyű és a közepes van bekapcsolva.'
     ]},
     { version:'3.39', changes:[
       'Javítva (telefon): a rajzoló eszköztár jobb oldali ikonjai (radír, vissza, újra, törlés) túl kicsik voltak — most ugyanakkorák, mint a bal oldali eszközök.'
@@ -15281,7 +15254,7 @@ const SRV = (function(){
     ]},
     { version:'3.36', changes:[
       'Szóbejelentés: egy szó csak akkor számít hibásnak, ha legalább 2 játékos megjelöli — két játékosnál tehát mindkettőnek. Kettőnél több játékosnál továbbra is a játékosok legalább fele kell.',
-      'A hibásnak jelölt szó azonnal felfüggesztésre kerül: az admin felülvizsgálatáig (javítás, törlés vagy „marad”) egyik játékban sem kerül elő többé.'
+      'A hibásnak jelölt szó azonnal kikerül a játékból, amíg át nem nézik.'
     ]},
     { version:'3.35', changes:[
       'Nagy képernyőn a váróterem (és minden kicsit túl magas képernyő) most kicsinyít, hogy görgetés nélkül kiférjen.',
@@ -15314,13 +15287,12 @@ const SRV = (function(){
     ]},
     { version:'3.27', changes:[
       'Közeli tippért nem jár pont. Eddig az apró elírás vagy egy plusz rag (pl. „labdarúgó” a „labdarúgás” helyett) teljes értékű találatnak számított, most „közel!” jelzést kap, és pont nélkül fut tovább a kör. Az ékezet, a kis- és nagybetű és a szóköz továbbra sem számít.',
-      'Szóbejelentés: a kör végén egy koppintással megjelölhető a hibás vagy értelmetlen szó. Ha a játékosok legalább fele megjelöli, a szó az adminhoz kerül. A saját beküldött szavak nem jelölhetők.',
-      'Admin: új „🚩 Bejelentett szavak” rész, ahol a bejelentett szavak javíthatók, törölhetők vagy megtarthatók.',
+      'Szóbejelentés: a kör végén egy koppintással megjelölhető a hibás vagy értelmetlen szó. Ha a játékosok legalább fele megjelöli, a szót átnézzük. A saját beküldött szavak nem jelölhetők.',
       'Sötét módban minden szín sötétebb lett: gombok, kiemelések, rajzpaletta, menük. A sötét mód és a színvilág most már együtt is használható.',
       'A színvilág játék közben is állítható a ☰ Menüben.'
     ]},
     { version:'3.26', changes:[
-      'Javítva: Firefoxban (és néhány jelszókezelőnél) a tippmező és a chat alatt felugró „Új e-mail álnév” ajánlat. Az okozta, hogy a 3.20-ban az admin felületre került két új jelszómező, és a böngésző ezek miatt regisztrációs űrlapnak hitte az oldalt.',
+      'Javítva: Firefoxban (és néhány jelszókezelőnél) a tippmező és a chat alatt nem ugrik fel többé „Új e-mail álnév” ajánlat.',
       'A chat és a gyors reakció gombja áthelyezhető: nyomd hosszan, húzd ahová szeretnéd, és engedd el. Ha a felül megjelenő „alaphelyzet” célra ejted, visszaugrik a helyére. Telefonon és gépen is működik, és az eszköz megjegyzi a helyét.',
       'Új körszámítás: egy kör most az, amikor mindenki egyszer rajzolt. A kijelzés például: „Kör 2 / 3 · 1/4. rajz”.',
       'A kör eredménye nem tűnik el, amikor a következő rajzoló megnyomja az „Én jövök” gombot. A tippelők addig az eredménynél maradnak, amíg a rajzoló szót választ, és csak a rajzolás indulásakor lépnek tovább (vagy ha a „Tovább” gombra koppintanak). Az előző kör eredménye a rajzolás alatt is visszanézhető az „📋 Előző kör” gombbal.'
@@ -15346,25 +15318,16 @@ const SRV = (function(){
     ]},
     { version:'3.20', changes:[
       'Megújult kezdőképernyő: krétatábla-hangulat, új logó, nagyobb színválasztó, kiemelt „Szoba létrehozása” gomb, rendezettebb gombsor és lábléc. Minden színtémában és sötét módban is a téma színeit használja.',
-      'A többi képernyő is megkapta az új külsőt: számozott lépések a szobanyitásnál (gépen kétoszlopos elrendezéssel), krétatáblás „Te jössz!” képernyő, a rajzoló eszköztárán vonalas ikonok és sárgán kiemelt aktív eszköz, halvány krétafirkák a rajzlap körül.',
-      'Admin: a jelszó mostantól az admin felületen módosítható. Sózott, lassított ujjlenyomatként kerül az élő tárhelyre, így nem kell hozzá a kódot szerkeszteni.'
-    ]},
-    { version:'3.19', changes:[
-      'A közvetítő (TURN) szerver hozzáférési adatait a játék mostantól a saját Netlify szerverfüggvényétől kéri, így a szolgáltatás kulcsa nem látszik az oldal forrásában. Ha ez nem elérhető, a játék a korábbi módon működik tovább. Új naplókódok: T10, T11.'
+      'A többi képernyő is megkapta az új külsőt: számozott lépések a szobanyitásnál (gépen kétoszlopos elrendezéssel), krétatáblás „Te jössz!” képernyő, a rajzoló eszköztárán vonalas ikonok és sárgán kiemelt aktív eszköz, halvány krétafirkák a rajzlap körül.'
     ]},
     { version:'3.18', changes:[
       'Új: saját szavak. Szobanyitáskor beírhatsz legfeljebb 150 saját szót, és eldöntheted, hogy a beépítettekkel keverve vagy csak ezekből játszatok. Ilyenkor a választható szavak között mindig ott van legalább egy saját.',
       'Új: saját statisztika a kezdőképernyőn (játékok, győzelmek, legjobb eredmény). Csak ezen az eszközön tárolódik.',
       'Új: Adatvédelem ablak a kezdőképernyőn, és egy gomb, amellyel minden helyben tárolt adatod törölhető.',
-      'Akadálymentesség: a képernyő újra nagyítható (két ujjal), a képernyőolvasók felolvassák a chatet és az idő fogyását, a billentyűzetes fókusz jól látható.',
-      'Biztonság: a szobakód kriptográfiailag erős véletlenből készül, a pontszám-javítás szigorúbb (csalni nem lehet vele), alapszintű tartalombiztonsági szabályok.',
-      'A kapcsolódási napló 24 óra után magától törlődik.'
+      'Akadálymentesség: a képernyő újra nagyítható (két ujjal), a képernyőolvasók felolvassák a chatet és az idő fogyását, a billentyűzetes fókusz jól látható.'
     ]},
     { version:'3.17', changes:[
-      'Új: tartalék út. Ha két eszköz között nem jön létre közvetlen kapcsolat (router, iPhone, VPN, tűzfal, mobilnet szolgáltatói NAT), 6 mp után a játék automatikusan az MQTT-szervereken keresztül megy tovább — ugyanazon az úton, amin a szobalista is működik. Az adatok a szobakóddal titkosítva mennek, a szerverek nem látják a tartalmat. Ha később mégis létrejön a közvetlen kapcsolat, a játék észrevétlenül átvált rá. Új naplókódok: F01 tartalék út indult, F02 átváltás közvetlenre, F03 átváltás tartalékra.'
-    ]},
-    { version:'3.16', changes:[
-      'Új: valódi közvetítő-próba. Eddig csak azt ellenőriztük, hogy a közvetítő (TURN) szerver ad-e címet — ez nem bizonyítja, hogy adatot is továbbít (pl. elfogyott havi keretnél). Most az eszköz egy próbaüzenetet küld saját magának kizárólag a közvetítőn át; ha nem ér át, a diagnózis ezt mondja ki elsőként. Ez dönti el, miért nem tud valaki mobilnetről csatlakozni. Az ⓘ jelentésben is látszik.'
+      'Tartalék út: ha két eszköz nem tud közvetlenül kapcsolódni (router, iPhone, VPN, mobilnet), a játék magától egy másik úton megy tovább. A tartalom ilyenkor is titkosítva utazik.'
     ]},
     { version:'3.15', changes:[
       'Sötét módban a rajz színei is alkalmazkodnak: minden szín kicsit sötétebb és tompább, így nem vakítanak a sötét lapon (a fekete továbbra is világosszürke lesz). Csak a te képernyődön változik a megjelenés — a többiek a saját beállításuk szerint látják a rajzot, a galériába mentett kép pedig mindig az eredeti színekkel készül.'
@@ -15376,25 +15339,20 @@ const SRV = (function(){
       'Javítva: iPhone-on néhány kör után újra fekete lehetett a rajzlap. A játék minden kör végén készít egy képet a galériához, és az iOS ezeknek a memóriáját magától nem adta vissza; ha a rajzvásznak memóriakorlátja betelt, a rajzlap feketére váltott. Most ezek a vásznak használat után azonnal felszabadulnak, és a rajzlap tétlenség idején is magától frissül, így egy esetleges törlés után pár másodpercen belül helyreáll.'
     ]},
     { version:'3.12', changes:[
-      'Javítva: ha játék közben egyetlen játékossal szakadt meg a kapcsolat (pl. egy közös wifin lévő iPhone-nal), a játék az egész szobát újraépítette, és ezzel a jó kapcsolatokat is elvágta — újra és újra. Most csak akkor épít újra, ha mindenkivel megszakadt a kapcsolat.',
-      'A chatben játékosonként egyszer jelenik meg a diagnózis, és mindig az adott játékosra vonatkozó (pl. közös wifi esetén a konkrét teendővel).'
+      'Javítva: ha játék közben egyetlen játékossal szakadt meg a kapcsolat (pl. egy közös wifin lévő iPhone-nal), a játék az egész szobát újraépítette, és ezzel a jó kapcsolatokat is elvágta — újra és újra. Most csak akkor épít újra, ha mindenkivel megszakadt a kapcsolat.'
     ]},
     { version:'3.11', changes:[
-      'A hibadiagnózis felismeri, ha a két eszköz ugyanazon a hálózaton (wifin) van. Ha ilyenkor az egyik iPhone-on nincs bekapcsolva az „iPhone-kapcsolat javítása”, ezt konkrétan kiírja, és az érintett iPhone-on ott a gomb is a bekapcsoláshoz. (A hálózat azonosításához csak a nyilvános cím egy rövid ujjlenyomata utazik, maga a cím nem.)',
-      'Javítva: a szobanyitónál ugyanaz a diagnózis másodpercenként újra bekerült a kapcsolati naplóba.'
+      'A hibadiagnózis felismeri, ha két eszköz ugyanazon a wifin van, és megmondja a teendőt.'
     ]},
     { version:'3.10', changes:[
-      'Új: automatikus hibadiagnózis. Ha valaki nem tud csatlakozni, vagy játék közben megszakad a kapcsolat, a két eszköz a háttércsatornán kicseréli a hálózati adatait, és a játék megmondja, hol a gond (pl. „Szilvi eszköze semmilyen hálózati címet nem tud szerezni — a hálózata vagy egy blokkoló tiltja”). A diagnózis megjelenik a csatlakozó képernyőn, a szobanyitó várótermében és a chatben, az ⓘ jelentés pedig a másik eszköz adatait is tartalmazza — elég egy eszközről elküldeni.'
+      'Új: automatikus hibadiagnózis. Ha valaki nem tud csatlakozni, vagy megszakad a kapcsolat, a játék megmondja, hol a gond (a csatlakozó képernyőn, a váróteremben és a chatben).'
     ]},
     { version:'3.09', changes:[
       'Javítva: ha a játék végi szavazásnál a szobanyitót az időtúllépés kiléptette, a szoba a maradék egy játékossal a listán maradt, pedig már nem lehetett benne játszani. Most az ilyen szoba lekerül a listáról.',
       'Szobanyitáskor a játék szól, ha már van ugyanilyen nevű szoba a listán, hogy ne legyen két egyforma. Az automatikus névből („Adam szobája”) ilyenkor „Adam szobája (2)” lesz.'
     ]},
-    { version:'3.08', changes:[
-      'Új a kapcsolati naplóban: rajzolás közben a játék méri, mennyi idő alatt érnek el hozzá a toll (rajztábla) és az egér jelzései, és mennyi ideig dolgozza fel őket. Ha a toll lenyomása után késve reagál a rajz, a ☰ Menü → 📋 Kapcsolati napló megmutatja, hogy a rendszer (Windows / rajztábla-illesztőprogram) vagy a játék okozza.'
-    ]},
     { version:'3.07', changes:[
-      'Rajzolás közben jóval kevesebb adat megy a hálózaton (a pontok pozícióját a játék a látható pontosság felett nem küldi). Rajztáblával, ami sokkal több pontot mér, mint az egér, ez gyengébb kapcsolaton sokat számít.'
+      'Rajzolás közben jóval kevesebb adat megy a hálózaton, ami rajztáblával és gyengébb kapcsolaton sokat számít.'
     ]},
     { version:'3.06', changes:[
       'Javítva: rajztáblával (és néha egérrel) előfordult, hogy a játék nem vette észre a toll felemelését, így a következő érintés összekötötte az új vonalat az előzővel. Most a felemelt toll lebegése már nem rajzol, és az új érintés mindig új vonalat kezd.'
@@ -15407,8 +15365,7 @@ const SRV = (function(){
       'Javítva: ha a rajzoló oldala rajzolás közben újratöltődött (összeomlott vagy frissítette), a játék visszaengedte, de tippelőként a saját körébe, így nem tudott rajzolni, a többiek pedig a kör végéig vártak. Most ilyenkor a félbemaradt kört azonnal a következő játékos veszi át új szóval, a visszatérő pedig megtartja a pontjait és a későbbi köreit.'
     ]},
     { version:'3.03', changes:[
-      'Új: kapcsolati napló. A játék időbélyeggel és hibakóddal feljegyzi, mi történt a kapcsolatokkal (ki kapcsolódott, kinek szakadt meg, próbálta-e újraépíteni, háttérbe került-e a lap, volt-e internet). A ☰ Menü → 📋 Kapcsolati napló másolása gombbal vágólapra tehető, és újratöltés után is megmarad. Megszakadáskor a chat-üzenet a hibakódot is kiírja.',
-      'Javítva: ha a hálózati könyvtár jelezte egy kapcsolat bontását, a játék nem nézte meg, hogy a játékos a háttércsatornán még jelez-e, így a kapcsolat újraépítése közben is kilépettnek vehette. Most minden esetben ugyanaz a türelmi idő jár.'
+      'Új: kapcsolati napló. A ☰ Menü → 📋 Kapcsolati napló másolása gombbal vágólapra tehető, és elküldhető, ha segítség kell egy kapcsolódási hibánál.'
     ]},
     { version:'3.02', changes:[
       'Új szín a rajzolásnál: zöld.',
@@ -15420,30 +15377,18 @@ const SRV = (function(){
     { version:'3.00', changes:[
       'Gépen a zene és a hangok akkor is szólnak, ha másik lapfülre vagy ablakra váltasz. Telefonon és tableten továbbra is elhallgatnak, amikor a játék a háttérbe kerül (másik app, lezárt képernyő).'
     ]},
-    { version:'2.99', changes:[
-      'Javítva: az admin próbaértesítése hibát jelzett, mert e-mail cím is meg volt adva — az ntfy.sh 2026 óta fiók nélkül nem küld e-mailt, és ilyenkor az egész értesítést visszautasítja. Az e-mail opció kikerült; a hibaüzenet ezentúl azt is kiírja, mit válaszolt a szerver.'
-    ]},
-    { version:'2.98', changes:[
-      'Új admin-beállítás: értesítés a telefonra (az ingyenes ntfy appon keresztül), amikor valaki szobát nyit a játékban. Nyilvános szobánál az értesítésre koppintva egyből be is léphetsz.'
-    ]},
     { version:'2.97', changes:[
       'Javítva: aki csatlakozáskor előbb egy másik játékossal kapcsolódott össze, mint a szobanyitóval, azt a játék „bent lévőnek” vette, pedig a szobanyitó nem látta (a többiek viszont igen). Most a csatlakozás csak akkor sikeres, ha a szobanyitóval is létrejött a kapcsolat; addig a játék tovább próbálkozik.',
       'A szobanyitó a váróteremben látja, ha valaki épp csatlakozni próbál („⏳ … csatlakozik…”).'
     ]},
     { version:'2.96', changes:[
-      'Csatlakozáskor a telefon az MQTT-szobalistán „kopogtat” a szobanyitónál, aki visszajelez. Ha a szobanyitó hallja a csatlakozót, de a közvetlen kapcsolat nem jön létre, a játék egyszer automatikusan, tiszta lappal újrapróbálja, és a hibaüzenet is megmondja, melyik rész akadt el.',
-      'A ⓘ hálózati jelentésben telefonon is látszanak a szoba saját jelzőszerverei, a szobanyitónál pedig az, hogy ki próbált csatlakozni.'
+      'Ha csatlakozáskor nem jön létre a kapcsolat a szobanyitóval, a játék magától újrapróbálja, és a hibaüzenet is megmondja, mi akadt el.'
     ]},
     { version:'2.95', changes:[
       'Javítva: a tűzijáték és a konfetti (főleg a játék végén) másodpercekre belassította, beszaggatta a játékot, leginkább telefonon. Az effektek most jóval kevesebb erőforrást használnak, kevesebb, de ugyanolyan látványos részecskével, időben elosztva; ha a készülék mégis lassulna, maguktól ritkulnak.'
     ]},
     { version:'2.94', changes:[
-      'Új, megbízhatóbb szobalista: a szobák közvetlenül az MQTT-szervereken keresztül látszanak, közvetlen eszköz–eszköz kapcsolat nélkül. Telefonon a régi, WebRTC-s szobalista már nem fut: az iPhone egy idő után ettől nem tudott új kapcsolatot építeni, ezért nem látta a PC-n nyitott szobát, és csatlakozni sem tudott. A telefon most csak akkor épít kapcsolatot, amikor ténylegesen belép egy szobába.',
-      'Fontos: a régi verziót futtató eszközök a régi listán látszanak — mindenki frissítse az oldalt.'
-    ]},
-    { version:'2.93', changes:[
-      'Javítva: ha a közvetítő (TURN) szerver adatai lassan érkeztek meg (pl. mobilneten vagy a Messenger böngészőjében), a szobalista egész végig nélküle futott, és egy iPhone így nem látta a más gépen nyitott szobákat. Most, amint a közvetítő megérkezik és működik, a szobalista újraépül vele.',
-      'Szobanyitáskor és csatlakozáskor a játék tovább (legfeljebb 9 mp-ig) vár a közvetítőre, mert a nélküle indított szobakapcsolat később sem kapja meg. Ha a lekérés nem sikerül, többször is újrapróbálja.'
+      'Új, megbízhatóbb szobalista, főleg iPhone-on: a telefon már nem veszíti el a más gépen nyitott szobákat.'
     ]},
     { version:'2.92', changes:[
       'A betű-súgó ismét csak a kör felétől jelenik meg (a szó hosszával és egy betűvel), utána fokozatosan, egyesével nyílik fel még néhány betű — legfeljebb a szó kb. fele, és legfeljebb 4 betű.'
@@ -15469,12 +15414,6 @@ const SRV = (function(){
       'Simább vonalak: a gyors mozdulat nem lesz szögletes.',
       'A festékes vödör minden eszközön pontosan ugyanúgy tölt ki, és hosszú rajznál sem lassul be a tippelők telefonja.',
       'Ha a játék motorja nem tud betöltődni (hálózati tiltás, reklámblokkoló), üres képernyő helyett érthető hibaüzenet és Újratöltés gomb jelenik meg.'
-    ]},
-    { version:'2.88', changes:[
-      'Admin: élő áttekintés (online játékosok, nyitott szobák, folyamatban lévő játékok, szó- és zeneszámok).',
-      'Admin: közlemény a kezdőképernyőre, lejárati idővel — a játékosok bezárhatják.',
-      'Admin: szólista-ellenőrzés (mindkét listában szereplő, túl hosszú, túl rövid, furcsa karakteres szavak), egykattintásos törléssel.',
-      'Admin: figyelmeztetés mentetlen szólista-módosításokra, bezáráskor és az oldal elhagyásakor is.'
     ]},
     { version:'2.87', changes:[
       'Telefonon tippelőként is 3 tipp látszik egyszerre (eddig csak 1), ugyanúgy, mint rajzolóként: egy tömör sor tippenként.',
@@ -15510,14 +15449,14 @@ const SRV = (function(){
       'Fekvő mód telefonon teljesen átdolgozva: a játék a billentyűzet fölötti látható részhez igazodik, a chat és a reakció gomb a felső sávba került, a chat jobb oldali, teljes magasságú panelként nyílik, gépelés közben pedig a névsor és a feliratok eltűnnek, hogy a rajz és a beviteli mező kiférjen. A nagy (Pro Max) iPhone-okon is működik.'
     ]},
     { version:'2.79', changes:[
-      'A játékszobák is az MQTT hálózatot használják (eddig a sokszor akadozó Nostr-t). Mobilnetről csatlakozó telefon eddig gyakran meg sem találta a szobanyitót. Fontos: minden eszközön frissíteni kell az oldalt, mert a régebbi verzió még a régi hálózaton keresi a szobát.'
+      'Mobilnetről csatlakozó telefon is megbízhatóbban megtalálja a szobát.'
     ]},
     { version:'2.78', changes:[
       'Javítva: lassú hálózaton (pl. mobilnetről) a csatlakozás gyakran csak a 3. próbálkozásra sikerült, mert a játék 12 másodpercenként megszakította és újrakezdte a majdnem kész kapcsolatot. Most egyetlen folyamatos próbálkozás tart legfeljebb 45 másodpercig, élő másodpercszámlálóval.'
     ]},
     { version:'2.77', changes:[
       'A kapcsolat állapota most a valóságot mutatja: csatlakozáskor „Keresem a szobát…”, sikertelen próbálkozás után pedig piros „Nem sikerült kapcsolódni” (korábban hibásan „Kapcsolódva” állt ott).',
-      'Az állapotsor mellett ⓘ jel: csatlakozáskor és a váróteremben is megnyitható a hálózati jelentés, ami már a szoba saját kapcsolatának adatait is tartalmazza.'
+      'Az állapotsor melletti ⓘ jellel megnyitható a hálózati jelentés.'
     ]},
     { version:'2.76', changes:[
       'Javítva: a zene (főleg iPhone-on) akkor is szólt, ha a játék a háttérben volt. Most elhallgat, és visszatéréskor folytatódik.',
@@ -15532,9 +15471,6 @@ const SRV = (function(){
       'Javítva: a meghívó linkről telepített webapp nem próbál minden indításkor ugyanabba a régi szobába belépni.',
       'A cenzúra (trágárságszűrő) kikerült a játékból.'
     ]},
-    { version:'2.74', changes:[
-      'Részletesebb hálózati jelentés (ⓘ): címjelöltek száma, az induláskori TURN-próba eredménye, az iPhone-javítás hibakódja, és iPhone-on teendőlista, ha a készülék nem kap külső címet.'
-    ]},
     { version:'2.73', changes:[
       'Javítva: iPhone-on az „iPhone-kapcsolat javítása” gomb sikertelen próbálkozás után végtelen körben újra felajánlotta ugyanazt. Most a hiba oka látható marad, és csak akkor lehet újrapróbálni, ha annak van értelme.',
       'Új beállítás szobanyitáskor: hány szóból választhat a rajzoló a kör elején (1, 2, 3, 5, 7 vagy 10).',
@@ -15547,8 +15483,7 @@ const SRV = (function(){
       'Szavazásos kizárás: a váróteremben a 🗳️ gombbal, játék közben a játékos nevére koppintva szavazhatsz valaki kizárásáról. Ha a többiek többsége egyetért, kikerül a szobából.',
       'Trágárságszűrő a nevekre, a chatre és a tippekre.',
       'Igazságosabb pontozás: a pontokat minden eszköz maga számolja ki az eltelt időből, így senki nem tud utólag pontot „csalni” magának.',
-      'Samsung böngészőben és a Messenger/Facebook beépített böngészőjében felugró ablak javasolja az ajánlott böngészőt (Android: Chrome, iPhone: Safari).',
-      'Biztonságosabb admin belépés.'
+      'Samsung böngészőben és a Messenger/Facebook beépített böngészőjében felugró ablak javasolja az ajánlott böngészőt (Android: Chrome, iPhone: Safari).'
     ]},
     { version:'2.71', changes:[
       'Új visszaszámláló: kompakt kapszula egy fogyó körrel és egyenletes szélességű számokkal (pl. 1:05), a rajzlap tetején pedig egy vékony időcsík fogy. 20 másodpercnél sárgára, 10-nél pirosra vált. Telefonon és PC-n is.'
@@ -15562,19 +15497,16 @@ const SRV = (function(){
       'Tippelésnél a beírómező alul van, közvetlenül a billentyűzet fölött, és a képernyő a billentyűzet megnyitásakor sem csúszik el: a rajz, a tippek és a beírómező is látszik.'
     ]},
     { version:'2.68', changes:[
-      'Kijavítva: ha telefonon nyitottál szobát, a telefon egy idő után átválthatott egy nem működő jelzőhálózatra, és a többiek nem látták a szobát. A telefonok most a megbízható MQTT hálózaton maradnak, amíg az elérhető.',
+      'Kijavítva: ha telefonon nyitottál szobát, a telefon egy idő után átválthatott egy nem működő jelzőhálózatra, és a többiek nem látták a szobát. Most a telefon a megbízható úton marad.',
       'Kijavítva: telefonon a rajz fölötti tipplistában a „〰 közel” gomb nem volt megnyomható.',
       'Az „Ott vagy még?” kérdés csak akkor jön elő, ha a rajzoló még semmit nem rajzolt. Aki már rajzolt, azt nem zavarja, a kör ideje úgyis lejár.'
-    ]},
-    { version:'2.67', changes:[
-      'Admin felület: a szólisták .txt fájlból importálhatók (soronként egy szó). Alapból csak az új szavakat adja hozzá, a „felülírás" gombbal a fájl tartalmára cseréli a teljes listát. Az exportálás gomb a régi letöltés.'
     ]},
     { version:'2.66', changes:[
       'Lassú hálózaton (pl. ha a wifi blokkolja a közvetlen kapcsolatot) több idő jut a kapcsolat felépítésére: 10 helyett 30 másodperc.',
       'iPhone-on a helyi-cím javítás gombja akkor is megjelenik, ha be van állítva közvetítő szerver, de a kapcsolat mégsem jön létre.'
     ]},
     { version:'2.65', changes:[
-      'Megbízhatóbb szobakeresés: a szobalista mostantól egy harmadik, céges üzemeltetésű jelzőhálózaton (MQTT) is fut, ami sokkal stabilabb az eddigi ingyenes szervereknél. Telefonon ezzel indul, és ha nem talál senkit, magától vált.',
+      'Megbízhatóbb szobakeresés, és ha a telefon nem talál senkit, magától más hálózatra vált.',
       'Új 🔄 Frissítés gomb a szobalistánál: újraépíti a keresést, ha a szoba nem jelenik meg.'
     ]},
     { version:'2.64', changes:[
@@ -15584,12 +15516,10 @@ const SRV = (function(){
       'Kijavítva: ha valakinek (főleg telefonon) csendben megszakadt a kapcsolata, a játék a többieknél néha nem vette észre, és örökké rá várt, például rajzolás közben vagy a következő kör indításánál. Mostantól minden eszköz pár másodpercenként jelzi, hogy még él, és aki 20 másodpercig hallgat, azt a szokásos türelmi idő után kilépettnek veszi a játék, és továbbadja a ceruzát.'
     ]},
     { version:'2.62', changes:[
-      'Kijavítva: telefonon a szobalista hálózatváltása játék közben is lefuthatott, ami megzavarhatta a játék kapcsolatait (a telefon azt hihette, hogy mindenki más kilépett). Szobában vagy játék közben most már nem vált.'
+      'Javítva: telefonon a szobalista játék közben megzavarhatta a kapcsolatot, és úgy tűnhetett, mindenki kilépett.'
     ]},
     { version:'2.61', changes:[
-      'Telefonon a szobalista már nem ragad be egy hálózatra: ha 20 másodperc alatt senkit nem talál, átvált a másikra (torrent ↔ nostr), és megjegyzi, melyik működött.',
-      'Hálózati diagnosztika: minden jelzőszerver külön, névvel és állapottal szerepel, így két eszköz listája összehasonlítható.',
-      'Ha a közvetítő (TURN) szerver nem ad címet, a játék kiveszi a beállításból, így iPhone-on újra megjelenik a helyi-cím javítás gombja.'
+      'Telefonon a szobalista nem ragad be: ha 20 másodperc alatt senkit nem talál, magától más úton próbálkozik.'
     ]},
     { version:'2.59', changes:[
       'Háttérzene: az oldal betöltésekor és minden játék után véletlenszerűen választott zenével indul (egymás után kétszer nem ugyanazzal), onnan sorban megy tovább, és az utolsó után a lista elejéről folytatja.'
@@ -15603,15 +15533,14 @@ const SRV = (function(){
     ]},
     { version:'2.56', changes:[
       'Új: háttérzene. A főmenüben és a szobában, a játék indulásáig szólnak a feltöltött zenék egymás után; induláskor fokozatosan elhalkulnak, majd leállnak.',
-      'Új: a játékhangok és a zene hangereje külön állítható (a főoldal alján a 🎚️ gombbal, játék közben a ☰ menüben). Teljesen lehúzva néma. A beállítás ezen az eszközön megmarad.',
-      'Admin: mp3 zenék feltöltése, belehallgatása és törlése az admin felületen. A zenék a GitHub-tároló külön „zene” ágára kerülnek, így nem indítanak Netlify-deployt.'
+      'Új: a játékhangok és a zene hangereje külön állítható (a főoldal alján a 🎚️ gombbal, játék közben a ☰ menüben). Teljesen lehúzva néma. A beállítás ezen az eszközön megmarad.'
     ]},
     { version:'2.55', changes:[
       'Új: a rajzoló három szó közül választhat (ha mindkét nehézség be van kapcsolva, mindig van köztük könnyű és nehéz is). Ha 10 másodpercig nem választ, a játék dönt helyette. A „Passz” gomb ezzel megszűnt.',
       'Új rajzeszközök: kitöltés (festékes vödör), egyenes vonal és kör/ellipszis.',
       'Új: a játék végén galéria mutatja a parti összes rajzát a szavakkal. Egy rajzra koppintva letölthető, vagy az összes egyetlen képben menthető és megosztható.',
       'Új: ha a szobanyitó kilép, a szoba nem hal meg — valaki más automatikusan átveszi a szerepét (indítás, késők beengedése, új parti).',
-      'Gyorsabb: rajzolás közben már csak az új vonások mennek át a hálózaton, nem minden alkalommal a teljes rajz. Részletes rajzoknál és lassú mobilneten ez sokkal kevesebb akadást jelent. Mindenkinek frissítenie kell az oldalt.',
+      'Gyorsabb rajzközvetítés: részletes rajzoknál és lassú mobilneten sokkal kevesebb akadás.',
       'Javítva: ha megtelik a rajz (vonás- vagy pontkorlát), a rajzoló most üzenetet kap, és előtte figyelmeztetést is — eddig egyszerűen nem rajzolt tovább a toll.'
     ]},
     { version:'2.54', changes:[
@@ -15623,18 +15552,10 @@ const SRV = (function(){
     ]},
     { version:'2.52', changes:[
       'Kijavítva: ha valaki újratöltötte az oldalt játék közben, és visszalépett, kétszer szerepelt a listában, a pontjai pedig kettéváltak a régi és az új példánya között. Mostantól, ha ugyanazzal a névvel tér vissza, átveszi a régi pontjait és a helyét a sorrendben.',
-      'Kijavítva: egy kilépés vagy újracsatlakozás után a játékosok gépein eltérhetett a rajzolási sorrend, és előfordult, hogy két játékos kölcsönösen egymásra várt a következő kör indításával. Mostantól a sorrendet a szobanyitó gépe határozza meg és küldi el mindenkinek, így mindenki ugyanazt látja.',
-      'Biztonsági háló: ha mégis eltérne a sorrend, és egy jelen lévő játékos már elindította a következő kört, a többiek gépe követi őt, ahelyett hogy csendben figyelmen kívül hagyná a rajzát.'
-    ]},
-    { version:'2.51', changes:[
-      'Visszaállítva: a játékszobák ismét a korábbi (Nostr) hálózaton kapcsolódnak, mert a v2.50-ben a BitTorrent-hálózaton a csatlakozás elakadt a „Csatlakozás a szobához…” lépésnél, PC-n is. A szobalista telefonon továbbra is a BitTorrent-hálózatot használja. Mindenkinek frissítenie kell az oldalt, hogy ugyanaz a verzió fusson.'
+      'Kijavítva: egy kilépés vagy újracsatlakozás után a játékosok gépein eltérhetett a rajzolási sorrend, és előfordult, hogy két játékos kölcsönösen egymásra várt a következő kör indításával. Mostantól a sorrendet a szobanyitó gépe határozza meg és küldi el mindenkinek, így mindenki ugyanazt látja.'
     ]},
     { version:'2.50', changes:[
-      'Kijavítva: telefonon senkinek nem jelent meg a szobalista, és nem lehetett csatlakozni egyetlen szobához sem. A Nostr-hálózat, amin a telefonok eddig kizárólag kapcsolódtak, már nem továbbította megbízhatóan a kapcsolatfelvételi üzeneteket. A számítógépek ezért működtek, mert ők egy második, BitTorrent-alapú hálózatot is használtak. Mostantól ez a fő hálózat minden eszközön. FONTOS: minden játékosnak ezt az új verziót kell használnia (egyszer frissítsd az oldalt), mert a régi verzió a régi hálózaton keresi a szobákat.'
-    ]},
-    { version:'2.49', changes:[
-      'A hálózati jelentés (ⓘ gomb) mostantól a legutóbbi kapcsolódási hibák pontos szövegét is tartalmazza, így telefonon is kideríthető, mi akadályozza a csatlakozást.',
-      'A játék induláskor ténylegesen kipróbálja a közvetítő (TURN) szervert. Ha a szerver nem ad címet (például elfogyott a havi ingyenes keret), ezt piros üzenettel egyértelműen kiírja, ahelyett hogy csak annyit mondana, hogy nem sikerült kapcsolódni.'
+      'Javítva: telefonon nem jelent meg a szobalista, és nem lehetett csatlakozni egyetlen szobához sem.'
     ]},
     { version:'2.48', changes:[
       'Kijavítva: ha játék közben megnyitottad a menüt, és onnan kiléptél a szobából, a menü nyitva maradt a kezdőképernyőn. Mostantól bármilyen módon kerülsz ki a játékból (saját kilépés, „Ott vagy még?” időtúllépés, hiba), a menü bezáródik.',
@@ -15670,46 +15591,32 @@ const SRV = (function(){
       'A játék végén minden játékos szavazhat, hogy akar-e még egy partit: „Igen” esetén vár a többiekre, „Nem” esetén azonnal kilép. A szobanyitó csak akkor indíthat új partit, ha mindenki más is igent mondott.',
       'Hozzáadva a „Kezdőképernyőhöz adás” / telepíthető webapp támogatás: ikon, teljes képernyős indulás böngészősáv nélkül, mindkét tájolásban.'
     ]},
-    { version:'2.40', changes:[
-      'Kijavítva: a v2.39-ben a szobalista előbb közvetlen kapcsolatot próbált, és csak utólag, egy szoba bezárásával/újranyitásával váltott át a közvetítőre (TURN) — ez a lépés önmagában is hibaforrás volt, és megzavarta a felületet is (a „kapcsolódás közvetítő szerveren keresztül" üzenet feleslegesen kétszer is megjelenhetett). Most a közvetítő — ha be van állítva — MINDEN kapcsolatnak, a szobalistának is, már az első próbálkozásától kezdve fel van ajánlva.',
-      'Az „iPhone-kapcsolat javítása" gomb mostantól csak akkor jelenik meg, ha nincs beállítva közvetítő szerver — ha van, és mégsem jön létre kapcsolat, az nem a rejtett helyi címen múlik, a mikrofon-engedély ott nem segítene.',
-      'Hozzáadva egy Safari/WebKit-kompatibilitási beállítás (credentialType) minden közvetítő-szerver bejegyzéshez — néhány régebbi Safari-verzió ismerten figyelmen kívül hagyhatja a hitelesítő adatokat enélkül.',
-      'Ha a közvetítő adatainak betöltése elsőre nem sikerül, a program 8 másodperc múlva automatikusan újrapróbálja.',
-      'A ⓘ diagnosztika most megkülönbözteti, hogy a kapcsolódás a közvetítőn keresztül is elbukott-e (ez magára a közvetítő szerverre vagy a hálózatra utal), vagy még be sincs állítva.'
-    ]},
     { version:'2.39', changes:[
-      'Közvetítő (TURN) szerver támogatás: ha a kódban meg van adva egy ingyenes Metered „Open Relay" hozzáférés, a játékszoba mindig felajánlja a közvetítőt (közvetlen kapcsolat továbbra is előnyben), a szobalista pedig magától átvált rá, ha a közvetlen kapcsolat nem jön létre. Ez akkor is segít, amikor az iPhone-os javítás nem elég (pl. mobilnet, szigorú router).',
-      'A szobalista nem állítja többé, hogy „Még nincs nyitva szoba", ha valójában csak nem sikerült kapcsolódni a többiekhez — ilyenkor ezt mondja ki.',
-      'A ⓘ diagnosztika a közvetítő szervert is teszteli, kiírja a böngésző azonosítóját, és iPhone-on a vágólapra is másolja az eredményt, hogy el lehessen küldeni.'
+      'Megbízhatóbb csatlakozás akkor is, ha a közvetlen kapcsolat nem jön létre (pl. mobilnet, szigorú router).',
+      'A szobalista nem állítja többé, hogy „Még nincs nyitva szoba", ha valójában csak nem sikerült kapcsolódni a többiekhez — ilyenkor ezt mondja ki.'
     ]},
     { version:'2.38', changes:[
-      'Kijavítva: a v2.37 iPhone-on (és Safariban) már induláskor hibára futott („Cannot access \'appleNetUnlocked\' before initialization"), így a játék el sem indult. Az iPhone-javítás állapotváltozóit a program későbbi ponton hozta létre, mint ahol a szobalista állapota először kirajzolódik.'
+      'Javítva: iPhone-on és Safariban a játék el sem indult.'
     ]},
     { version:'2.37', changes:[
-      'iPhone / Safari: ha a szobalista azt írja, hogy „találtam másik játékost, de nem sikerült vele kapcsolatot építeni", megjelenik egy „📶 iPhone-kapcsolat javítása" gomb (a csatlakozási hibánál is). Ok: az Apple böngészőmotorja elrejti a készülék helyi hálózati címét, amíg az oldal nem kap mikrofon-engedélyt, ezért ugyanazon a wifin az iPhone sokszor nem éri el a többieket, miközben az androidos és a gépes eszközök egymást igen. A gomb egyszer mikrofon-engedélyt kér, a mikrofont azonnal bezárja (semmit nem vesz fel), és újraépíti a kapcsolatokat.',
-      'A Messenger (Facebook, Instagram) beépített böngészője ezt a javítást nem engedi — ilyenkor a program azt javasolja, hogy nyisd meg az oldalt Safariban.',
-      'A ⓘ diagnosztika megmutatja, hogy az eszköz látható, álnevesített vagy rejtett helyi címmel kapcsolódik-e.',
-      'Előkészítve (alapból kikapcsolva): közvetítő (TURN) szerver megadható a játékszobához azokra az esetekre, amikor semmilyen közvetlen kapcsolat nem jöhet létre (pl. szigorú mobilhálózat).'
+      'iPhone / Safari: ha ugyanazon a wifin nem jön létre kapcsolat, megjelenik egy „📶 iPhone-kapcsolat javítása” gomb. Egyszer mikrofon-engedélyt kér, de semmit nem vesz fel, csak így engedi az iPhone a közvetlen kapcsolatot.',
+      'A Messenger (Facebook, Instagram) beépített böngészője ezt a javítást nem engedi — ilyenkor a program azt javasolja, hogy nyisd meg az oldalt Safariban.'
     ]},
     { version:'2.36', changes:[
-      'Biztonság: a hálózatról érkező összes üzenet ellenőrzésen megy át. A beállításokat (és a játék indítását) már csak a szobanyitó küldheti, kirúgni is csak ő tud, kört csak az indíthat, akinek épp a köre van (vagy aki egy kilépő rajzolót vált), rajzot csak az aktuális rajzoló küldhet, és mindenki csak a saját pontszámát jelentheti be — más pontszámát nem lehet felülírni. A hiányos, hibás vagy túlméretezett üzeneteket a program eldobja.',
-      'Kijavítva: hibás vagy sérült rajzadat (hiányzó pontok, NaN/végtelen koordináta, irreális ecsetméret) korábban megakaszthatta a rajz megjelenítését a nézőknél.',
+      'Biztonság: csalni nem lehet. Más pontszámát átírni, más nevében rajzolni vagy a játékot más helyett indítani nem lehet.',
+      'Javítva: egy hibás rajzadat megakaszthatta a rajz megjelenítését a tippelőknél.',
       'Rajzolás: egyetlen koppintás is látszik (eddig a pont nélküli vonás láthatatlan volt), a második ujj nem veszi el a megkezdett vonást, a megszakított érintés (pl. bejövő hívás, képernyőforgatás) nem ragasztja be a rajzolást, és a nulla méretű rajzfelület sem okoz hibát.',
-      'Hálózat: hosszú rajznál ritkábban és csak tényleges változás esetén megy ki a rajz, a fölösleges, egymáshoz túl közeli pontok kimaradnak — így kevesebb adat megy, a rajz ugyanaz marad (a visszavonás, a törlés és a menet közbeni csatlakozás is változatlanul működik).',
-      'Menet közbeni csatlakozás: ha az állapot-pillanatkép hamarabb érkezne, mint a szobanyitó azonosítása, már nem vész el (eddig a belépő üres lobbiban ragadhatott); ugyanaz a pillanatkép kétszer már nem kerül feldolgozásra; lejárt kör után belépve nem indul újra a visszaszámláló.',
-      'Kijavítva: szobaváltás, kilépés vagy visszavágó közben befejeződő korábbi műveletek (átadás, kör vége képernyő, hangfelvétel, újraküldés) már nem szólnak bele az új szobába.',
+      'Hosszú rajznál kevesebb adat megy a hálózaton, a rajz ugyanaz marad.',
+      'Javítva: menet közben belépve néha üres váróteremben ragadtál.',
       'Kilépéskor a mikrofon is leáll, a fül bezárásakor pedig a szoba azonnal lekerül a szobalistáról.',
       'Ha a szobanyitó kilép, a többiek egyértelmű jelzést kapnak róla (a lobbiban és a chatben is), hogy abban a szobában már nem indul új játék — eddig csak vártak.',
       'Chat: a régi üzenetek (és a bennük lévő hangfelvételek) egy idő után kikerülnek a listából, így hosszú játék alatt sem fogy el a memória. A megjelenő név mindig az, akit a játék az adott játékoshoz ismer, nem az, amit az üzenet állít magáról.',
-      'A GitHub- és Netlify-token már csak a böngésző munkamenet-tárolójában marad (a fül bezárásáig), nem tartósan a gépen. Fontos és őszintén: kiszolgáló nélkül a token ettől még nem lesz igazán biztonságban, mert kliensoldali.',
-      'A zárt szobák ujjlenyomata erősebb beállítással készül (a régi szobákkal is kompatibilis marad). Pontosítás a korábbi leíráshoz: az ujjlenyomat nem „visszafejthetetlen" — az 5 karakteres kód rövid, ezért elegendő erőforrással kipróbálható; a zárt szoba arra jó, hogy ne lehessen csak úgy rábukkanni, nem titkosításra.',
-      'A visszajelzés ablak megmondja, hogy ez a funkció csak a Netlify-ra kitelepített változatban működik, és hogy a név/elérhetőség megadása önkéntes.',
       'Apróságok: a szobalétrehozás és a csatlakozás gombja nem indítható kétszer, a „Passz" és az „Én jövök" gomb nem okoz hibát elkésett kattintásra, a nem támogatott mikrofon/hangformátum érthető üzenetet kap, a konfetti-animáció pedig nem fut feleslegesen a háttérben.'
     ]},
     { version:'2.35', changes:[
-      'Visszajelzés gomb a főképernyőn: a játékosok hibát jelenthetnek, funkciót kérhetnek, vagy véleményt írhatnak (nem kötelező névvel és elérhetőséggel, kérésre eszköz- és verzióadatokkal). A visszajelzéseket a Netlify Forms gyűjti.',
+      'Visszajelzés gomb a főképernyőn: hibát jelenthetsz, funkciót kérhetsz, vagy véleményt írhatsz (név és elérhetőség nélkül is).',
       'Chat: bármelyik üzenetre lehet emojival reagálni (👍 😂 ❤️ 😱 👏 🤔 😡) — a reakciók számlálóval jelennek meg az üzenet alatt, a saját reakciód újra megnyomva visszavonható. Korábbi üzenetre válaszolni is lehet: a válasz fölött megjelenik az idézett üzenet, amire kattintva odaugrik az eredetihez.',
-      'A szoba a szobalistán marad, amikor elindul a játék (\"🎮 Folyamatban\" jelöléssel), és menet közben is lehet csatlakozni hozzá — rajzolás közben, kör vége képernyőn, sőt a játék vége után is (ilyenkor a visszavágóban már részt vesz). A szoba létszámkorlátját ilyenkor is betartja: ha megtelt, nem lehet belépni, de a kilépő játékosok helye felszabadul.',
+      'A szoba a szobalistán marad, amikor elindul a játék ("🎮 Folyamatban" jelöléssel), és menet közben is lehet csatlakozni hozzá — rajzolás közben, kör vége képernyőn, sőt a játék vége után is (ilyenkor a visszavágóban már részt vesz). A szoba létszámkorlátját ilyenkor is betartja: ha megtelt, nem lehet belépni, de a kilépő játékosok helye felszabadul.',
       'Aki menet közben csatlakozik, megkapja a játék állását (pontok, kör, az addig megrajzolt vonalak, a betű-súgó, a hátralévő idő), a többiek pedig értesülnek róla. A hátralévő körök rajzolási sorrendjét a program újratervezi, hogy az újonnan érkező is sorra kerüljön; a körök száma nem változik, a soron következő kör sorrendjét pedig nem érinti.'
     ]},
     { version:'2.34', changes:[
@@ -15717,51 +15624,42 @@ const SRV = (function(){
       'Kijavítva: telefonon tippeléskor a rajzfelület túl nagy volt, ezért a tipp beírására fel-le kellett görgetni. Most a rajzfelület úgy méreteződik, hogy a rajz és a tipp beírása is elférjen a képernyőn görgetés nélkül (kisebb oldalsó/felső margókkal). Ami eddig is elfért, az változatlan marad; a billentyűzet felugrása nem zsugorítja a rajzot.'
     ]},
     { version:'2.33', changes:[
-      'Kijavítva: iPhone-on a szobalista keresése közben az oldal néhány másodperc után összeomlott (\"egy probléma többször fellépett a weblapon\"). Ok: a hálózati könyvtár minden csatornán 20 előre elkészített kapcsolatot tart, a szobalista pedig két csatornán futott (40 kapcsolat), és a nem elérhető játékosokhoz 5 másodpercenként újabb próbálkozás indult. Most telefonon csak egy csatorna fut, kevesebb STUN-szerverrel.',
+      'Javítva: iPhone-on a szobalista keresése közben az oldal néhány másodperc után összeomlott.',
       'Összeomlás-védelem: ha az előző betöltés összeomlott, a szobalista magától nem indul újra (nehogy ismétlődjön), hanem a szobalista melletti feliratra koppintva kapcsolható be. Meghívó-linkkel ilyenkor is lehet csatlakozni.',
       'Új hibajelzés: a szobalista melletti állapotjelző (🟠) megmondja, ha talált másik játékost, de a két hálózat nem engedi a közvetlen kapcsolatot; a csatlakozási hibaüzenet is külön jelzi ezt.',
-      'Új diagnosztika: a szobalista melletti ⓘ jelre koppintva kiírja, hány jelzőszerver érhető el, hány játékost talált, és hogy az adott eszköz hálózata engedi-e a közvetlen kapcsolatot.',
-      'Csatlakozáskor 12 mp jut egy próbálkozásra 9 helyett.',
-      'Fontos: a javítás csak az oldal újratöltése után él, minden eszközön.'
+      'Új diagnosztika: a szobalista melletti ⓘ jelre koppintva látszik, hogy az eszközöd hálózata engedi-e a közvetlen kapcsolatot.',
+      'Csatlakozáskor 12 mp jut egy próbálkozásra 9 helyett.'
     ]},
     { version:'2.32', changes:[
       'Böngésző-értesítés a szobanyitónak: ha valaki belép a szobádba vagy kilép belőle, a böngésző jelez (amíg másik fülön vagy ablakban vagy). Az engedélyt szoba létrehozásakor kéri a böngésző, a lobbiban pedig ki is látszik, hogy be van-e kapcsolva.',
       'Javítva: ha a játék végén mindenki más kilépett, majd új szobát hoztál létre, az új szoba beállító képernyőjén rögtön megjelent a régi "Időközben mindenki más kilépett a szobából…" üzenet. Az új szoba mostantól tiszta lappal indul, és a régi szoba késői eseményei sem zavarnak be.'
     ]},
-    { version:'2.31', changes:[
-      'Javítva, hogy sok kihagyott (már meglévő) szó esetén szétcsúszott a felület, és a teteje elérhetetlenné vált. A kihagyott szavakból már csak néhány példa és a darabszám látszik, a panel pedig mindig legörgethető a tetejéig (a kiadási napló is).'
-    ]},
-    { version:'2.30', changes:[
-      'A szavak listája nagyobb, és a lista alatt kiírja, hogy az összes szó látszik benne (a játék mindig az összes szót használja, a lista csak egy görgethető doboz volt).',
-      'Kereső mindkét szólistához (ékezetek és kis/nagybetű nélkül is keres), a törlés a keresés és a görgetési pozíció megtartásával működik.'
-    ]},
     { version:'2.29', changes:[
-      'Biztonság: a feladvány mostantól nem kerül ki a hálózatra. A szót csak a rajzoló eszköze ismeri; a tippeket is csak neki küldik el, ő ellenőrzi őket, és mindenkinek megmutatja az ellenőrzött tippet. A szó a kör végén, az eredménnyel együtt derül ki mindenkinek. Ezért a böngésző fejlesztői eszközeiből sem olvasható ki a megfejtés.',
-      'Fontos: ez a verzió nem kompatibilis a régebbiekkel — mindenkinek újra kell töltenie az oldalt, mielőtt közös játékot indítotok.'
+      'Biztonság: a feladvány mostantól nem kerül ki a hálózatra. A szót csak a rajzoló eszköze ismeri; a tippeket is csak neki küldik el, ő ellenőrzi őket, és mindenkinek megmutatja az ellenőrzött tippet. A szó a kör végén, az eredménnyel együtt derül ki mindenkinek. Ezért a böngésző fejlesztői eszközeiből sem olvasható ki a megfejtés.'
     ]},
     { version:'2.28', changes:[
       'Gyorsreakciók: a 🔥 helyett 😡 (mérges fej) van.',
       'A rajzoló rajzolás közben is látja a feladványt (a képernyő tetején, a nehézségi szinttel együtt).',
-      '10 másodperces visszaszámláló az \"Én jövök — kezdem!\", a \"Megnézem a szót\" és a \"Kezdem a rajzolást!\" gombokon: ha a játékos nem nyomja meg, a gomb magától megnyomódik.',
+      '10 másodperces visszaszámláló az "Én jövök — kezdem!", a "Megnézem a szót" és a "Kezdem a rajzolást!" gombokon: ha a játékos nem nyomja meg, a gomb magától megnyomódik.',
       'Javítva: ha ketten egyszerre találták el a szót, eszközönként más lehetett a nyertes, és dupla pont járt. Most a rajzoló dönt: az első hozzá érkező helyes tipp nyer, mindenkinél ugyanaz az eredmény.',
       'Javítva: ha a soron következő rajzoló kilépett, miközben a kör vége képernyő látszott, a játék örökre megállt. Most automatikusan a következő aktív játékos jön.',
       'Javítva: a visszaszámláló az eszközök órájának eltérése miatt máshogy járhatott a tippelőknél és a rajzolónál; a pontszám is ettől függött. Most mindenki a saját érkezési idejéhez méri, a pontot a rajzoló számolja. Ha a rajzoló eszköze nem jelzi az idő lejártát, a többiek pár másodperc után maguktól továbblépnek.',
       'Javítva: aki már elindult játékba próbált becsatlakozni, korábban egy üres váróteremben ragadt (hibákkal); most jelzést kap, hogy a játék már fut.',
-      'Javítva: a \"Passz\" gomb után is azt írta ki, hogy lejárt az idő; most azt, hogy a rajzoló passzolt.',
+      'Javítva: a "Passz" gomb után is azt írta ki, hogy lejárt az idő; most azt, hogy a rajzoló passzolt.',
       'Javítva: kilépéskor a régi szoba chatje bent maradt, és a visszaszámláló tovább futott a háttérben.',
       'Biztonság: egy játékos a nevével, színével, hangüzenettel vagy reakcióval kódot tudott csempészni a többiek oldalába; ezek most szűrve vannak. A kör végét csak a rajzoló jelenthet be.'
     ]},
     { version:'2.27', changes:[
-      'A főképernyő szobalistájában most már a zárt (kódos) szobák is megjelennek, nem csak a nyilvánosak. Minden szobánál jól látható jelölés van: zöld \"🌐 Nyilvános\" vagy sárga \"🔒 Zárt\" címke és színes szél. Zárt szobára kattintva a kódot kell megadni (hibás kódnál azonnal jelzi), a kód a szoba lobbijában újra látható. A zárt szoba kódja soha nem kerül ki a listára, csak egy visszafejthetetlen ujjlenyomata.',
+      'A főképernyő szobalistájában most már a zárt (kódos) szobák is megjelennek, nem csak a nyilvánosak. Minden szobánál jól látható jelölés van: zöld "🌐 Nyilvános" vagy sárga "🔒 Zárt" címke és színes szél. Zárt szobára kattintva a kódot kell megadni (hibás kódnál azonnal jelzi), a kód a szoba lobbijában újra látható. A zárt szoba kódja soha nem kerül ki a listára, csak egy visszafejthetetlen ujjlenyomata.',
       'Gyorsreakciók: a név sötét, lekerekített címkén jelenik meg, így a fehér rajzvásznon is olvasható, és az animáció kb. 5 másodpercig látszik a korábbi ~2 helyett.',
-      'Megszűnt az \"extra kihívás-kártyák\" opció: a szoba beállításai közül és a játékmenetből is kikerült.'
+      'Megszűnt az "extra kihívás-kártyák" opció: a szoba beállításai közül és a játékmenetből is kikerült.'
     ]},
     { version:'2.26', changes:[
       'A főképernyőről kikerült a "Csatlakozás kóddal" kártya: nyilvános szobába a listából, privát szobába a meghívó linkkel lehet belépni. A privát szoba lobbija ezért a kód helyett a meghívó-link másolását ajánlja.',
       'A "Szoba létrehozása" gomb kompakt, középre igazított gomb lett a nagy kártya helyett.',
       'Új játékos-sáv tippelés és rajzolás közben: minden belépett játékos állandóan látszik (színes körrel, névvel, ponttal; a rajzolót ✏️ jelzi, téged "Te"), és aki kilép, azonnal eltűnik belőle. Tippeléskor a küldő chipje felvillan.',
       'A tippek listája most a küldő színes körével és nevével jelenik meg, a saját tippjeid külön kiemelve; a rajzolónál is.',
-      'Szobalista-javítások: a hálózati könyvtár rögzített verziót használ (a különböző eszközökön eltérő verzió miatt előfordulhatott, hogy nem találták meg egymást), több relé-szervert használ, a nyitott szobák pár másodpercenként újra meghirdetik magukat, a lista egy második hálózaton (BitTorrent) és ugyanazon böngésző lapjai között is működik, a lejárt szobák eltűnnek, és a lista mellett állapotjelzés mutatja, hogy van-e kapcsolat.',
+      'Megbízhatóbb szobalista: a nyitott szobák gyorsabban megjelennek, a lejártak eltűnnek, és látszik, van-e kapcsolat.',
       'Kijavítva: ha egy képernyő magasabb volt a kijelzőnél (pl. a szoba beállításai telefonon), a teteje elérhetetlenül kicsúszott a képernyő fölé — most mindig görgethető.',
       'Kijavítva: a szoba láthatósága (privát/nyilvános) néha eltérhetett a kapcsoló állásától, ha előtte másik szobához csatlakoztál — így a szoba nem került fel a listára.'
     ]},
@@ -15778,36 +15676,14 @@ const SRV = (function(){
       'Gyors reakció-emojik: rajzolás/tippelés közben egy 🙂 gombbal elküldhetsz egy gyors reakciót (👏 😂 😱 ❤️ 🤔 🔥), ami mindenkinél felvillan a képernyőn.'
     ]},
     { version:'2.23', changes:[
-      'Az AI ellenfél funkció teljesen eltávolítva (a rajzai a szótól függetlenül, félrevezetően semlegesek voltak, aminek a tulajdonos szerint nem volt értelme kategorizálás vagy külső AI-szolgáltatás nélkül).',
-      'Alapos átvizsgálás: minden JavaScript-hivatkozás ellenőrizve, hogy valóban létező HTML-elemre mutat-e — nem maradt törött hivatkozás az eltávolítás után.'
-    ]},
-    { version:'2.22', changes:[
-      'Visszavonva: a szólistákban nincs több kategória-jelölés — a szavak-konnyu.txt és szavak-kozepes.txt fájlok visszaálltak az eredeti, egyszerű (egy szó soronként) formára.',
-      'Mivel a szó jelentését API/kép­felismerés nélkül nem lehet becsületesen kitalálni, az AI mostantól mindig egy semleges, elvont formakészletből rajzol, a szótól függetlenül — nem próbál (és nem is próbálhat) illeszkedni a feladványhoz.'
-    ]},
-    { version:'2.21', changes:[
-      'Az AI rajz-kategóriája mostantól magában a szólistában van, nem egy külön, csak általam szerkeszthető szótárban: minden szó "szó|kategória" formában tárolható, és bármikor átállítható egy legördülő menüből.',
-      'Minden szó mellett látható és szerkeszthető a kategória (pl. 🐾 Szőrös állat, 🍽️ Étel, 🚗 Jármű) — letöltéskor és felhő-mentéskor is megmarad.',
-      'A meglévő kb. 310 szó mindegyike megkapta a korábbi belső tudásom alapján a legjobban illő kategóriát (pl. saláta és más ételek → 🍽️ Étel) — ehhez le kell töltened az új szavak-konnyu.txt / szavak-kozepes.txt fájlokat, és fel kell töltened a tárhelyedre.',
-      'Új, kézzel felvett szónál a kategória alapból üres — ha nem állítasz be neki egyet, az AI egy semleges, elvont formát rajzol helyette (nem primitív emberkét).'
+      'Az AI ellenfél kikerült a játékból.'
     ]},
     { version:'2.20', changes:[
       'Kijavítva: nyilvános szobánál a "Kapcsolódva — kód: ..." felirat még mindig kiírta a kódot a lobbi tetején — most csak annyit mutat, hogy "Kapcsolódva a szobához", sehol nem jelenik meg a kód.',
-      'Kijavítva: ha az AI olyan szót kapott, ami nem szerepelt a beépített szó→rajz szótárban (pl. "saláta", vagy bármilyen később hozzáadott új szó), mindig egy emberkét rajzolt, függetlenül a feladványtól. Bővítettem a szótárat (több étel-szóval), és az ismeretlen szavaknál mostantól egy semleges, elvont formát rajzol emberke helyett.',
       'A szobából mostantól rajzolás és tippelés közben, illetve kör végén is bármikor ki lehet lépni egy "🚪" / "Kilépés a szobából" gombbal, nem csak a lobbiban vagy a végén.'
     ]},
     { version:'2.19', changes:[
-      'Kijavítva: az AI szó→rajz párosítása hibásan majdnem mindig az általános tartalék rajzra (emberke) esett vissza ékezetes szavaknál (pl. "rozmár") — most helyesen a megfelelő, témába illő sablont választja.',
-      'Nem lehet elindítani a játékot, ha összesen csak 2 játékos van és az egyik az AI (mivel az AI nem tud tippelni, ez a felállás nem játszható végig).',
-      'A szoba létszámkorlátjánál nem választható a "2 fő", ameddig az AI be van kapcsolva — automatikusan legalább 3 főre ugrik.',
-      'A visszaszámláló mostantól középen, felül jelenik meg (nem a bal felső sarokban), és kicsit nagyobb méretben, mind a rajzolónál, mind a tippelőknél.',
-      'Az AI rajzolása folyamatos és természetes: vonalanként, fokozatosan épül fel, emberi tempóhoz hasonló sebességgel és apró szünetekkel a vonalak között — nem néhány másodpercenkénti "kockázással".',
-      'Az AI rajzaiban mostantól színek is szerepelnek ott, ahol indokolt (pl. sárga nap, zöld fakorona, piros szív, kék hal).'
-    ]},
-    { version:'2.18', changes:[
-      'AI ellenfél hozzáadható a szoba létrehozásakor: teljes értékű játékosnak számít, beleszámít a létszámkorlátba, és sorra kerül rajzolni.',
-      'Az AI ügyességi szintje állítható (Kezdő / Középhaladó / Profi) — ez a rajzai részletességét és pontosságát befolyásolja.',
-      'Az AI egy beépített, helyi rajzsablon-könyvtárból "rajzol" a szó témája alapján, fokozatosan, valós rajzoláshoz hasonló ütemben — nem külső AI-szolgáltatással, API-kulcs nem szükséges. Tippelni egyelőre nem tud (ehhez a rajz valódi felismerése kellene, ami API-kulcs nélkül nem megoldható becsületesen).'
+      'A visszaszámláló mostantól középen, felül jelenik meg (nem a bal felső sarokban), és kicsit nagyobb méretben, mind a rajzolónál, mind a tippelőknél.'
     ]},
     { version:'2.17', changes:[
       'Rajzolás közben a beérkező tippek PC-n a rajzoló saját képernyőjén is jobb oldali sávban jelennek meg (nem egy vékony sávban alul), ugyanúgy mint a tippelőknél.',
@@ -15850,11 +15726,6 @@ const SRV = (function(){
       'Chat üzenetek mellett megjelenik a küldés időpontja (óra:perc).',
       'Vissza gombok a beállítás- és csatlakozás-képernyőn, illetve "Szoba elhagyása" a lobbiban.'
     ]},
-    { version:'2.9', changes:[
-      'Belső eszköz a szavak kezelésére: hozzáadás, törlés.',
-      'Szavak tömegesen is felvihetők (soronként bemásolva), a rendszer jelzi, mely szavak lettek kihagyva, mert már szerepeltek.',
-      'Élő felhős szinkron (GitHub Gist) a szótárhoz, hogy a módosítások letöltés/feltöltés nélkül, azonnal élesbe kerüljenek.'
-    ]},
     { version:'2.8', changes:[
       'Élő "Jelenleg X játékos játszik" számláló a lábléc alján.'
     ]},
@@ -15880,7 +15751,6 @@ const SRV = (function(){
     ]},
     { version:'2.3', changes:[
       'Chat ablak: szöveges üzenetek és rövid hangüzenetek küldése.',
-      'Nem kötelező a minimum 2 játékos várakozás — de vissza is került, amikor kiderült, hogy értelmetlen 1 fővel indítani.',
       '"Senki nem találta ki" gomb átnevezve "Passz"-ra, és a "telefonodon" szövegek "saját eszközödön"-re javítva.'
     ]},
     { version:'2.2', changes:[
@@ -15888,12 +15758,10 @@ const SRV = (function(){
       'Látványos animációk a kezdőképernyőn (lebegő ikonok, belépő animációk).'
     ]},
     { version:'2.0', changes:[
-      'Teljes újraépítés: a játék mostantól szerver nélküli, közvetlen (peer-to-peer) kapcsolaton működik — Claude nélkül, bármilyen ingyenes webtárhelyről (pl. Netlify) kiszolgálva.',
-      'Rajzolás közben a rajzoló teljes képernyője rajzfelület, a többiek élőben látják és tippelnek a saját eszközükön.'
+      'Teljes újraépítés: mindenki a saját eszközén játszik, a rajzoló képernyője a rajztábla, a többiek élőben tippelnek.'
     ]},
     { version:'1.5', changes:[
-      'Csak könnyű és közepes nehézségi szint, sokkal több (kb. 270) új, konkrét, jól rajzolható szóval bővítve.',
-      'A szavak külön szöveges fájlokban (szavak-konnyu.txt / szavak-kozepes.txt), hogy a lista könnyen bővíthető legyen kód nélkül is.'
+      'Csak könnyű és közepes nehézségi szint, sokkal több (kb. 270) új, konkrét, jól rajzolható szóval bővítve.'
     ]},
     { version:'1.4', changes:[
       'Minden feladvány kizárólag egyetlen szóból áll (korábban szólások és többszavas jelenetek is előfordultak).'
@@ -15911,7 +15779,7 @@ const SRV = (function(){
     ]},
     { version:'1.0', changes:[
       'Az első verzió: HTML alapú, 2–4 fős party rajzjáték. Rajzolás egérrel egyetlen közös eszközön, körbeadva; színválasztó, radír, visszaszámláló, pontszámítás, konfetti és hangeffektek.'
-    ]}
+    ]},
   ];
 
   // =====================================================================
