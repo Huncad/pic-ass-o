@@ -18,7 +18,6 @@ import { makeSession, verifySession } from '../lib/adminauth.mjs';
 
 const GIST_ID = process.env.WORDS_GIST_ID || 'fe34dbe63eefd11f324555359ec4cf53';
 // a beépített jelszó lenyomata (ugyanaz, mint a játékban) — amíg nincs admin.json
-const BUILTIN_PW_SHA256 = '1d317673149102cdf94521be83a4cc1a4687e1b65382bd9de0f9499abb0f1dab';
 const MAX_BODY = 6 * 1024 * 1024;
 
 const hits = new Map();
@@ -56,7 +55,8 @@ async function checkPassword(pw) {
     const h = pbkdf2Sync(String(pw), Buffer.from(rec.salt, 'hex'), rec.iter, 32, 'sha256').toString('hex');
     return eqHex(h, rec.hash);
   }
-  return eqHex(createHash('sha256').update(String(pw)).digest('hex'), BUILTIN_PW_SHA256);
+  // v4.29: nincs beépített tartalék jelszó — ha az admin.json nem olvasható, a belépés elutasítva
+  return false;
 }
 
 // a zenés tároló: környezeti változóból, vagy a Gist zene.json-jából
