@@ -4328,19 +4328,13 @@ const SRV = (function(){
   // =====================================================================
   // Hidden admin panel — add/remove puzzle words, download updated .txt
   // files. Only reachable via a #admin URL hash; not linked anywhere in
-  // the normal UI. Password check is client-side only (this is a static
-  // site with no server), so treat it as a light deterrent, not real
-  // security — anyone who reads the page source can see the password.
+  // the normal UI. v4.29: the password is checked by the server
+  // (netlify/functions/admin.mjs) against the salted PBKDF2 record in the
+  // gist (admin.json). There is no built-in fallback password: if that
+  // record can't be read, login is refused.
   // =====================================================================
-  // v2.72: only the SHA-256 hash of the password lives in the page, not the
-  // password itself. New hash (browser console):
-  //   crypto.subtle.digest('SHA-256', new TextEncoder().encode('ÚJ JELSZÓ'))
-  //     .then(b=>console.log([...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')))
-  // A short / numbers-only password can still be brute-forced from the hash —
-  // use a long passphrase.
-  // v3.20: a password set from the admin panel lives in the gist as
-  // { v:1, salt, iter, hash } (PBKDF2-SHA256). Until one exists, or if the
-  // gist can't be read, the built-in hash above is used.
+  // { v:1, salt, iter, hash } (PBKDF2-SHA256) — also used for the offline
+  // check below when the page has no server (e.g. opened as a local file).
   let adminPwRecord = null;
   const HEX_RE = /^[0-9a-f]+$/;
   function setAdminPwRecord(r){
@@ -4360,10 +4354,6 @@ const SRV = (function(){
   async function checkAdminPassword(pw){
     if(adminPwRecord) return (await pbkdf2Hex(pw, adminPwRecord.salt, adminPwRecord.iter)) === adminPwRecord.hash;
     return false; // v4.29: no built-in fallback password
-  }
-  async function sha256Hex(text){
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(text)));
-    return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
   }
   let adminLoginFails = 0, adminLockedUntil = 0;
   let adminUnlocked = false;

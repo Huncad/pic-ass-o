@@ -13,11 +13,10 @@
 //   NETLIFY_API_TOKEN — Netlify személyes token (a visszajelzések olvasásához)
 //   (SITE_ID-t a Netlify magától adja; a munkamenet-titok magától jön létre)
 import { getStore } from '@netlify/blobs';
-import { pbkdf2Sync, createHash, timingSafeEqual } from 'node:crypto';
+import { pbkdf2Sync, timingSafeEqual } from 'node:crypto';
 import { makeSession, verifySession } from '../lib/adminauth.mjs';
 
 const GIST_ID = process.env.WORDS_GIST_ID || 'fe34dbe63eefd11f324555359ec4cf53';
-// a beépített jelszó lenyomata (ugyanaz, mint a játékban) — amíg nincs admin.json
 const MAX_BODY = 6 * 1024 * 1024;
 
 const hits = new Map();
