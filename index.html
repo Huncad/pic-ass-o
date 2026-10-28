@@ -750,6 +750,12 @@
   .prep-choices{ display:flex; flex-direction:column; gap:10px; margin:14px auto 0; max-width:340px; }
   .prep-choices.many{ display:grid; grid-template-columns:1fr 1fr; max-width:460px; gap:8px; }
   .prep-choices.many button{ font-size:1.1rem; padding:10px 10px; }
+  /* v4.29: an odd last word sits centred under the two columns */
+  .prep-choices.many > :not(.choice-legend):nth-last-child(2):nth-child(odd){ grid-column:1 / -1; justify-self:center; width:calc(50% - 4px); }
+  .prep-choices.many > :not(.choice-legend):last-child:nth-child(odd){ grid-column:1 / -1; justify-self:center; width:calc(50% - 4px); }
+  .choice-legend{ grid-column:1 / -1; display:flex; justify-content:center; flex-wrap:wrap; gap:14px; margin-top:6px; font-size:.8rem; font-weight:700; color:var(--chalk-dim); }
+  .choice-legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .choice-legend i{ width:12px; height:12px; border-radius:50%; display:inline-block; }
   .prep-choices button{ animation:choicePop .45s cubic-bezier(.2,1.6,.4,1) both; transition:transform .18s ease, box-shadow .18s ease; }
   .prep-choices button.popped{ animation:none; }
   .prep-choices button.popped:hover{ transform:scale(1.05) rotate(-1deg); }
@@ -5265,8 +5271,8 @@ const SRV = (function(){
   });
 
   const TIER_INFO = {
-    konnyu:  {label:"Könnyű",  color:"var(--green)"},
-    kozepes: {label:"Közepes", color:"var(--blue)"},
+    konnyu:  {label:"Könnyű",  color:"var(--green-fill)"},
+    kozepes: {label:"Közepes", color:"var(--blue-fill)"},
     nehez:   {label:"Nehéz", color:"var(--red)"},
     sajat:   {label:"Saját szavad · neked 0 pont", color:"var(--purple)"}
   };
@@ -11776,6 +11782,13 @@ const SRV = (function(){
     document.getElementById('prep-round-total').textContent = totalRoundCount();
     const pd = document.getElementById('prep-drawing-num');
     if(pd){ const per = drawingsPerRound(idx); pd.textContent = per > 1 ? `${drawingPosInRound(idx)}. rajz a ${per}-ból` : ''; }
+    {
+      // v4.29: the text follows the room setting instead of always saying "three"
+      const n = Number(settings.wordChoices) || 3;
+      document.getElementById('prep-word-hidden').textContent = n === 1
+        ? 'Egy szót kapsz 🙈 — csak te látod a saját eszközödön.'
+        : `${n} szó közül választhatsz 🙈 — csak te látod őket a saját eszközödön.`;
+    }
     document.getElementById('prep-word-hidden').classList.remove('hidden');
     document.getElementById('prep-word-shown').classList.add('hidden');
     document.getElementById('prep-tier-badge').classList.add('hidden');
@@ -11820,6 +11833,16 @@ const SRV = (function(){
       choicesEl.appendChild(b);
       return b;
     });
+    // v4.29: the button colours mean difficulty — say so under the words
+    {
+      const tiers = [...new Set(list.map(c=>c.tier))].filter(t=>TIER_INFO[t]);
+      if(tiers.length > 1){
+        const lg = document.createElement('div');
+        lg.className = 'choice-legend';
+        lg.innerHTML = tiers.map(t=>`<span><i style="background:${TIER_INFO[t].color}"></i>${escapeHtml(TIER_INFO[t].label.split(' · ')[0])}</span>`).join('');
+        choicesEl.appendChild(lg);
+      }
+    }
     choicesEl.classList.remove('hidden');
     // Nobody picks in time: one of the three is chosen at random.
     armAutoPress(buttons[Math.floor(Math.random()*buttons.length)]);
