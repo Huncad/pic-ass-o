@@ -2261,8 +2261,6 @@
   .home-panel.hidden{ display:none; }
   #rooms-card .rooms-h{ margin-bottom:10px; }
   #player-card .create-wrap{ margin-top:2px; }
-  .home-howto{ display:block; margin:12px auto 0; background:transparent; box-shadow:none; color:var(--chalk-dim); font-weight:700; font-size:.88rem; padding:6px 10px; }
-  .home-howto:hover{ color:var(--chalk); transform:none; }
   @media (max-width:640px){ #player-card{ padding:14px 14px 10px; } .home-avatars{ gap:6px; grid-template-columns:repeat(8, minmax(0, 1fr)); } .home-av{ font-size:1.25rem; } }
 
   /* v4.10: "egyedül maradtál" kártya és kilépés gomb */
@@ -2533,7 +2531,6 @@
       </div>
       </div>
       <div id="home-warning" style="text-align:center;color:var(--red);font-weight:700;min-height:0;margin-top:10px;"></div>
-      <button type="button" class="home-howto" id="home-howto">Új vagy a játékban? Így működik <span aria-hidden="true">▾</span></button>
     </section>
 
     <section class="home-card" id="subscribe-box">
@@ -2823,7 +2820,7 @@
   <footer class="hint">
     Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
     <div class="footer-meta" style="position:relative;">
-      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.27</button>
+      <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.28</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>
       <button id="volume-toggle-btn" class="ghost small" title="Hangerő" aria-label="Hangerő beállítása">🎚️</button>
       <div id="volume-picker" class="hidden">
@@ -4973,7 +4970,6 @@ const SRV = (function(){
   })();
   // v4.17: home card tabs, colour picker, open-room counter
   (function(){
-    document.getElementById('home-howto').addEventListener('click', ()=>{ const b = document.getElementById('btn-open-tutorial'); if(b) b.click(); });
     // v4.18: avatar picker. Each avatar has its own colour, and only the colour
     // travels over the network (as before) — every device maps it back to the
     // avatar, so no message format changed and older versions just show the colour.
@@ -14947,6 +14943,9 @@ const SRV = (function(){
   // =====================================================================
   try{ ['picasso-solo','picasso-qd-cfg','picasso-qd-dtype'].forEach(k=>localStorage.removeItem(k)); }catch(e){}   // v3.80: leftovers of the removed single-player mode
   const CHANGELOG = [
+    { version:'4.28', changes:[
+      'Kezdőképernyő: kikerült az „Új vagy a játékban? Így működik” link, mert ugyanazt nyitotta meg, mint a Súgó gomb.'
+    ]},
     { version:'4.27', changes:[
       'Sorozat: ha valaki 3 vagy több rajzot egymás után kitalál, a neve mellett megjelenik a 🔥 és a sorozat hossza (3, 5, 7 és 10 jó tippnél a chat is szól). Ha egy rajzot nem talál ki, a sorozata megszakad; ha a rajzoló passzol, nem változik semmi.',
       'Új jelvények a játék végén a meglévő két mellett: 🔥 Leghosszabb sorozat, 🥇 Villámkezű (legtöbbször ő találta ki elsőként), 🎯 Hibátlan tippelő (legalább 3 találat, rossz tipp nélkül), 🤪 Legbátrabb tippelő (a legtöbb tévedés).',
