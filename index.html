@@ -1987,7 +1987,7 @@
     --yellow:color-mix(in srgb, #FFD166 74%, #000); --blue:color-mix(in srgb, #5FB6DE 74%, #000); --green:color-mix(in srgb, #7BD389 74%, #000);
     --pink:color-mix(in srgb, #FF6FA0 74%, #000); --red:color-mix(in srgb, #FF6B5B 74%, #000); --purple:color-mix(in srgb, #C79CF0 74%, #000);
   }
-  #theme-picker{ flex-wrap:wrap; max-width:min(320px, calc(100vw - 32px)); justify-content:center; }
+  #theme-picker{ display:grid; grid-template-columns:repeat(5, max-content); gap:8px; padding:10px; justify-content:start; max-width:none; }   /* v4.29: 5 + 4, no lonely ninth swatch */
   .theme-swatch-btn.light-swatch{ border-color:rgba(38,48,44,.35) !important; }
   .theme-swatch-btn.light-swatch.active{ border-color:var(--yellow) !important; }
 
