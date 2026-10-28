@@ -259,6 +259,8 @@
   #custom-words-input{ width:100%; padding:11px 13px; border-radius:10px; border:none; font-size:1rem; font-family:'Nunito',sans-serif; resize:vertical; min-height:70px; }
   .custom-words-count{ font-size:.75rem; color:var(--chalk-dim); margin-top:4px; }
   /* v4.29: in-game leaderboard — follows the chosen theme */
+  #rank-overlay .stats-box{ width:100% !important; max-width:620px !important; }
+  #rank-close-btn{ white-space:nowrap; flex-shrink:0; }
   .rank-tabs{ margin:6px 0 14px; }
   .rank-table{ width:100%; border-collapse:collapse; background:rgba(var(--line-rgb),.05); border-radius:12px; overflow:hidden; }
   .rank-table th, .rank-table td{ padding:9px 10px; text-align:right; font-variant-numeric:tabular-nums; color:var(--chalk); }
@@ -2909,7 +2911,7 @@
       <button class="ghost small" id="rank-close-btn" aria-label="Bezárás">Bezárás ✕</button>
     </div>
     <div class="pill-row rank-tabs" role="tablist">
-      <button class="pill active" data-days="0">Mindig</button>
+      <button class="pill active" data-days="0">Összesített</button>
       <button class="pill" data-days="30">Utolsó 30 nap</button>
       <button class="pill" data-days="7">Utolsó 7 nap</button>
     </div>
