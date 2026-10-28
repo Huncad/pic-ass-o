@@ -2702,6 +2702,18 @@
       <p class="setup-hint">Tippelni mindig mindenki tud. Minél gyorsabb valaki, annál több pontot kap; a rajzoló akkor kap pontot, ha valaki kitalálta.</p>
     </div>
     <div class="setup-section">
+      <label class="field-label">Hány pontot vonjunk le egy rossz tippért?</label>
+      <div class="pill-row" id="penalty-row">
+        <button class="pill" data-penalty="0">Semennyit</button>
+        <button class="pill active" data-penalty="1">1</button>
+        <button class="pill" data-penalty="2">2</button>
+        <button class="pill" data-penalty="3">3</button>
+        <button class="pill" data-penalty="5">5</button>
+        <button class="pill" data-penalty="10">10</button>
+      </div>
+      <p class="setup-hint">A levonás azonnal megtörténik, de senki pontszáma nem mehet 0 alá. Nagyobb levonásnál nem éri meg vaktában tippelgetni.</p>
+    </div>
+    <div class="setup-section">
       <label class="field-label">Saját szavak a játékosoktól</label>
       <div class="pill-row" id="customonly-row">
         <button class="pill active" data-customonly="mix">Keverve a beépítettekkel</button>
@@ -6123,8 +6135,9 @@ const SRV = (function(){
   let roomCode = '';
   let currentRoomName = '';
   let isHost = false;
-  let settings = { difficulties:['konnyu','kozepes'], totalRounds:2, roundTime:60, maxPlayers:0, hintsEnabled:true, wordChoices:3, guessMode:'first', customWords:[], customOnly:false };
+  let settings = { difficulties:['konnyu','kozepes'], totalRounds:2, roundTime:60, maxPlayers:0, hintsEnabled:true, wordChoices:3, wrongPenalty:1, guessMode:'first', customWords:[], customOnly:false };
   const WORD_CHOICE_OPTIONS = [1,2,3,5,7,10];
+  const WRONG_PENALTY_OPTIONS = [0,1,2,3,5,10];   // v4.29: points a wrong guess costs, set per room
   let roomIsPublic = false;
 
   let room = null;
@@ -6681,7 +6694,7 @@ const SRV = (function(){
       localStorage.setItem(CREATE_PREFS_KEY, JSON.stringify({
         difficulties: [...document.querySelectorAll('#difficulty-row .pill.active')].map(b=>b.dataset.tier),
         totalRounds: settings.totalRounds, roundsAreCycles: true, roundTime: settings.roundTime,
-        hintsEnabled: settings.hintsEnabled, maxPlayers: settings.maxPlayers, wordChoices: settings.wordChoices,
+        hintsEnabled: settings.hintsEnabled, maxPlayers: settings.maxPlayers, wordChoices: settings.wordChoices, wrongPenalty: settings.wrongPenalty,
         guessMode: settings.guessMode,
         customOnly: settings.customOnly, customOff: !!settings.customOff,
         visibility: vis ? vis.dataset.visibility : 'private',
@@ -6714,6 +6727,7 @@ const SRV = (function(){
     settings.hintsEnabled = pick('hints-row', 'hints', p.hintsEnabled === false ? 'off' : 'on', 'on') === 'on';
     settings.maxPlayers = parseInt(pick('maxplayers-row', 'maxplayers', p.maxPlayers, 0), 10);
     settings.wordChoices = parseInt(pick('choices-row', 'choices', p.wordChoices, 3), 10);
+    settings.wrongPenalty = parseInt(pick('penalty-row', 'penalty', p.wrongPenalty, 1), 10);
     settings.guessMode = pick('guessmode-row', 'guessmode', p.guessMode === 'all' ? 'all' : 'first', 'first') === 'all' ? 'all' : 'first';
     roomIsPublic = pick('visibility-row', 'visibility', p.visibility, 'private') === 'public';
     if(typeof p.roomName === 'string') document.getElementById('room-name-input').value = p.roomName.slice(0,30);
@@ -6842,6 +6856,14 @@ const SRV = (function(){
       sndClick();
       settings.wordChoices = parseInt(btn.dataset.choices,10);
       document.querySelectorAll('#choices-row .pill').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  document.querySelectorAll('#penalty-row .pill').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      sndClick();
+      settings.wrongPenalty = parseInt(btn.dataset.penalty,10);
+      document.querySelectorAll('#penalty-row .pill').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
     });
   });
@@ -8030,6 +8052,7 @@ const SRV = (function(){
       maxPlayers: clampNum(s.maxPlayers, 0, 20, 0),
       hintsEnabled: s.hintsEnabled !== false,
       wordChoices: WORD_CHOICE_OPTIONS.includes(Number(s.wordChoices)) ? Number(s.wordChoices) : 3,
+      wrongPenalty: WRONG_PENALTY_OPTIONS.includes(Number(s.wrongPenalty)) ? Number(s.wrongPenalty) : 1,
       guessMode: s.guessMode === 'all' ? 'all' : 'first',
       customWords: cleanCustomEntries(s.customWords),
       customOnly: s.customOnly === true && s.customOff !== true,
@@ -13703,29 +13726,31 @@ const SRV = (function(){
   // v4.14: wrong guesses — counted by the drawer, -5 points each, for
   // everyone who guessed wrong (found the word later or not). Only the
   // guesser causes this, so the drawer can't use it to sabotage anyone.
-  const WRONG_GUESS_PENALTY = 1;
+  function wrongGuessPenalty(){ const n = Number(settings && settings.wrongPenalty); return WRONG_PENALTY_OPTIONS.includes(n) ? n : 1; }
   let roundWrong = { key:'', counts:{} };
   // v4.20: the penalty is booked the moment the drawer rejects a guess, on
   // every device, once per guess (gid), never below 0
   const penalizedGuesses = new Set();
   function applyWrongGuessPenalty(pid, gid, rk){
     if(!pid || !gid || !meta || !meta.playerNames[pid]) return;
+    const pen = wrongGuessPenalty();
+    if(pen <= 0) return;
     if(currentRound && pid === currentRound.drawerId) return;
     const k = rk + '|' + gid;
     if(penalizedGuesses.has(k)) return;
     penalizedGuesses.add(k);
     if(penalizedGuesses.size > 3000) penalizedGuesses.clear();
     const before = scores[pid] || 0;
-    scores[pid] = Math.max(0, before - WRONG_GUESS_PENALTY);
+    scores[pid] = Math.max(0, before - pen);
     if(pid === selfId && scoreAction && scores[pid] !== before){ try{ scoreAction.send({ playerId:selfId, total:scores[selfId] }); }catch(e){} }
     try{ renderRosters(); }catch(e){}
-    try{ popRosterDelta(pid, '−' + WRONG_GUESS_PENALTY); }catch(e){}   // v4.24: shown next to the score, briefly
+    try{ popRosterDelta(pid, '−' + pen); }catch(e){}   // v4.24: shown next to the score, briefly
   }
   function roundPenalties(result){
     const w = (result && isPlainObject(result.wrong)) ? result.wrong : {};
     return Object.keys(w).map(pid=>({ pid, n: clampNum(w[pid], 0, 200, 0) }))
       .filter(x=>x.n > 0 && (!currentRound || x.pid !== currentRound.drawerId))
-      .map(x=>({ pid:x.pid, n:x.n, pts: x.n * WRONG_GUESS_PENALTY }));
+      .map(x=>({ pid:x.pid, n:x.n, pts: x.n * wrongGuessPenalty() }));
   }
   function roundAward(result){
     if(!result || result.type !== 'correct') return { guessers:[], drawerPts:0, penalties: roundPenalties(result) };
@@ -15084,6 +15109,7 @@ const SRV = (function(){
     { version:'4.29', changes:[
       'A szavak megbízhatóbban töltődnek be, és gyenge kapcsolatnál vagy új eszközön sem fogynak el.',
       'Szoba létrehozásakor a gomb kiírja, ha még a kapcsolat készül elő.',
+      'Szobanyitáskor beállítható, hány pontot vonjon le a játék egy rossz tippért (0, 1, 2, 3, 5 vagy 10).',
       'Ha a Fehér tábla vagy a Krémpapír témát választod, a sötét mód magától kikapcsol, így a háttér tényleg világos lesz.',
       'Fehér tábla és Krémpapír témában sötétebb lett a sárga, zöld és kék szöveg, hogy jobban olvasható legyen; a gombok pedig világosabb hátteret kaptak, így a feliratuk is jól olvasható.',
       'Ha elküldöd a játék linkjét, az üzenetben saját előnézeti kép jelenik meg.',
