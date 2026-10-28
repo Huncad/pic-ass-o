@@ -862,7 +862,7 @@
     background:var(--panel); border:2px solid rgba(var(--line-rgb),0.25); border-radius:12px;
     padding:12px 14px; box-shadow:0 10px 30px rgba(0,0,0,0.5); z-index:80;
   }
-  .vol-block{ display:flex; flex-direction:column; gap:4px; margin:4px 0 8px; color:var(--chalk); }
+  .vol-block{ display:flex; flex-direction:column; gap:7px; margin:4px 0 12px; color:var(--chalk); }
   .vol-block label{ display:flex; justify-content:space-between; font-weight:800; font-size:.85rem; }
   .vol-block label span{ color:var(--chalk-dim); font-weight:700; }
   .vol-block input[type=range]{ width:100%; accent-color:var(--yellow); }
@@ -871,11 +871,14 @@
   .vol-mute{ padding:4px 8px; font-size:1rem; line-height:1; flex-shrink:0; }
   .vol-mute.muted{ border-color:var(--red); }
   .vol-block.is-muted input[type=range]{ opacity:.4; }
-  .music-step{ display:flex; align-items:center; gap:6px; margin-top:2px; }
+  .music-step{ display:flex; align-items:center; gap:6px; margin-top:6px; }
   .music-step.hidden{ display:none; }
   .music-step .music-title{ flex:1; min-width:0; text-align:center; font-size:.78rem; font-weight:700; color:var(--chalk-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .music-step button{ padding:4px 10px; }
-  .menu-list .vol-wrap{ background:rgba(0,0,0,0.18); border-radius:12px; padding:10px 12px 4px; text-align:left; }
+  .menu-list .vol-wrap{ background:rgba(0,0,0,0.18); border-radius:12px; padding:12px 14px 6px; text-align:left; }
+  /* v4.29: diagnostics is a secondary action */
+  #menu-btn-connlog{ width:auto !important; align-self:center; padding:6px 12px; font-size:.8rem; font-weight:700; color:var(--chalk-dim); border-color:rgba(var(--line-rgb),.18); box-shadow:none; }
+  #menu-btn-connlog:hover{ color:var(--chalk); }
   .admin-track-row{ display:flex; align-items:center; gap:8px; background:rgba(0,0,0,0.2); border-radius:8px; padding:6px 10px; margin-top:6px; }
   .admin-track-row .tname{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--chalk); }
   .admin-track-row button{ background:transparent; box-shadow:none; padding:2px 8px; font-size:.95rem; border-radius:6px; color:var(--chalk); }
@@ -1148,7 +1151,7 @@
   #settings-fab{ position:fixed; z-index:800; top:calc(10px + env(safe-area-inset-top, 0px)); right:calc(10px + env(safe-area-inset-right, 0px));
     font-size:1.2rem; padding:6px 10px; background:var(--panel, rgba(22,48,42,.9)); box-shadow:0 3px 10px rgba(0,0,0,.3); }
   #ingame-menu-overlay{
-    position:fixed; inset:0; z-index:970; background:rgba(10,20,16,0.9);
+    position:fixed; inset:0; z-index:970; background:rgba(10,20,16,0.62); backdrop-filter:blur(2px);
     display:flex; align-items:center; justify-content:center; padding:20px;
   }
   .menu-list{ display:flex; flex-direction:column; gap:10px; margin-top:14px; }
@@ -1191,7 +1194,7 @@
   .changelog-entry ul{ margin:0; padding-left:20px; color:var(--chalk-dim); font-size:.9rem; line-height:1.5; }
   .changelog-entry li{ margin-bottom:3px; }
   .admin-box{
-    background:var(--panel); border:2px dashed rgba(var(--line-rgb),0.3); border-radius:16px;
+    background:var(--panel); border:1.5px solid color-mix(in srgb, var(--green) 28%, rgba(var(--line-rgb),.18)); border-radius:16px;
     padding:26px; max-width:420px; width:100%; color:var(--chalk);
     margin:auto;   /* centred when it fits, scrollable from the top when it doesn't */
   }
@@ -3276,8 +3279,8 @@
           <span class="music-title"></span>
           <button type="button" class="ghost small music-nextbtn" aria-label="Következő szám" title="Következő szám">⏭</button></div></div>
       </div>
-      <button class="ghost" id="menu-btn-connlog" style="width:100%;text-align:left;">📋 Kapcsolati napló másolása</button>
       <button class="ghost leave-game-link" id="menu-btn-leave" style="width:100%;text-align:left;color:var(--red);">🚪 Kilépés a szobából</button>
+      <button class="ghost small" id="menu-btn-connlog">📋 Kapcsolati napló másolása</button>
     </div>
   </div>
 </div>
