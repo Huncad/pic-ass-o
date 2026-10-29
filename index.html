@@ -5,10 +5,11 @@
 // v4.10: a mentett téma és sötét mód AZONNAL, még az első kirajzolás előtt —
 // különben egy pillanatra az alap zöld háttér villan fel
 (function(){ try{
-  var d = document.documentElement, t = localStorage.getItem('picasso-theme');
-  if(t && t !== 'forest') d.setAttribute('data-theme', t);
+  // v4.29: a new player starts on the grey (Grafit) theme
+  var d = document.documentElement, t = localStorage.getItem('picasso-theme') || 'graphite';
+  if(t !== 'forest') d.setAttribute('data-theme', t);
   if(localStorage.getItem('picasso-dark-mode') === '1') d.classList.add('dark-mode');
-}catch(e){} })();
+}catch(e){ document.documentElement.setAttribute('data-theme', 'graphite'); } })();
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,7 +24,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:description" content="Ingyenes, magyar rajzolós-kitalálós party játék, regisztráció nélkül. Nyiss szobát, küldd el a kódot, és játsszatok!">
 <meta property="og:type" content="website">
-<meta name="theme-color" content="#16302A">
+<meta name="theme-color" content="#1A1A1E">
 <!-- "Add to Home Screen" as a full-screen app, no browser address bar. -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14965,7 +14966,7 @@ const SRV = (function(){
   // Theme / skin picker
   // =====================================================================
   function loadSavedTheme(){
-    try{ return localStorage.getItem('picasso-theme') || 'forest'; }catch(e){ return 'forest'; }
+    try{ return localStorage.getItem('picasso-theme') || 'graphite'; }catch(e){ return 'graphite'; }
   }
   function applyTheme(themeName){
     if(themeName === 'forest') document.documentElement.removeAttribute('data-theme');
@@ -15109,6 +15110,7 @@ const SRV = (function(){
     { version:'4.29', changes:[
       'A szavak megbízhatóbban töltődnek be, és gyenge kapcsolatnál vagy új eszközön sem fogynak el.',
       'Szoba létrehozásakor a gomb kiírja, ha még a kapcsolat készül elő.',
+      'Új játékosoknál a szürke (Grafit) színvilág az alapértelmezett. Aki már választott témát, annál az marad.',
       'Szobanyitáskor beállítható, hány pontot vonjon le a játék egy rossz tippért (0, 1, 2, 3, 5 vagy 10).',
       'Ha a Fehér tábla vagy a Krémpapír témát választod, a sötét mód magától kikapcsol, így a háttér tényleg világos lesz.',
       'Fehér tábla és Krémpapír témában sötétebb lett a sárga, zöld és kék szöveg, hogy jobban olvasható legyen; a gombok pedig világosabb hátteret kaptak, így a feliratuk is jól olvasható.',
