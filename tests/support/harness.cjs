@@ -147,3 +147,48 @@ async function advanceClock(pages, seconds) {
 }
 
 module.exports = { advanceClock, ROOT, startServers, newPlayer, createRoom, joinRoom, chooseFirstWord, drawSquiggle, waitForDrawingOnWatch, guess };
+
+// ---- kiszámított stílusok kimentése (CSS-átalakítások ellenőrzéséhez, v4.31) ----
+// Minden elem (a rejtettek is) a fontos tulajdonságaival; az elem azonosítója
+// a DOM-beli útvonala, ami determinisztikus futásnál futásról futásra azonos.
+const STYLE_PROPS = ['display', 'position', 'top', 'right', 'bottom', 'left', 'z-index', 'float', 'box-sizing',
+  'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+  'border-top-style', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'border-top-left-radius', 'border-top-right-radius',
+  'border-bottom-left-radius', 'border-bottom-right-radius', 'outline-style', 'outline-width', 'outline-color', 'outline-offset',
+  'flex-direction', 'flex-wrap', 'flex-grow', 'flex-shrink', 'flex-basis', 'order', 'justify-content', 'align-items', 'align-self', 'align-content', 'justify-self', 'justify-items',
+  'grid-template-columns', 'grid-template-rows', 'grid-template-areas', 'grid-area', 'grid-column-start', 'grid-column-end', 'grid-row-start', 'grid-row-end', 'row-gap', 'column-gap',
+  'overflow-x', 'overflow-y', 'visibility', 'opacity', 'color', 'background-color', 'background-image', 'background-size', 'background-position', 'box-shadow', 'text-shadow',
+  'font-family', 'font-size', 'font-weight', 'font-style', 'line-height', 'letter-spacing', 'text-align', 'text-transform', 'text-decoration-line', 'white-space', 'word-break', 'overflow-wrap', 'text-overflow',
+  'vertical-align', 'transform', 'transform-origin', 'filter', 'backdrop-filter', 'pointer-events', 'cursor', 'user-select', 'touch-action', 'object-fit', 'aspect-ratio',
+  'animation-name', 'animation-duration', 'transition-property', 'transition-duration', 'content', 'list-style-type', 'mask-image', 'fill', 'stroke', 'stroke-width', 'caret-color', 'accent-color', 'appearance', 'isolation', 'mix-blend-mode', 'clip-path', 'inset'];
+async function dumpStyles(page, file) {
+  const data = await page.evaluate((props) => {
+    const out = {};
+    const pathOf = (el) => {
+      const parts = [];
+      for (let e = el; e && e.nodeType === 1 && e !== document.documentElement; e = e.parentElement) {
+        if (e.id) { parts.unshift('#' + e.id); break; }
+        const i = e.parentElement ? [...e.parentElement.children].indexOf(e) : 0;
+        parts.unshift(e.tagName.toLowerCase() + ':' + i);
+      }
+      return parts.join('>');
+    };
+    const all = [document.documentElement, ...document.querySelectorAll('body, body *')].filter(e => !/^(SCRIPT|STYLE|LINK|META|TITLE|HEAD|BR|TEMPLATE)$/.test(e.tagName));
+    for (const el of all) {
+      for (const pseudo of [null, '::before', '::after']) {
+        const cs = getComputedStyle(el, pseudo);
+        if (pseudo && (cs.content === 'none' || cs.content === 'normal')) continue;
+        const rec = {};
+        for (const p of props) rec[p] = cs.getPropertyValue(p);
+        // az elem azonosítói (nem stílus): a változás visszavezetéséhez a felelős szabályra
+        rec._tag = el.tagName.toLowerCase(); rec._id = el.id || ''; rec._cls = typeof el.className === 'string' ? el.className : ((el.className && el.className.baseVal) || '');
+        out[pathOf(el) + (pseudo || '')] = rec;
+      }
+    }
+    return out;
+  }, STYLE_PROPS);
+  require('fs').writeFileSync(file, require('zlib').gzipSync(JSON.stringify(data)));
+  return Object.keys(data).length;
+}
+module.exports.dumpStyles = dumpStyles;

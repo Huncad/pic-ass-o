@@ -27,10 +27,13 @@ async function snap(page, out, name) {
     const info = await page.evaluate(() => { const c = document.getElementById('fd-canvas'); if (!c || !c.offsetParent) return ''; const r = c.getBoundingClientRect(); const w = document.getElementById('fd-canvas-wrap').getBoundingClientRect(); return `vászon ${r.x.toFixed(1)},${r.y.toFixed(1)} ${r.width.toFixed(1)}x${r.height.toFixed(1)} (tartó ${w.width.toFixed(1)}x${w.height.toFixed(1)}) belső ${c.width}x${c.height} görgetés ${scrollY}`; });
     console.log('  📸', name, info);
   }
+  await page.mouse.move(1, 1);       // ne maradjon hover-állapotban gomb
   await page.waitForTimeout(450);   // a beúszó elemek (prefers-reduced-motion mellett is) álljanak meg
   const mask = MASK.map(s => page.locator(s));
   if (!page.hideStyled) { await page.addStyleTag({ content: HIDE }); page.hideStyled = true; }
   await page.screenshot({ path: path.join(out, name + '.png'), animations: 'disabled', caret: 'hide', mask, maskColor: '#ff00ff' });
+  // STYLES=1: a kiszámított stílusok is (CSS-átalakítás ellenőrzéséhez — lásd tests/visual/style-diff.cjs)
+  if (process.env.STYLES) await H.dumpStyles(page, path.join(out, name + '.styles.json.gz'));
 }
 
 async function run(key, out) {
@@ -76,6 +79,19 @@ async function run(key, out) {
       await H.waitForDrawingOnWatch(guesser);
       await snap(drawer, out, `${tag}-05-rajzolas`);
       await snap(guesser, out, `${tag}-05-nezo`);
+      if (n === 1) {
+        // a játékbeli chat és menü is legyen lefedve
+        await guesser.click('#chat-toggle-btn');
+        await guesser.waitForSelector('#chat-panel:not(.hidden)');
+        await snap(guesser, out, `${tag}-05b-chat-nezo`);
+        await guesser.click('#chat-toggle-btn');
+        await drawer.click('#screen-fulldraw .menu-open-btn');
+        await drawer.waitForSelector('#ingame-menu-overlay:not(.hidden)');
+        await snap(drawer, out, `${tag}-05c-menu-rajzolo`);
+        await drawer.keyboard.press('Escape');
+        if (await drawer.isVisible('#ingame-menu-overlay')) await drawer.click('#ingame-menu-overlay', { position: { x: 5, y: 5 } });
+        await drawer.waitForSelector('#ingame-menu-overlay', { state: 'hidden' });
+      }
       await tick(4);
       await H.guess(guesser, 'biztosannemezaszo');
       await guesser.waitForSelector('#watch-guess-feed .gentry');
