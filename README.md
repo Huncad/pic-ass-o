@@ -43,6 +43,29 @@ python3 tests/visual/diff.py elotte utana
 A játékképernyős képek futásról futásra azonosak (rögzített véletlen és álló óra), így
 bármilyen eltérés valódi változást jelez.
 
+### CSS-módosítás biztonságosan
+
+A képeknél érzékenyebb mérce a **kiszámított stílus**: minden elem (a rejtettek is — chat,
+menü, ablakok) ~130 tulajdonsága, 124 állapotban (6 kijelző/téma × 12 menüállapot +
+2 × 26 játékállapot).
+
+```bash
+STYLES=1 node tests/visual/menus.cjs elotte-menu
+STYLES=1 node tests/visual/game.cjs  elotte-jatek
+# … CSS-módosítás …
+STYLES=1 node tests/visual/menus.cjs utana-menu
+STYLES=1 node tests/visual/game.cjs  utana-jatek
+node tests/visual/style-diff.cjs elotte-menu utana-menu     # -v: részletek
+node tests/visual/style-diff.cjs elotte-jatek utana-jatek
+```
+
+Elemzők:
+
+```bash
+node tests/tools/css-audit.mjs          # bizonyíthatóan halott deklarációk (--fix: törlés)
+node tests/tools/css-imp-trial.mjs elotte-menu elotte-jatek munka   # !important-ok mérésen alapuló levétele
+```
+
 Új verziónál a `js/changelog.js` elejére kerül a bejegyzés, és a `js/picasso.js` `APP_VERSION` értéke is átírandó (teszt ellenőrzi).
 
 ## Netlify környezeti változók

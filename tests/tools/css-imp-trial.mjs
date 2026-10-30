@@ -89,6 +89,10 @@ function run(cmd, args, env) {
 }
 
 const keep = new Set(fs.existsSync(KEEP_FILE) ? JSON.parse(fs.readFileSync(KEEP_FILE, 'utf8')) : []);
+// a szerkezeti tulajdonságok (elrejtés, rétegek, kattinthatóság) eleve védettek: nélkülük a
+// felület kezelhetetlen lesz, és a képsorozat le sem fut
+const STRUCTURAL = /^(display|visibility|pointer-events|position|z-index)$/;
+postcss.parse(original, { from: CSS }).walkDecls(d => { if (d.important && STRUCTURAL.test(d.prop)) keep.add(keyOf(d)); });
 let iteration = 0;
 try {
   for (;;) {
@@ -98,10 +102,23 @@ try {
     console.log(`\n== ${iteration}. kör: ${removed} !important levéve, ${kept} védett`);
     const dm = path.join(work, `it${iteration}-menus`), dg = path.join(work, `it${iteration}-game`);
     fs.rmSync(dm, { recursive: true, force: true }); fs.rmSync(dg, { recursive: true, force: true });
-    await Promise.all([
-      run(process.execPath, ['tests/visual/menus.cjs', dm], { STYLES: '1' }),
-      run(process.execPath, ['tests/visual/game.cjs', dg], { STYLES: '1' }),
-    ]);
+    try {
+      await Promise.all([
+        run(process.execPath, ['tests/visual/menus.cjs', dm], { STYLES: '1' }),
+        run(process.execPath, ['tests/visual/game.cjs', dg], { STYLES: '1' }),
+      ]);
+    } catch (e) {
+      // a felület annyira megváltozott, hogy a képsorozat elakadt: a maradék levett
+      // jelölők felét visszavédjük, és újra próbáljuk (konzervatív lépés)
+      const rest = [];
+      postcss.parse(original, { from: CSS }).walkDecls(d => { if (d.important && !keep.has(keyOf(d))) rest.push(keyOf(d)); });
+      const half = rest.slice(0, Math.ceil(rest.length / 2));
+      half.forEach(k => keep.add(k));
+      fs.writeFileSync(KEEP_FILE, JSON.stringify([...keep], null, 1));
+      console.log(`   a képsorozat elakadt (${String(e.message).split('\n').find(l => /❌|Error|rror/.test(l)) || '?'}) — ${half.length} jelölő visszavédve`);
+      if (!rest.length) throw e;
+      continue;
+    }
     const changes = [];
     for (const [b, n] of [[baseMenus, dm], [baseGame, dg]]) {
       const jf = path.join(work, `it${iteration}-${path.basename(n)}.json`);
