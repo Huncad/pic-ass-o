@@ -92,3 +92,13 @@ test('sanitizeStrokes: méretkorlátok', () => {
     .reduce((n, s) => n + s.points.length, 0);
   assert.ok(total <= MAX_TOTAL_POINTS);
 });
+
+test('a verziószám és a kiadási napló első bejegyzése egyezik', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../js/picasso.js', import.meta.url), 'utf8');
+  const m = /const APP_VERSION = '([\d.]+)'/.exec(src);
+  const { CHANGELOG } = await import('../js/changelog.js');
+  assert.ok(m, 'APP_VERSION megtalálható');
+  assert.equal(CHANGELOG[0].version, m[1]);
+  assert.ok(CHANGELOG.every(e => e.version && Array.isArray(e.changes) && e.changes.length));
+});
