@@ -12,7 +12,7 @@
 }catch(e){ document.documentElement.setAttribute('data-theme', 'graphite'); } })();
 </script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- v3.18: basic hardening that cannot break the P2P / CDN traffic: no plugins, no <base> hijack, forms only to this site -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>PIC-ASS-O — party rajzjáték (több eszközön)</title>
@@ -211,6 +211,10 @@
       </div>
       <p class="center-note" style="margin:8px 0 0;">Mindkettő látszik a szobalistán: nyilvánosba bárki egy kattintással beléphet, zártba csak kóddal.</p>
     </div>
+    <!-- v4.30: a ritkábban állított beállítások lenyitható részben; a fejléc mutatja az aktuális értékeket -->
+    <div class="setup-advanced collapsed" id="setup-advanced">
+      <button type="button" class="setup-adv-toggle" id="setup-advanced-toggle" aria-expanded="false" aria-controls="setup-advanced-body"><span class="setup-adv-title">⚙️ További beállítások</span><span class="setup-adv-sum" id="setup-advanced-summary"></span></button>
+      <div class="setup-adv-body" id="setup-advanced-body">
     <div class="setup-section" id="maxplayers-section">
       <label class="field-label">Maximum hány játékos csatlakozhat?</label>
       <div class="pill-row" id="maxplayers-row">
@@ -303,6 +307,8 @@
         <button class="pill" data-customonly="off">Nincsenek saját szavak</button>
       </div>
       <p class="setup-hint">A váróteremben mindenki beírhat legfeljebb 15 saját szót. Saját szavadért rajzolóként nem jár pont; ha senki nem ír be semmit, a beépített szavak jönnek.</p>
+    </div>
+      </div>
     </div>
     <div class="start-btn-wrap" style="display:flex;justify-content:center;margin-top:24px;">
       <button class="big" id="btn-create-room" style="background:var(--green-fill);">Szoba létrehozása 🎉</button>
@@ -459,7 +465,7 @@
   </div>
 
   <footer class="hint">
-    Minden játékos a saját eszközén — közvetlen (szerver nélküli) kapcsolaton keresztül. A rajzoló saját eszköze lesz a rajztábla, a többiek élőben látják és tippelnek.
+    Minden játékos a saját eszközén játszik: a rajzoló eszköze lesz a rajztábla, a többiek élőben látják és tippelnek. A kapcsolat a játék saját szerverén át jön létre, ha az nem érhető el, közvetlenül az eszközök között.
     <div class="footer-meta" style="position:relative;">
       <button id="app-version" class="ghost small" style="font-family:'Kalam',cursive;" title="Kiadási napló megnyitása" aria-label="Kiadási napló megnyitása">PIC-ASS-O · v4.29</button>
       <span id="global-player-count" class="conn-status" style="display:inline;margin:0;" title="Jelenleg ennyien vannak fent a játékkal (böngészik a szobákat vagy éppen játszanak)">🧑‍🎨 Jelenleg 1 játékos játszik</span>

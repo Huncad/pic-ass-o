@@ -97,7 +97,7 @@ const roomJoin = TrysteroMqtt ? TrysteroMqtt.joinRoom : joinRoom;
     const manifest = {
       name: 'PIC-ASS-O — party rajzjáték',
       short_name: 'PIC-ASS-O',
-      description: 'Böngészőben futó, szerver nélküli, többjátékos rajzoló-kitaláló party játék.',
+      description: 'Böngészőben futó, regisztráció nélküli, többjátékos rajzoló-kitaláló party játék.',
       start_url: location.pathname,
       scope: location.pathname.replace(/[^/]*$/, ''),
       display: 'standalone',
@@ -12808,4 +12808,51 @@ const SRV = (function(){
     } else open();
   }
   setTimeout(showWhenFree, 700);
+})();
+
+// =====================================================================
+// v4.30: room setup — the less often changed settings sit in a collapsible
+// box; its header shows the current values, so nothing is hidden unawares.
+// =====================================================================
+(function setupAdvancedBox(){
+  const box = document.getElementById('setup-advanced');
+  const toggle = document.getElementById('setup-advanced-toggle');
+  const sum = document.getElementById('setup-advanced-summary');
+  if(!box || !toggle || !sum) return;
+  const KEY = 'picasso-setup-advanced-open';
+  const setOpen = (open)=>{
+    box.classList.toggle('collapsed', !open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  try{ setOpen(localStorage.getItem(KEY) === '1'); }catch(e){ setOpen(false); }
+  toggle.addEventListener('click', ()=>{
+    const open = box.classList.contains('collapsed');
+    setOpen(open);
+    try{ localStorage.setItem(KEY, open ? '1' : '0'); }catch(e){}
+  });
+  const activeText = (rowId)=>{
+    const row = document.getElementById(rowId);
+    if(!row) return [];
+    return [...row.querySelectorAll('.pill.active')].map(b=>b.textContent.replace(/[^\p{L}\p{N} :]/gu, '').trim()).filter(Boolean);
+  };
+  function refresh(){
+    const parts = [];
+    const tiers = activeText('difficulty-row');
+    if(tiers.length) parts.push(tiers.join(' + '));
+    const rounds = document.querySelector('#rounds-row .pill.active');
+    if(rounds){
+      if(rounds.dataset.rounds === 'custom'){ const v = Number((document.getElementById('rounds-custom-input') || {}).value) || 0; if(v) parts.push(v + ' kör'); }
+      else parts.push(rounds.textContent.trim());
+    }
+    const time = activeText('time-row')[0]; if(time) parts.push(time);
+    const ch = activeText('choices-row')[0]; if(ch) parts.push(ch + ' szóból választ');
+    const mp = document.querySelector('#maxplayers-row .pill.active');
+    if(mp && mp.dataset.maxplayers !== '0') parts.push('max. ' + mp.textContent.trim());
+    sum.textContent = parts.join(' · ');
+  }
+  // the pills are switched by the game's own code too (e.g. a rematch fills
+  // in the previous settings), so the summary follows every class change
+  new MutationObserver(refresh).observe(box, { subtree:true, attributes:true, attributeFilter:['class'] });
+  box.addEventListener('input', refresh);
+  refresh();
 })();

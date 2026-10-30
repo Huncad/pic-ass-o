@@ -2417,3 +2417,47 @@
   .glb-speed button:hover{ transform:none; background:rgba(255,255,255,.08); }
   .glb-speed button.active{ background:var(--yellow-fill); color:#16302A; }
   #glb-replay-canvas{ display:block; margin:0 auto; }
+
+/* ===== v4.30: mobil finomítások ===== */
+/* iPhone: a viewport-fit=cover miatt a notch / home-csík területét a lap
+   kapja meg; a kezdő- és menüképernyők annyival beljebb kezdődnek (a játék
+   képernyői — wide-mode — ezt eddig is maguk kezelték). */
+body:not(:has(.board.wide-mode)){ padding-left:max(24px, env(safe-area-inset-left)); padding-right:max(24px, env(safe-area-inset-right)); padding-bottom:max(24px, env(safe-area-inset-bottom)); }
+@media (max-width:859px), (orientation:landscape) and (max-height:600px){
+  body:not(:has(.board.wide-mode)){ padding-left:max(14px, env(safe-area-inset-left)); padding-right:max(14px, env(safe-area-inset-right)); padding-bottom:max(14px, env(safe-area-inset-bottom)); }
+}
+@media (orientation:landscape) and (max-height:500px){
+  body:not(:has(.board.wide-mode)){ padding-left:max(8px, env(safe-area-inset-left)); padding-right:max(8px, env(safe-area-inset-right)); padding-bottom:max(8px, env(safe-area-inset-bottom)); }
+}
+/* nagyobb érintési felület kis gomboknál, a látvány változása nélkül */
+#phone-hint-close{ position:relative; }
+#phone-hint-close::after{ content:""; position:absolute; inset:-9px -6px; }
+/* keskeny telefonon 6 avatar egy sorban (régen 8, kb. 27 px-es gombokkal) */
+@media (max-width:420px){ .home-avatars{ grid-template-columns:repeat(6, minmax(0, 1fr)); gap:8px; } .home-av{ font-size:1.5rem; } }
+/* a szobalista állapota telefonon nem csonkul ("kapcsoló…"), hanem a cím alá kerül */
+@media (max-width:640px){
+  #rooms-card .rooms-h{ flex-wrap:wrap; row-gap:2px; }
+  #rooms-card .rooms-status{ order:3; flex-basis:100%; white-space:normal; overflow:visible; padding-left:0; }
+}
+
+/* ===== v4.30: szobabeállítás — "További beállítások" nyitható rész =====
+   Telefonon és kisebb kijelzőn alapból csukva: a név és a láthatóság után
+   azonnal jöhet a "Szoba létrehozása". Nagy kijelzőn (fit-frame) minden
+   egy képernyőn, a régi kártyarácsban látszik — ott a doboz nem jelenik meg. */
+.setup-advanced{ margin:22px 0 4px; border:1.5px solid rgba(var(--line-rgb),.18); border-radius:14px; background:rgba(var(--line-rgb),.04); }
+.setup-adv-toggle{ all:unset; box-sizing:border-box; width:100%; cursor:pointer; display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; padding:14px 44px 14px 16px; position:relative; border-radius:14px; text-align:left; }
+.setup-adv-toggle::after{ content:"›"; position:absolute; right:18px; top:50%; transform:translateY(-50%) rotate(-90deg); font-size:1.5rem; line-height:1; color:var(--chalk-dim); transition:transform .2s; }
+.setup-advanced.collapsed .setup-adv-toggle::after{ transform:translateY(-50%) rotate(90deg); }
+.setup-adv-toggle:focus-visible{ outline:2px solid var(--yellow); outline-offset:2px; }
+.setup-adv-title{ font-weight:800; font-size:1.05rem; color:var(--chalk); font-family:'Nunito',sans-serif; }
+.setup-adv-sum{ font-size:.86rem; color:var(--chalk-dim); font-family:'Nunito',sans-serif; }
+.setup-advanced:not(.collapsed) .setup-adv-toggle{ border-bottom:1px solid rgba(var(--line-rgb),.12); border-radius:14px 14px 0 0; }
+.setup-advanced.collapsed .setup-adv-body{ display:none; }
+.setup-adv-body{ padding:0 16px 6px; }
+body.fit-frame .setup-advanced, body.fit-frame .setup-adv-body{ display:contents !important; }
+body.fit-frame .setup-adv-toggle{ display:none; }
+/* a lépésszámok színe ugyanúgy váltakozzon, mint régen (2 szakasz van előtte) */
+#screen-create .setup-adv-body .setup-section > label.field-label::before{ background:var(--green-fill); }
+#screen-create .setup-adv-body .setup-section:nth-of-type(4n) > label.field-label::before{ background:var(--yellow-fill); }
+#screen-create .setup-adv-body .setup-section:nth-of-type(4n+1) > label.field-label::before{ background:var(--blue-fill); }
+#screen-create .setup-adv-body .setup-section:nth-of-type(4n+2) > label.field-label::before{ background:var(--pink-fill); }
