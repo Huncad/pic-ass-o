@@ -2,6 +2,12 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.31', changes:[
+    'Fekvő telefonon a rajzoló nézet új elrendezést kapott: balra a rajzlap teljes magasságban, jobbra a játékosok, az eszközök és a tippek. Régen alig maradt hely a rajzra.',
+    'Kis telefonon (pl. iPhone SE) minden szín látszik, az eszközök egy sorban vannak, és nagyobb a rajzlap.',
+    'A rajzlap a kör elején rögtön a végleges méretével jelenik meg (nem ugrik meg egy pillanattal később).',
+    'A választott szó felvillanása keskeny kijelzőn sem töri ketté a szót.'
+  ]},
   { version:'4.30', changes:[
     'Telefonon rövidebb a szobabeállítás: a név és a láthatóság után a többi beállítás egy nyitható „További beállítások” részben van, a fejléce mutatja az aktuális értékeket.',
     'Keskeny telefonon nagyobbak az avatarok, könnyebb eltalálni őket.',

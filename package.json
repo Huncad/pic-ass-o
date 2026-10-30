@@ -5,7 +5,8 @@
   "scripts": {
     "test": "node --test --experimental-test-module-mocks tests/*.test.mjs",
     "test:e2e": "node tests/e2e/round.cjs",
-    "test:visual": "node tests/visual/snap.cjs"
+    "test:visual": "node tests/visual/snap.cjs",
+    "test:visual:game": "node tests/visual/game.cjs"
   },
   "dependencies": {
     "@netlify/blobs": "^10.7.13",

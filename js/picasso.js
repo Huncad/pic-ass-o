@@ -1,6 +1,6 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes } from './rules.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.30';
+const APP_VERSION = '4.31';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -2794,6 +2794,11 @@ const SRV = (function(){
     document.documentElement.classList.toggle('fd-open', ids.includes('screen-fulldraw') || ids.includes('fd-prepare'));
     document.documentElement.classList.toggle('watch-lock', ids.includes('screen-watch') && window.innerWidth <= 859);
     if(ids.includes('screen-watch')) try{ renderSpectatorBadge(); }catch(e){}
+    // v4.31: the phone layout's "buttons in the top bar" mode is decided right
+    // away, not by the next 400 ms check — until then the toolbar kept room for
+    // floating buttons, wrapped into an extra row, and the canvas was first
+    // sized ~45 px too small (then jumped to its real size a moment later)
+    try{ placeGameFabs(); }catch(e){}
     if(!ids.includes('screen-roundend')) showingRoundEnd = false;
     // The connection/code banner is only useful while still in the lobby
     // (sharing the code with others); hide it during actual gameplay.
@@ -8384,9 +8389,9 @@ const SRV = (function(){
     fdTierEl.textContent = fdTier.label; fdTierEl.style.background = fdTier.color;
     fdRoundStartAt = rd.roundStartAt;
     fdRoundTimeTotal = settings.roundTime;
+    startTicker(document.getElementById('fd-timer'), true);   // v4.31: before measuring (the clock is part of the top bar)
     setupFdCanvas();
     clearFdCanvas();
-    startTicker(document.getElementById('fd-timer'), true);
     startAfkWatch();
     const wrap = document.getElementById('fd-canvas-wrap');
     rd.canvasAspect = CANVAS_ASPECT;
@@ -9201,6 +9206,9 @@ const SRV = (function(){
     hintSentInitial = false;
     hintOrder = null;
     if(!fdRoundStartAt) fdRoundStartAt = Date.now();   // never produce NaN on the clock
+    // v4.31: the clock (with its ring) is drawn at once, not on the first tick —
+    // the late ring made the top bar a few px taller after the canvas was sized
+    try{ updateTimerEl(el, Math.max(0, Math.ceil(fdRoundTimeTotal - (Date.now()-fdRoundStartAt)/1000))); }catch(e){}
     localTickTimer = setInterval(()=>{
       if(!fdRoundStartAt || !currentRound){ stopTicker(); return; }
       const elapsed = (Date.now()-fdRoundStartAt)/1000;

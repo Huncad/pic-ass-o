@@ -2461,3 +2461,75 @@ body.fit-frame .setup-adv-toggle{ display:none; }
 #screen-create .setup-adv-body .setup-section:nth-of-type(4n) > label.field-label::before{ background:var(--yellow-fill); }
 #screen-create .setup-adv-body .setup-section:nth-of-type(4n+1) > label.field-label::before{ background:var(--blue-fill); }
 #screen-create .setup-adv-body .setup-section:nth-of-type(4n+2) > label.field-label::before{ background:var(--pink-fill); }
+
+/* ===== v4.31: fekvő telefon — rajzoló nézet új elrendezése =====
+   Régen a fejléc és a kétsoros eszköztár felülről és alulról összenyomta a
+   vásznat: egy 393 px magas fekvő telefonon kb. 50 px maradt a rajzra.
+   Most balra a vászon teljes magasságban, jobbra egy oszlopban a játékosok,
+   az eszköztár és a tippek; a fejléc egyetlen sor. */
+@media (orientation:landscape) and (max-height:500px){
+  #screen-fulldraw:not(.hidden){
+    display:grid !important;
+    grid-template-columns:minmax(0, 1fr) min(300px, 40vw);
+    grid-template-rows:auto auto minmax(0, auto) minmax(0, 1fr);
+    grid-template-areas:"status status" "canvas roster" "canvas tools" "canvas feed";
+    column-gap:8px;
+    padding-left:env(safe-area-inset-left, 0px); padding-right:env(safe-area-inset-right, 0px);
+  }
+  #screen-fulldraw > .fd-status{ grid-area:status; }
+  #screen-fulldraw > #fd-roster{ grid-area:roster; padding:4px 6px 2px; overflow:hidden; }
+  #screen-fulldraw > #fd-roster .roster, #screen-fulldraw > #fd-roster{ flex-wrap:wrap; justify-content:flex-start; gap:4px; }
+  #screen-fulldraw > #fd-content-wrap{ display:contents; flex-direction:column; }
+  #screen-fulldraw #fd-canvas-wrap{ grid-area:canvas; min-height:0; min-width:0; width:auto; height:auto !important; flex:none !important; margin:0 0 max(6px, env(safe-area-inset-bottom)) 6px; }
+  #screen-fulldraw > .fd-toolbar{ grid-area:tools; margin:0 6px 0 0 !important; padding:6px !important; border-radius:12px; overflow-y:auto;
+    display:flex; flex-wrap:wrap; align-content:flex-start; gap:5px !important; }
+  /* sorok: színek · (saját szín + vastagság) · eszközök · műveletek */
+  #screen-fulldraw .fd-toolbar .swatches{ order:1; flex:1 1 100%; display:grid; grid-template-columns:repeat(11, minmax(0, 1fr)); gap:2px; margin:0; justify-items:center; }
+  #screen-fulldraw .fd-toolbar .swatch{ width:100%; max-width:22px; height:auto; aspect-ratio:1; flex-shrink:0; }
+  #screen-fulldraw .fd-toolbar .fd-color-group{ order:2; flex:0 0 auto; padding:0; margin:0; background:none; }
+  #screen-fulldraw .fd-toolbar .fd-color-group input[type=color]{ width:34px; height:30px; padding:0; }
+  #screen-fulldraw .fd-toolbar .fd-size-group{ order:3; flex:1 1 0; min-width:0; padding:0 4px; margin:0; gap:6px; }
+  #screen-fulldraw .fd-toolbar .fd-size-label{ display:none; }
+  #screen-fulldraw .fd-toolbar .fd-size-dot{ flex-basis:26px; width:26px; height:26px; }
+  #screen-fulldraw .fd-toolbar .fd-size-group input[type=range]{ min-width:0; flex:1 1 auto; height:28px; }
+  #screen-fulldraw #fd-tools{ order:4; flex:1 1 100%; justify-content:space-between; padding:2px; margin:0; }
+  #screen-fulldraw #fd-tools .fd-tool{ flex:1 1 0; padding:4px 0; min-width:0; }
+  /* műveletek csak ikonnal (mint a rajzeszközök); a felolvasott név (aria-label) és a súgó (title) megmarad */
+  #screen-fulldraw .fd-act{ order:5; flex:1 1 0; min-width:0; min-height:36px; padding:4px 2px; font-size:0 !important; line-height:0;
+    display:inline-flex; align-items:center; justify-content:center; }
+  #screen-fulldraw .fd-act::before{ width:22px !important; height:22px !important; min-width:22px; min-height:22px; }
+  /* játékosok: egy sorban, kicsiben; ha nem fér ki, oldalra görgethető */
+  #screen-fulldraw > #fd-roster{ flex-wrap:nowrap !important; overflow-x:auto; scrollbar-width:none; }
+  #screen-fulldraw > #fd-roster .rchip{ font-size:.74rem; padding:1px 4px 1px 1px; gap:5px; }
+  #screen-fulldraw > #fd-roster .rav{ width:22px; height:22px; }
+  #screen-fulldraw .fd-guess-feed{ grid-area:feed; justify-self:stretch; width:auto !important; max-width:none !important; min-height:44px; height:auto !important; margin:6px 6px max(6px, env(safe-area-inset-bottom)) 0 !important; overflow-y:auto; }
+  /* fejléc: menü · szó · óra egy sorban */
+  /* jobb oldalt helyet hagy a reakció- és chatgombnak (azok a fejléc sorában lebegnek) */
+  #screen-fulldraw .fd-status{ grid-template-columns:auto minmax(0, 1fr) auto !important; grid-template-areas:"menu word timer" !important; padding-top:max(4px, env(safe-area-inset-top)) !important; padding-bottom:4px !important; padding-right:104px !important; }
+  #screen-fulldraw .fd-status #fd-word-bar{ justify-content:flex-start !important; }
+}
+
+/* v4.31: a rajzoló fejlécében a szó sora rögzített magasságú — régen a Kalam
+   betűtípus (ő/ű betűs változata) késve töltődött be, más sormagassággal,
+   és a fejléc a vászon lemérése után 1–3 px-t ugrott */
+#fd-word-text{ height:1.15em; line-height:1.15; }
+#fd-word-text .fdw-inner{ line-height:1.15; vertical-align:top; }
+
+
+/* v4.31: keskeny álló telefon (iPhone SE, mini; ≤ 380 px) — régen a 11. szín
+   (fehér) lelógott a képernyő jobb széléről, a gombok pedig két sorba törtek,
+   elvéve a helyet a vászontól. Most a színek egy rácsban, az 5 eszköz és a
+   4 művelet egyetlen sorban fér el. */
+@media (max-width:380px) and (orientation:portrait){
+  #screen-fulldraw .fd-toolbar .swatches{ display:grid; grid-template-columns:repeat(11, minmax(0, 1fr)); gap:2px; justify-items:center; flex:1 1 100%; }
+  #screen-fulldraw .fd-toolbar .swatch{ width:100%; max-width:26px; height:auto; aspect-ratio:1; }
+  /* az alapok (5/9 + 4 × 1/9 ≈ 100%) miatt az eszközsor mindig új sorba kerül, egyben */
+  #screen-fulldraw #fd-tools{ flex:5 1 50%; min-width:0; padding:2px; gap:2px; }
+  #screen-fulldraw #fd-tools .fd-tool{ flex:1 1 0; min-width:0; padding:5px 0; }
+  #screen-fulldraw .fd-act{ flex:1 1 9%; min-width:0 !important; padding:5px 0; }
+  #screen-fulldraw .fd-act::before{ width:20px !important; height:20px !important; min-width:20px; min-height:20px; }
+}
+/* v4.31: a választott szó felvillanása nem töri ketté a szót (régen keskeny
+   kijelzőn: "cirkus / z"); a hosszú szó inkább kisebb betűvel fér ki */
+#chosen-word-flash{ max-width:calc(100vw - 24px); }
+#chosen-word-flash b{ overflow-wrap:normal; word-break:keep-all; hyphens:manual; font-size:clamp(1.3rem, 9vw, 2.4rem); }

@@ -32,10 +32,16 @@ npm run test:e2e    # teljes kör két böngészőben (Playwright + Chromium kel
 Vizuális összevetés (pl. CSS-módosítás előtt és után):
 
 ```bash
+# kezdő- és beállítóképernyő (egy futó statikus kiszolgálóval, pl. python3 -m http.server 8765)
 node tests/visual/snap.cjs http://127.0.0.1:8765/ elotte
-node tests/visual/snap.cjs http://127.0.0.1:8765/ utana
+# játékképernyők: két játékos végigjátszik egy teljes játékot (48 kép, a kiszolgálókat maga indítja)
+node tests/visual/game.cjs elotte
+# … módosítás után ugyanez "utana" mappába, majd:
 python3 tests/visual/diff.py elotte utana
 ```
+
+A játékképernyős képek futásról futásra azonosak (rögzített véletlen és álló óra), így
+bármilyen eltérés valódi változást jelez.
 
 Új verziónál a `js/changelog.js` elejére kerül a bejegyzés, és a `js/picasso.js` `APP_VERSION` értéke is átírandó (teszt ellenőrzi).
 
