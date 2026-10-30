@@ -90,7 +90,7 @@ A `--bg` miatt ez újraindítás után is megmarad.
 
 ## 6. A játék rákötése a szerverre
 
-Az `index.html` elején van egy sor:
+A `js/picasso.js` elején (v4.30 előtt az `index.html`-ben) van egy sor:
 
 ```js
 const PICASSO_SERVER_URL = '';
@@ -142,6 +142,9 @@ Nem kötelező beállítások: `WORD_USED_DAY_CAP` (alapból 300) és `WORD_BLOC
 | Állapot | `curl -s localhost:8787/api/health` |
 | Funnel állapota | `tailscale funnel status` |
 | Ranglista mentése | `/var/lib/picasso/games.json` (érdemes a Proxmox-mentésbe tenni) |
+| Frissítés a `test` ágról | `BRANCH=test bash <(curl -fsSL https://raw.githubusercontent.com/Huncad/pic-ass-o/test/server/telepites.sh)` |
+
+A szerver leállításkor (`systemctl stop/restart`) azonnal elmenti a ranglistát.
 
 ## Alternatíva: Cloudflare Tunnel
 

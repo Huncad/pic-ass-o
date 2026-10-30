@@ -13,4 +13,4 @@ trystero@0.25.4, @trystero-p2p/torrent@0.25.4, @trystero-p2p/mqtt@0.25.4, mqtt@5
       --bundle --splitting --format=esm --minify --platform=browser \
       --outdir=vendor --chunk-names=chunks/[name]-[hash] --legal-comments=external
 
-Utána az index.html-ben a VENDOR_V értéket is át kell írni.
+Utána a `js/picasso.js`-ben (v4.30 előtt az index.html-ben) a VENDOR_V értéket is át kell írni.
