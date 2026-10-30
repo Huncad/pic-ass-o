@@ -1,41 +1,46 @@
-// PIC-ASS-O — admin szerveroldal (v4.19)
+// PIC-ASS-O — admin szerveroldal (v4.19, v4.30)
 // Az admin oldalnak így nem kell GitHub vagy Netlify tokent kérnie: a tokenek
 // a Netlify környezeti változóiban vannak, és csak ez a függvény használja őket.
 //
 //   POST { action:"login", password }      -> { session }   (jelszó a szerveren ellenőrizve)
+//   POST { action:"setpw", password }      + x-admin-session -> új admin jelszó (v4.30)
 //   POST { action:"gh", method, path, body } + x-admin-session -> GitHub API, csak:
 //        /gists/<a játék Gistje>  és  /repos/<a zenés tároló>/...
 //   POST { action:"nf", method, path }       + x-admin-session -> Netlify API, csak
 //        a játék saját oldalának űrlapjai és beküldései
 //
+// v4.30: a jelszó lenyomata (salt + PBKDF2 hash) NEM a nyilvános Gistben van,
+// hanem a Netlify Blobs tárolóban (picasso-admin / pw-record), amit csak a
+// szerver lát. Régről maradt admin.json a Gistben: az első sikeres belépéskor
+// átkerül a Blobs-ba, és a Gistből törlődik. (A Gist korábbi változatai
+// nyilvánosak maradnak — ezért az átállás után érdemes új jelszót beállítani.)
+// Kívülről is megadható: ADMIN_PASSWORD_RECORD = {"v":1,"salt":"…","iter":310000,"hash":"…"}
+//
 // Környezeti változók (Netlify → Project configuration → Environment variables):
 //   GITHUB_TOKEN      — klasszikus GitHub token (gist + public_repo jogosultság)
 //   NETLIFY_API_TOKEN — Netlify személyes token (a visszajelzések olvasásához)
+//   MUSIC_REPO        — (nem kötelező) a zenés tároló, pl. "felhasznalo/picasso-zene"
 //   (SITE_ID-t a Netlify magától adja; a munkamenet-titok magától jön létre)
 import { getStore } from '@netlify/blobs';
-import { pbkdf2Sync, timingSafeEqual } from 'node:crypto';
+import { pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { makeSession, verifySession } from '../lib/adminauth.mjs';
+import { json, ipOf, makeLimiter, updateJSON } from '../lib/util.mjs';
 
 const GIST_ID = process.env.WORDS_GIST_ID || 'fe34dbe63eefd11f324555359ec4cf53';
 const MAX_BODY = 6 * 1024 * 1024;
+const PW_ITER = 310000;
 
-const hits = new Map();
-function limited(key, max, windowMs) {
-  const now = Date.now();
-  const arr = (hits.get(key) || []).filter(t => now - t < windowMs);
-  arr.push(now); hits.set(key, arr);
-  if (hits.size > 3000) for (const k of hits.keys()) { if (!(hits.get(k) || []).some(t => now - t < windowMs)) hits.delete(k); }
-  return arr.length > max;
-}
-const ipOf = req => req.headers.get('x-nf-client-connection-ip') || (req.headers.get('x-forwarded-for') || '').split(',')[0] || 'x';
-const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+const limited = makeLimiter();
+const adminStore = () => getStore({ name: 'picasso-admin', consistency: 'strong' });
 const ghHeaders = () => Object.assign({ accept: 'application/vnd.github+json', 'user-agent': 'pic-ass-o-netlify' },
   process.env.GITHUB_TOKEN ? { authorization: 'token ' + process.env.GITHUB_TOKEN } : {});
 
-async function readGistFile(name) {
+async function readGist() {
   const r = await fetch(`https://api.github.com/gists/${GIST_ID}`, { headers: ghHeaders() });
   if (!r.ok) return null;
-  const d = await r.json();
+  return r.json();
+}
+async function gistFileJSON(d, name) {
   const f = d && d.files && d.files[name];
   if (!f) return null;
   let text = f.content;
@@ -43,19 +48,38 @@ async function readGistFile(name) {
   try { return JSON.parse(text); } catch (e) { return null; }
 }
 
+function validRecord(rec) {
+  return !!rec && rec.v === 1 && /^[0-9a-f]{32,}$/.test(rec.salt || '') && /^[0-9a-f]{64}$/.test(rec.hash || '')
+    && Number.isInteger(rec.iter) && rec.iter >= 100000 && rec.iter <= 2000000;
+}
 function eqHex(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
   try { return timingSafeEqual(Buffer.from(a), Buffer.from(b)); } catch (e) { return false; }
 }
-async function checkPassword(pw) {
-  const rec = await readGistFile('admin.json');
-  if (rec && rec.v === 1 && /^[0-9a-f]{32,}$/.test(rec.salt || '') && /^[0-9a-f]{64}$/.test(rec.hash || '')
-      && Number.isInteger(rec.iter) && rec.iter >= 100000 && rec.iter <= 2000000) {
-    const h = pbkdf2Sync(String(pw), Buffer.from(rec.salt, 'hex'), rec.iter, 32, 'sha256').toString('hex');
-    return eqHex(h, rec.hash);
-  }
-  // v4.29: nincs beépített tartalék jelszó — ha az admin.json nem olvasható, a belépés elutasítva
-  return false;
+const hashPw = (pw, rec) => pbkdf2Sync(String(pw), Buffer.from(rec.salt, 'hex'), rec.iter, 32, 'sha256').toString('hex');
+
+/** A jelszó-rekord: 1. Blobs, 2. környezeti változó, 3. (átállás) a Gist régi admin.json-ja. */
+async function passwordRecord() {
+  const stored = await adminStore().get('pw-record', { type: 'json' }).catch(() => null);
+  if (validRecord(stored)) return { rec: stored, from: 'blobs' };
+  try { const env = JSON.parse(process.env.ADMIN_PASSWORD_RECORD || 'null'); if (validRecord(env)) return { rec: env, from: 'env' }; } catch (e) {}
+  const gist = await readGist().catch(() => null);
+  const legacy = await gistFileJSON(gist, 'admin.json').catch(() => null);
+  if (validRecord(legacy)) return { rec: legacy, from: 'gist' };
+  return { rec: null, from: '' };
+}
+
+/** A régi, nyilvános admin.json áthelyezése a Blobs-ba, és törlése a Gistből. */
+async function migrateLegacyRecord(rec) {
+  await adminStore().setJSON('pw-record', rec);
+  if (!process.env.GITHUB_TOKEN) return false;
+  try {
+    const r = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+      method: 'PATCH', headers: Object.assign(ghHeaders(), { 'content-type': 'application/json' }),
+      body: JSON.stringify({ files: { 'admin.json': null } })
+    });
+    return r.ok;
+  } catch (e) { return false; }
 }
 
 // a zenés tároló: környezeti változóból, vagy a Gist zene.json-jából
@@ -63,7 +87,7 @@ let musicRepoCache = null, musicRepoAt = 0;
 async function musicRepo() {
   if (process.env.MUSIC_REPO) return process.env.MUSIC_REPO.toLowerCase();
   if (musicRepoCache !== null && Date.now() - musicRepoAt < 60000) return musicRepoCache;
-  const z = await readGistFile('zene.json');
+  const z = await gistFileJSON(await readGist().catch(() => null), 'zene.json').catch(() => null);
   musicRepoCache = (z && typeof z.repo === 'string') ? z.repo.toLowerCase() : '';
   musicRepoAt = Date.now();
   return musicRepoCache;
@@ -75,8 +99,8 @@ async function ghAllowed(method, path) {
   const m = /^\/repos\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(\/.*)?$/.exec(p);
   if (!m) return false;
   const want = await musicRepo();
-  const repo = m[1].toLowerCase();
-  if (want && repo !== want) return false;   // csak a beállított zenés tároló
+  // v4.30: zenés tároló nélkül egyetlen tárolóhoz sem enged hozzá (régen bármelyikhez)
+  if (!want || m[1].toLowerCase() !== want) return false;
   const rest = m[2] || '';
   return rest === '' || /^\/(branches|git\/ref|git\/refs|contents)(\/|$)/.test(rest);
 }
@@ -106,20 +130,39 @@ export default async (req) => {
   if (body.action === 'login') {
     if (limited('l|' + ip, 5, 10 * 60000)) return json({ error: 'Túl sok próbálkozás — várj 10 percet.' }, 429);
     // országos (példányon átívelő) fék: óránként legfeljebb 40 hibás próba összesen
-    const store = getStore({ name: 'picasso-admin', consistency: 'strong' });
+    const store = adminStore();
     const hour = new Date().toISOString().slice(0, 13);
     const fails = await store.get('fails', { type: 'json' }).catch(() => null) || {};
     if (fails.h === hour && fails.n >= 40) return json({ error: 'Túl sok hibás próbálkozás — próbáld újra egy óra múlva.' }, 429);
-    const ok = await checkPassword(body.password).catch(() => false);
+    const { rec, from } = await passwordRecord().catch(() => ({ rec: null, from: '' }));
+    // nincs beépített tartalék jelszó: ha nincs rekord, a belépés elutasítva
+    const ok = !!rec && eqHex(hashPw(body.password, rec), rec.hash);
     if (!ok) {
-      await store.setJSON('fails', { h: hour, n: (fails.h === hour ? fails.n : 0) + 1 }).catch(() => {});
+      await updateJSON(store, 'fails', f => {
+        const cur = (f && typeof f === 'object') ? f : {};
+        return { value: { h: hour, n: (cur.h === hour ? Number(cur.n) || 0 : 0) + 1 } };
+      }).catch(() => {});
       return json({ error: 'Hibás jelszó.' }, 401);
     }
-    return json({ session: await makeSession(), gh: !!process.env.GITHUB_TOKEN, nf: !!process.env.NETLIFY_API_TOKEN });
+    let migrated;
+    if (from === 'gist') migrated = await migrateLegacyRecord(rec).catch(() => false);
+    return json({ session: await makeSession(), gh: !!process.env.GITHUB_TOKEN, nf: !!process.env.NETLIFY_API_TOKEN,
+      pwFrom: from === 'gist' ? 'blobs' : from, migrated: migrated === undefined ? undefined : !!migrated });
   }
 
   if (!(await verifySession(req.headers.get('x-admin-session')))) return json({ error: 'A belépés lejárt — lépj be újra.' }, 401);
   if (limited('a|' + ip, 300, 60000)) return json({ error: 'slow down' }, 429);
+
+  if (body.action === 'setpw') {
+    const pw = String(body.password || '');
+    if (pw.length < 10 || pw.length > 200) return json({ error: 'A jelszó 10–200 karakter legyen.' }, 400);
+    const salt = randomBytes(16).toString('hex');
+    const rec = { v: 1, salt, iter: PW_ITER };
+    rec.hash = hashPw(pw, rec);
+    await adminStore().setJSON('pw-record', rec);
+    return json({ ok: true });
+  }
+
   const method = String(body.method || 'GET').toUpperCase();
   const path = String(body.path || '');
   if (!/^\/[A-Za-z0-9_./?=&%:-]*$/.test(path) || path.includes('..')) return json({ error: 'bad path' }, 400);
@@ -129,6 +172,8 @@ export default async (req) => {
     if (!['GET', 'PATCH', 'POST', 'PUT', 'DELETE'].includes(method) || !(await ghAllowed(method, path))) return json({ error: 'Ez a GitHub-művelet nem engedélyezett.' }, 403);
     const opts = { method, headers: ghHeaders() };
     if (body.body !== undefined && method !== 'GET') { opts.body = typeof body.body === 'string' ? body.body : JSON.stringify(body.body); opts.headers['content-type'] = 'application/json'; }
+    // v4.30: a jelszó-lenyomat soha nem kerülhet vissza a nyilvános Gistbe
+    if (method === 'PATCH' && opts.body && /"admin\.json"\s*:\s*\{/.test(opts.body)) return json({ error: 'A jelszó már nem a Gistben tárolódik.' }, 403);
     const r = await fetch('https://api.github.com' + path, opts);
     if (path.startsWith(`/gists/`) || path.includes('/repos/')) musicRepoAt = 0;   // a zene.json változhatott
     return new Response(await r.text(), { status: r.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });

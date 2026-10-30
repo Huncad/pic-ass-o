@@ -3889,6 +3889,7 @@ const DIRECTORY_ROOM_ID = 'picasso-room-directory-v1';
 // once, then redeploy this one file. Leave empty to fall back to the local
 // szavak-konnyu.txt / szavak-kozepes.txt files shipped alongside this page.
 const WORDS_GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
+const GIST_PROXY_URL = '/.netlify/functions/gist';   // v4.30: cached copy of the gist (see netlify/functions/gist.mjs)
 
 // =====================================================================
 // v4.00: SAJÁT JÁTÉKSZERVER (otthoni mini PC). Ha be van állítva és elérhető,
@@ -4306,9 +4307,21 @@ const SRV = (function(){
   async function loadWordsFromGist(){
     if(!WORDS_GIST_ID) return null;
     try{
-      const res = await fetch(`https://api.github.com/gists/${WORDS_GIST_ID}`, { cache:'no-store' });
-      if(!res.ok) return null;
-      const data = await res.json();
+      // v4.30: first our own cached copy (netlify/functions/gist) — the GitHub API
+      // allows only 60 unauthenticated requests per hour per IP address, which a
+      // party on one wifi used up quickly. GitHub directly is only the fallback.
+      let data = null;
+      try{
+        const ctrl = new AbortController(); const t = setTimeout(()=>ctrl.abort(), 5000);
+        const r1 = await fetch(GIST_PROXY_URL, { cache:'no-store', signal: ctrl.signal });
+        clearTimeout(t);
+        if(r1.ok){ const j = await r1.json(); if(j && j.id === WORDS_GIST_ID && isPlainObject(j.files)) data = j; }
+      }catch(e){}
+      if(!data){
+        const res = await fetch(`https://api.github.com/gists/${WORDS_GIST_ID}`, { cache:'no-store' });
+        if(!res.ok) return null;
+        data = await res.json();
+      }
       // v2.56: the background-music list lives in the same gist
       try{
         const mf = data.files && data.files['zene.json'];
@@ -4318,11 +4331,6 @@ const SRV = (function(){
       try{
         const nf = data.files && data.files['ertesites.json'];
         setNotifyCfg(nf && nf.content ? JSON.parse(nf.content) : null);
-      }catch(e){}
-      // v3.20: admin password changed from the admin panel (salted PBKDF2)
-      try{
-        const pf = data.files && data.files['admin.json'];
-        if(pf && pf.content) setAdminPwRecord(JSON.parse(pf.content));
       }catch(e){}
       // v2.88: home-screen announcement from the admin
       try{
@@ -4395,32 +4403,10 @@ const SRV = (function(){
   // Hidden admin panel — add/remove puzzle words, download updated .txt
   // files. Only reachable via a #admin URL hash; not linked anywhere in
   // the normal UI. v4.29: the password is checked by the server
-  // (netlify/functions/admin.mjs) against the salted PBKDF2 record in the
-  // gist (admin.json). There is no built-in fallback password: if that
-  // record can't be read, login is refused.
+  // (netlify/functions/admin.mjs) against the salted PBKDF2 record in its
+  // own server-side store (v4.30: no longer in the public gist). There is no
+  // built-in fallback password: if that record can't be read, login is refused.
   // =====================================================================
-  // { v:1, salt, iter, hash } (PBKDF2-SHA256) — also used for the offline
-  // check below when the page has no server (e.g. opened as a local file).
-  let adminPwRecord = null;
-  const HEX_RE = /^[0-9a-f]+$/;
-  function setAdminPwRecord(r){
-    if(isPlainObject(r) && r.v === 1 && typeof r.salt === 'string' && HEX_RE.test(r.salt) && r.salt.length >= 32
-       && typeof r.hash === 'string' && HEX_RE.test(r.hash) && r.hash.length === 64
-       && Number.isInteger(r.iter) && r.iter >= 100000 && r.iter <= 2000000){
-      adminPwRecord = { v:1, salt:r.salt, iter:r.iter, hash:r.hash };
-    }
-  }
-  const hexToBytes = h => new Uint8Array(h.match(/../g).map(x=>parseInt(x,16)));
-  const bytesToHex = b => [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
-  async function pbkdf2Hex(password, saltHex, iter){
-    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(password)), 'PBKDF2', false, ['deriveBits']);
-    const bits = await crypto.subtle.deriveBits({ name:'PBKDF2', hash:'SHA-256', salt:hexToBytes(saltHex), iterations:iter }, key, 256);
-    return bytesToHex(bits);
-  }
-  async function checkAdminPassword(pw){
-    if(adminPwRecord) return (await pbkdf2Hex(pw, adminPwRecord.salt, adminPwRecord.iter)) === adminPwRecord.hash;
-    return false; // v4.29: no built-in fallback password
-  }
   let adminLoginFails = 0, adminLockedUntil = 0;
   let adminUnlocked = false;
   // v4.19: server-side admin. The password is checked by the server, which
@@ -4482,8 +4468,9 @@ const SRV = (function(){
     const srv = await adminServerLogin(input.value);
     if(srv.session){ ok = true; adminSession = srv.session; adminSrvCaps = { gh: !!srv.gh, nf: !!srv.nf }; }
     else if(srv.offline){
-      // no server (e.g. opened as a local file): the panel opens, but nothing can be saved
-      try{ ok = await checkAdminPassword(input.value); }catch(e){ ok = false; }
+      // v4.30: no server (e.g. opened as a local file) — only the server can check the password
+      warn.textContent = 'Az admin felület csak a játék weboldalán érhető el (a jelszót a szerver ellenőrzi).';
+      input.value = ''; return;
     } else if(srv.error && !/jelszó/i.test(srv.error)){ warn.textContent = srv.error; input.value = ''; return; }
     if(!ok && ++adminLoginFails >= 5){ adminLockedUntil = Date.now() + 60000; adminLoginFails = 0; }
     if(ok){
@@ -4507,13 +4494,12 @@ const SRV = (function(){
     if(a.value !== b.value){ st.textContent = '⚠️ A két jelszó nem egyezik.'; return; }
     btn.disabled = true; st.textContent = 'Mentés…';
     try{
-      const salt = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
-      const iter = 310000;
-      const rec = { v:1, salt, iter, hash: await pbkdf2Hex(a.value, salt, iter) };
-      await adminWriteGistFile('admin.json', JSON.stringify(rec));
-      setAdminPwRecord(rec);
+      // v4.30: the server hashes and stores it (never in the public gist)
+      const r = await adminCall({ action:'setpw', password: a.value });
+      const j = await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
       a.value = ''; b.value = '';
-      st.textContent = '✅ Kész. Mostantól az új jelszó érvényes (a többi eszközön újratöltés után).';
+      st.textContent = '✅ Kész. Mostantól az új jelszó érvényes.';
     }catch(e){
       st.textContent = '⚠️ Nem sikerült: ' + (e && e.message ? e.message : 'ismeretlen hiba');
     }finally{ btn.disabled = false; }
@@ -6382,9 +6368,10 @@ const SRV = (function(){
   // it is never put on the network until the round is over (see publicRound()).
   let currentRound = null;
   let revealedWords = [];             // words already revealed at the end of earlier rounds (to avoid repeats)
-  // v3.83: fingerprints of the words OFFERED in this game. The drawer announces
-  // them with the round (the word itself stays secret), so everybody — also
-  // after the drawer left before choosing — never offers them again in this game.
+  // v3.83: fingerprints of the words OFFERED in this game, as older versions
+  // announced them with the round. v4.30 no longer sends them (they could be
+  // matched against the public word list); they are still accepted from older
+  // devices so their offered words are skipped too.
   let offeredKeySet = new Set();
   function wordFp(w){ const t = squash(w); let h = 5381; for(let i=0;i<t.length;i++) h = ((h*33) ^ t.charCodeAt(i)) >>> 0; return h.toString(36) + t.length; }
   function noteOfferedKeys(list){
@@ -6398,11 +6385,15 @@ const SRV = (function(){
     });
   }
   // What goes over the network for a round: everything except the secret word.
+  // v4.30: whitelist instead of deleting a few fields — offeredWords (the
+  // offered words, the secret one among them) used to slip through and went
+  // to every player in plain text with each round announcement.
+  const PUBLIC_ROUND_FIELDS = ['idx','drawerId','drawerName','tier','phase','roundStartAt','canvasAspect'];
   function publicRound(rd){
-    const pub = Object.assign({}, rd);
-    delete pub.word;
-    delete pub.usedWords;
-    delete pub.choices;
+    const pub = {};
+    if(!rd) return pub;
+    PUBLIC_ROUND_FIELDS.forEach(k=>{ if(rd[k] !== undefined) pub[k] = rd[k]; });
+    pub.word = null;
     return pub;
   }
   let scores = {};                    // peerId -> total
@@ -8240,6 +8231,17 @@ const SRV = (function(){
     return lastHintMask;
   }
 
+  // v4.30: while I am the drawer and the drawing is not over, revealedWords also
+  // holds the words I was offered — the secret one among them. They must not go
+  // into a snapshot (any guest can ask for one with a resync request).
+  function snapshotRevealedWords(resolved){
+    if(!currentRound || resolved || currentRound.drawerId !== selfId) return revealedWords.slice(-700);
+    const secret = new Set([currentRound.word].concat(
+      (Array.isArray(currentRound.choices) ? currentRound.choices : []).map(c=>c && c.w),
+      Array.isArray(currentRound.offeredWords) ? currentRound.offeredWords : []
+    ).filter(Boolean).map(w=>squash(w)));
+    return revealedWords.filter(w=>!secret.has(squash(w))).slice(-700);
+  }
   function buildLateSnapshot(){
     const resolved = !!(currentRound && processedResultRounds.has(roundKey(currentRound)));
     const drawing = !!(currentRound && currentRound.phase === 'drawing' && !resolved);
@@ -8251,8 +8253,8 @@ const SRV = (function(){
       resolved,
       elapsedMs: (drawing && fdRoundStartAt) ? Math.max(0, Date.now() - fdRoundStartAt) : 0,
       hintMask: currentHintMask(),
-      revealedWords: revealedWords.slice(-700),
-      offeredKeys: [...offeredKeySet].slice(-300),
+      revealedWords: snapshotRevealedWords(resolved),
+      offeredKeys: [...offeredKeySet].slice(-300),   // only what older versions announced (v4.30 announces none)
       gameStats,
       gameEnded
     };
@@ -11683,10 +11685,13 @@ const SRV = (function(){
     if(idx < 0 || idx >= meta.turnOrder.length) return;
     const choices = pickWordChoices(settings.difficulties, revealedWords, settings.wordChoices || 3);
     choices.forEach(c=>{ if(c && c.w && !revealedWords.includes(c.w)) revealedWords.push(c.w); });   // v3.28: never offered again
-    const offeredKeys = choices.map(c=>c && c.w ? wordFp(c.w) : '').filter(Boolean);
-    noteOfferedKeys(offeredKeys);
+    // v4.30: the offered words' fingerprints are NOT announced any more. The
+    // word list is public, so anyone could hash every word and match them —
+    // with one word to choose from that gave the secret word away. The words
+    // are kept out of later rounds anyway: here via revealedWords, everywhere
+    // else from the round result, which lists them once the drawing is over.
     const rd = {
-      idx, drawerId:selfId, drawerName:myName, word:null, tier:choices[0].tier, choices, offeredKeys,
+      idx, drawerId:selfId, drawerName:myName, word:null, tier:choices[0].tier, choices,
       phase:'prepare', roundStartAt:null
     };
     currentRound = rd;

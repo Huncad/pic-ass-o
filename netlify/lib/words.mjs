@@ -15,8 +15,10 @@ let cache = null, cacheAt = 0;
 export async function officialWords() {
   if (cache && Date.now() - cacheAt < 10 * 60 * 1000) return cache;
   try {
+    // v4.30: tokennel olvasunk, ha van (hitelesítés nélkül óránként csak 60 kérés jár)
     const r = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-      headers: { accept: 'application/vnd.github+json', 'user-agent': 'pic-ass-o-netlify' }
+      headers: Object.assign({ accept: 'application/vnd.github+json', 'user-agent': 'pic-ass-o-netlify' },
+        process.env.GITHUB_TOKEN ? { authorization: 'token ' + process.env.GITHUB_TOKEN } : {})
     });
     if (!r.ok) return cache;
     const d = await r.json();

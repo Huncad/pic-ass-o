@@ -15,7 +15,13 @@ async function secret() {
   if (process.env.ADMIN_SESSION_SECRET && process.env.ADMIN_SESSION_SECRET.length >= 32) return (secretCache = process.env.ADMIN_SESSION_SECRET);
   const store = getStore({ name: 'picasso-admin', consistency: 'strong' });
   let s = await store.get('session-secret').catch(() => null);
-  if (!s || s.length < 32) { s = randomBytes(32).toString('hex'); await store.set('session-secret', s); }
+  if (!s || s.length < 32) {
+    // v4.30: ha két példány egyszerre hozná létre, csak az első írás nyer, a másik azt olvassa vissza
+    const fresh = randomBytes(32).toString('hex');
+    const w = await store.set('session-secret', fresh, s ? undefined : { onlyIfNew: true }).catch(() => null);
+    s = (w && w.modified === false) ? await store.get('session-secret').catch(() => null) : fresh;
+    if (!s || s.length < 32) s = fresh;
+  }
   return (secretCache = s);
 }
 
@@ -36,14 +42,7 @@ export async function verifySession(token) {
   try { const d = JSON.parse(Buffer.from(body, 'base64url').toString()); return Number(d.exp) > Date.now(); } catch (e) { return false; }
 }
 
-/** Admin-e a kérés: érvényes munkamenet, VAGY (régi út) egy Netlify token, ami hozzáfér a projekthez. */
+/** Admin-e a kérés: érvényes munkamenet (v4.30: a régi Netlify-tokenes út megszűnt, a játék már nem használta). */
 export async function isAdminRequest(req) {
-  if (await verifySession(req.headers.get('x-admin-session'))) return true;
-  const token = req.headers.get('x-netlify-token') || '';
-  const site = process.env.SITE_ID;
-  if (!token || !site) return false;
-  try {
-    const r = await fetch(`https://api.netlify.com/api/v1/sites/${encodeURIComponent(site)}`, { headers: { authorization: 'Bearer ' + token } });
-    return r.ok;
-  } catch (e) { return false; }
+  return verifySession(req.headers.get('x-admin-session'));
 }
