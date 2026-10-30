@@ -2,8 +2,16 @@
   "name": "pic-ass-o",
   "private": true,
   "type": "module",
+  "scripts": {
+    "test": "node --test --experimental-test-module-mocks tests/*.test.mjs",
+    "test:e2e": "node tests/e2e/round.cjs",
+    "test:visual": "node tests/visual/snap.cjs"
+  },
   "dependencies": {
     "@netlify/blobs": "^10.7.13",
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^10.3.1"
+  },
+  "devDependencies": {
+    "ws": "^8.18.0"
   }
 }
