@@ -10,6 +10,7 @@
 import { getStore } from '@netlify/blobs';
 import { norm, officialWords, fromGameServer } from '../lib/words.mjs';
 import { isAdminRequest } from '../lib/adminauth.mjs';
+import { json as baseJson, ipOf, makeLimiter, updateJSON } from '../lib/util.mjs';
 
 const KEY = 'used';
 // v4.25: a drawn word is protected from repeats for 30 days only, then it
@@ -19,22 +20,12 @@ const fresh = (used) => { const now = Date.now(); const out = {}; for (const [k,
 
 
 // sebességkorlát és gyorsítótár (példányonként; a meleg függvénypéldány újrahasználja)
-const hits = new Map();
-function limited(key, max, windowMs) {
-  const now = Date.now();
-  const arr = (hits.get(key) || []).filter(t => now - t < windowMs);
-  arr.push(now); hits.set(key, arr);
-  if (hits.size > 3000) for (const k of hits.keys()) { if (!(hits.get(k) || []).some(t => now - t < windowMs)) hits.delete(k); }
-  return arr.length > max;
-}
-const ipOf = req => req.headers.get('x-nf-client-connection-ip') || (req.headers.get('x-forwarded-for') || '').split(',')[0] || 'x';
+const limited = makeLimiter();
 let listCache = null, listCacheAt = 0;
 
 export default async (req) => {
-  const json = (body, status = 200, cache = 'no-store') => new Response(JSON.stringify(body), {
-    status, headers: Object.assign({ 'content-type': 'application/json', 'cache-control': cache },
-      cache === 'no-store' ? {} : { 'netlify-cdn-cache-control': 'public, s-maxage=60, stale-while-revalidate=600' })
-  });
+  const json = (body, status = 200, cache = 'no-store') => baseJson(body, status, cache === 'no-store' ? {} :
+    { 'cache-control': cache, 'netlify-cdn-cache-control': 'public, s-maxage=60, stale-while-revalidate=600' });
   if (req.headers.get('sec-fetch-site') === 'cross-site') return json({ error: 'forbidden' }, 403);
   const store = getStore({ name: 'picasso-wordused', consistency: 'strong' });
   const read = async () => {
@@ -65,12 +56,16 @@ export default async (req) => {
   const official = await officialWords();
   if (!official) return json({ ok: false, skipped: 'wordlist unavailable' }, 503);
   if (!official.has(k)) return json({ ok: false, skipped: 'not an official word' });
-  const all = await read();
-  const used = fresh(all);                       // expired words are dropped here
-  if (used[k]) return json({ ok: true, already: true });
-  if (Object.keys(used).length > 40000) return json({ error: 'full' }, 429);
-  used[k] = Date.now();
-  await store.setJSON(KEY, used);
+  // v4.30: conflict-safe read-modify-write (two reports at once no longer overwrite each other)
+  const res = await updateJSON(store, KEY, raw => {
+    const used = fresh((raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {});   // expired words are dropped here
+    if (used[k]) return { write: false, result: 'already' };
+    if (Object.keys(used).length > 40000) return { write: false, result: 'full' };
+    used[k] = Date.now();
+    return { value: used, result: 'ok' };
+  });
+  if (res === 'already') return json({ ok: true, already: true });
+  if (res === 'full') return json({ error: 'full' }, 429);
   listCache = null;
   return json({ ok: true });
 };

@@ -48,6 +48,8 @@ const MAX_ROOM_PEERS = 40;
 const MAX_ROOMS = 500;
 const DIR_TTL_MS = 30_000;           // ennyi ideig él egy szoba-hirdetés frissítés nélkül
 const RATE_PER_SEC = 200;            // üzenet / mp / kapcsolat (rajzolásnál sok kicsi jön)
+const RATE_BURST = 600;              // v4.30: egyszeri löket (újracsatlakozáskor a böngésző akár 400 üzenetet küld újra)
+const THROTTLE_CLOSE_MAX = 3;        // v4.30: percenként legfeljebb ennyiszer bontunk túlterhelés miatt (utána csak eldobunk)
 // v4.11: bájtalapú korlát is — a beküldött és a szobába továbbított forgalomra
 const BYTES_PER_SEC = 512 * 1024;    // tartós beküldés / kapcsolat
 const BYTES_BURST = 6 * 1024 * 1024; // egyszeri löket (pl. teljes rajz egy késői belépőnek)
@@ -76,6 +78,8 @@ const directory = new Map();
 
 function log(...a){ console.log(new Date().toISOString(), ...a); }
 const isStr = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
+// v4.30: csak akkor küldünk, ha a kliens kimenő puffere nincs tele (lassú telefon ne tömje a memóriát)
+const canSend = ws => ws && ws.readyState === 1 && ws.bufferedAmount < MAX_WS_BUFFER;
 
 // v4.12: a továbbító fejlécekben csak akkor bízunk, ha a kérés helyi
 // proxyból (Tailscale Funnel / serve a gépen) jön; ilyenkor is a LEGUTOLSÓ
@@ -176,6 +180,18 @@ function ridForCode(code){
 const clampStr = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
 const clampInt = (v, lo, hi) => { const x = Math.floor(Number(v)); return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : 0; };
 
+// v4.30: a PBKDF2 drága (kb. 100 ms CPU) — egy kapcsolat percenként legfeljebb
+// ennyi új (gyorsítótárban nem lévő) kódot ellenőriztethet
+const RID_PER_MIN = 6;
+function ridAllowed(peer, code){
+  if(ridCache.has(code)) return true;
+  const now = Date.now();
+  peer.ridTimes = (peer.ridTimes || []).filter(t => now - t < 60_000);
+  if(peer.ridTimes.length >= RID_PER_MIN) return false;
+  peer.ridTimes.push(now);
+  return true;
+}
+
 async function handleDir(peer, d){
   if(!d || typeof d !== 'object') return;
   const code = /^[A-Z0-9]{4,8}$/.test(String(d.code || '')) ? String(d.code) : '';
@@ -197,6 +213,7 @@ async function handleDir(peer, d){
     info.owner = peer.id;
   }
   if(code){
+    if(!ridAllowed(peer, code)) return;
     const rid = await ridForCode(code);
     if(!rid || rid !== peer.room) return;                      // a kód nem ehhez a szobához tartozik
   }
@@ -274,7 +291,7 @@ function handleWordRep(peer, m){
 
 function broadcastDir(d, fromId){
   const str = JSON.stringify({ t:'dir', d });
-  peers.forEach(p => { if(p.id !== fromId && p.ws && p.ws.readyState === 1 && p.dirSub) p.ws.send(str); });
+  peers.forEach(p => { if(p.id !== fromId && p.dirSub && canSend(p.ws)) p.ws.send(str); });
 }
 
 // ---------------------------------------------------------------------
@@ -287,9 +304,22 @@ let saveTimer = null;
 function saveGames(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
+    saveTimer = null;
     const tmp = GAMES_FILE + '.tmp';
-    fs.writeFile(tmp, JSON.stringify(games), err => { if(!err) fs.rename(tmp, GAMES_FILE, () => {}); });
+    fs.writeFile(tmp, JSON.stringify(games), err => {
+      if(err){ log('ranglista mentési hiba', err.message); return; }
+      fs.rename(tmp, GAMES_FILE, e2 => { if(e2) log('ranglista mentési hiba', e2.message); });
+    });
   }, 500);
+}
+// v4.30: leállításkor szinkron mentés (régen egy 500 ms-os időzítőn és egy 700 ms-os kilépésen múlt)
+function saveGamesNow(){
+  clearTimeout(saveTimer); saveTimer = null;
+  try{
+    const tmp = GAMES_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(games));
+    fs.renameSync(tmp, GAMES_FILE);
+  }catch(e){ log('ranglista mentési hiba', e.message); }
 }
 const lastReportByRoom = new Map();
 /** roomId -> Map(hash -> { rows, voters:Set(peerId), at }) — még meg nem erősített eredmények */
@@ -488,8 +518,28 @@ wss.on('connection', (ws, req) => {
   connPerIp.set(ip, nConn);
   ws.on('close', () => { const n = (connPerIp.get(ip) || 1) - 1; if(n <= 0) connPerIp.delete(ip); else connPerIp.set(ip, n); });
   let peer = null;
-  let tokens = RATE_PER_SEC, lastRefill = Date.now();
+  let tokens = RATE_BURST, lastRefill = Date.now();
   let byteTokens = BYTES_BURST, fanTokens = FANOUT_BURST;
+  let throttled = false;
+  // v4.30: túlterheléskor régen csendben eldobtuk az üzenetet, de a később
+  // érkezők sorszáma "nyugtázta" az eldobottat is, így az végleg elveszett.
+  // Most bontjuk a kapcsolatot: a böngésző azonnal visszacsatlakozik, és
+  // a szerver által visszaigazolt sorszám után mindent újraküld.
+  // Percenként legfeljebb néhányszor — utána marad a régi eldobás (visszaélés ellen).
+  function overLimit(why){
+    if(throttled) return;
+    const now = Date.now();
+    if(peer && peer.v2){
+      peer.throttleCloses = (peer.throttleCloses || []).filter(t => now - t < 60_000);
+      if(peer.throttleCloses.length < THROTTLE_CLOSE_MAX){
+        peer.throttleCloses.push(now);
+        throttled = true;
+        log('túlterhelés, újracsatlakoztatás', peer.id.slice(0,6), why);
+        try{ ws.close(4008, 'túl gyors'); }catch(e){}
+        return;
+      }
+    }
+  }
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
 
@@ -497,13 +547,14 @@ wss.on('connection', (ws, req) => {
     // egyszerű sebességkorlát
     const now = Date.now();
     const dt = (now - lastRefill) / 1000;
-    tokens = Math.min(RATE_PER_SEC, tokens + dt * RATE_PER_SEC);
+    tokens = Math.min(RATE_BURST, tokens + dt * RATE_PER_SEC);
     byteTokens = Math.min(BYTES_BURST, byteTokens + dt * BYTES_PER_SEC);
     fanTokens = Math.min(FANOUT_BURST, fanTokens + dt * FANOUT_BYTES_PER_SEC);
     lastRefill = now;
-    if(--tokens < 0){ return; }
+    if(throttled) return;                 // a bontás után érkezőket már nem dolgozzuk fel (újra jönnek)
+    if(--tokens < 0){ overLimit('üzenetszám'); return; }
     byteTokens -= buf.length;
-    if(byteTokens < 0){ return; }
+    if(byteTokens < 0){ overLimit('bájt'); return; }
     if(isBinary) return;
     let m; try{ m = JSON.parse(buf.toString()); }catch(e){ return; }
     if(!m || typeof m !== 'object') return;
@@ -571,15 +622,15 @@ wss.on('connection', (ws, req) => {
         return;
       case 'send': {
         if(!peer.room || !isStr(m.a, 32)) return;
-        if(typeof m.s === 'number'){            // újraküldött példány, amit már továbbítottunk
-          if(m.s <= peer.inSeq) return;
-          peer.inSeq = m.s;
-        }
+        if(typeof m.s === 'number' && m.s <= peer.inSeq) return;   // újraküldött példány, amit már továbbítottunk
         const set = roomMembers(peer.room);
         const out = JSON.stringify({ t:'msg', a: m.a, d: m.d, f: peer.id });
         const targets = Array.isArray(m.to) ? m.to.filter(id => typeof id === 'string' && set.has(id)).length : Math.max(0, set.size - 1);
-        fanTokens -= Buffer.byteLength(out, 'utf8') * targets;
-        if(fanTokens < 0){ return; }   // túl sok továbbítandó adat: eldobjuk (normál játékban ide nem jut el)
+        const cost = Buffer.byteLength(out, 'utf8') * targets;
+        // v4.30: a sorszámot csak a továbbítás után léptetjük, így egy itt eldobott üzenet újra jöhet
+        if(fanTokens - cost < 0){ overLimit('továbbítás'); return; }
+        fanTokens -= cost;
+        if(typeof m.s === 'number') peer.inSeq = m.s;
         if(Array.isArray(m.to)){
           m.to.slice(0, MAX_ROOM_PEERS).forEach(id => {
             if(typeof id === 'string' && id !== peer.id && set.has(id)){ const p = peers.get(id); if(p) sendRaw(p, out); }
@@ -641,10 +692,18 @@ setInterval(() => {
   const now = Date.now();
   directory.forEach((e, k) => { if(now - e.at > DIR_TTL_MS) directory.delete(k); });
   const online = JSON.stringify({ t:'online', n: peers.size });
-  peers.forEach(p => { if(p.ws && p.ws.readyState === 1) p.ws.send(online); });
+  peers.forEach(p => { if(canSend(p.ws)) p.ws.send(online); });
   lastReportByRoom.forEach((t, k) => { if(now - t > 3600_000) lastReportByRoom.delete(k); });
   recordsByIpSet.forEach((arr, k) => { const a = arr.filter(t => now - t < 86400_000); if(a.length) recordsByIpSet.set(k, a); else recordsByIpSet.delete(k); });
 }, 20_000);
 
 server.listen(PORT, () => log(`PIC-ASS-O szerver fut: http://0.0.0.0:${PORT}  (engedélyezett oldalak: ${ALLOWED_ORIGINS.join(', ')})`));
-process.on('SIGTERM', () => { saveGames(); setTimeout(() => process.exit(0), 700); });
+function shutdown(sig){
+  log('leállás', sig);
+  saveGamesNow();
+  try{ wss.clients.forEach(ws => { try{ ws.close(1012, 'újraindul'); }catch(e){} }); }catch(e){}
+  server.close();
+  setTimeout(() => process.exit(0), 300).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

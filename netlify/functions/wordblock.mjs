@@ -12,27 +12,19 @@
 import { getStore } from '@netlify/blobs';
 import { norm, officialWords, fromGameServer } from '../lib/words.mjs';
 import { isAdminRequest } from '../lib/adminauth.mjs';
+import { json as baseJson, ipOf, makeLimiter, updateJSON } from '../lib/util.mjs';
 
 const KEY = 'held';
 
 
 // sebességkorlát és gyorsítótár (példányonként; a meleg függvénypéldány újrahasználja)
-const hits = new Map();
-function limited(key, max, windowMs) {
-  const now = Date.now();
-  const arr = (hits.get(key) || []).filter(t => now - t < windowMs);
-  arr.push(now); hits.set(key, arr);
-  if (hits.size > 3000) for (const k of hits.keys()) { if (!(hits.get(k) || []).some(t => now - t < windowMs)) hits.delete(k); }
-  return arr.length > max;
-}
-const ipOf = req => req.headers.get('x-nf-client-connection-ip') || (req.headers.get('x-forwarded-for') || '').split(',')[0] || 'x';
+const limited = makeLimiter();
 let listCache = null, listCacheAt = 0;
 
 export default async (req) => {
-  const json = (body, status = 200, cache = 'no-store') => new Response(JSON.stringify(body), {
-    status, headers: Object.assign({ 'content-type': 'application/json', 'cache-control': cache },
-      cache === 'no-store' ? {} : { 'netlify-cdn-cache-control': 'public, s-maxage=60, stale-while-revalidate=600' })
-  });
+  const json = (body, status = 200, cache = 'no-store') => baseJson(body, status, cache === 'no-store' ? {} :
+    { 'cache-control': cache, 'netlify-cdn-cache-control': 'public, s-maxage=60, stale-while-revalidate=600' });
+  const asObj = v => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
   if (req.headers.get('sec-fetch-site') === 'cross-site') return json({ error: 'forbidden' }, 403);
   const store = getStore({ name: 'picasso-wordblock', consistency: 'strong' });
   const read = async () => {
@@ -56,22 +48,30 @@ export default async (req) => {
 
   if (body.action === 'release') {
     if (!(await isAdminRequest(req))) return json({ error: 'unauthorized' }, 401);   // v4.19
-    const held = await read();
-    delete held[k];
-    await store.setJSON(KEY, held);
+    const words = await updateJSON(store, KEY, raw => {
+      const held = asObj(raw);
+      if (!held[k]) return { write: false, result: Object.keys(held) };
+      delete held[k];
+      return { value: held, result: Object.keys(held) };
+    });
     listCache = null;
-    return json({ ok: true, words: Object.keys(held) });
+    return json({ ok: true, words });
   }
 
   if (!trusted) return json({ error: 'forbidden', why: 'csak a játékszerver jelezhet' }, 403);
   const official = await officialWords();
   if (!official) return json({ ok: false, skipped: 'wordlist unavailable' }, 503);
   if (!official.has(k)) return json({ ok: false, skipped: 'not an official word' });
-  const held = await read();
-  if (held[k]) return json({ ok: true, already: true });
-  if (Object.keys(held).length > 2000) return json({ error: 'full' }, 429);
-  held[k] = { word, at: new Date().toISOString(), votes: Math.max(0, Math.floor(Number(body.votes) || 0)) };
-  await store.setJSON(KEY, held);
+  // v4.30: ütközésbiztos írás (két egyszerre érkező jelzés nem írja felül egymást)
+  const res = await updateJSON(store, KEY, raw => {
+    const held = asObj(raw);
+    if (held[k]) return { write: false, result: 'already' };
+    if (Object.keys(held).length > 2000) return { write: false, result: 'full' };
+    held[k] = { word, at: new Date().toISOString(), votes: Math.max(0, Math.floor(Number(body.votes) || 0)) };
+    return { value: held, result: 'ok' };
+  });
+  if (res === 'already') return json({ ok: true, already: true });
+  if (res === 'full') return json({ error: 'full' }, 429);
   listCache = null;
   return json({ ok: true });
 };

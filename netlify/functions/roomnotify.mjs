@@ -6,36 +6,25 @@
 //
 //   POST { action:"notify", name, host, public, code }  -> bárki (a szobát nyitó
 //        eszköz); sebességkorláttal és napi plafonnal
-//   POST { action:"get" }                + x-netlify-token -> admin: { on, topic }
-//   POST { action:"save", on, topic }    + x-netlify-token -> admin: beállítás
-//   POST { action:"test" }               + x-netlify-token -> admin: próbaértesítés
-//
-// A Netlify token ugyanaz, amit az admin oldal a Visszajelzéseknél kér; azt
-// ellenőrizzük, hogy hozzáfér-e ehhez a Netlify-projekthez.
+//   POST { action:"get" }                + x-admin-session -> admin: { on, topic }
+//   POST { action:"save", on, topic }    + x-admin-session -> admin: beállítás
+//   POST { action:"test" }               + x-admin-session -> admin: próbaértesítés
 import { getStore } from '@netlify/blobs';
 import { isAdminRequest } from '../lib/adminauth.mjs';
+import { json, ipOf, makeLimiter, updateJSON } from '../lib/util.mjs';
 
 const KEY = 'cfg';
 const GAME_SERVER_URL = String(process.env.GAME_SERVER_URL || 'https://picasso.taile8c93.ts.net').replace(/\/+$/, '');
 const DAILY_CAP = 80;          // legfeljebb ennyi értesítés naponta, összesen
 const MIN_GAP_MS = 20 * 1000;  // két értesítés között legalább 20 mp
 
-const hits = new Map();
-function limited(key, max, windowMs) {
-  const now = Date.now();
-  const arr = (hits.get(key) || []).filter(t => now - t < windowMs);
-  arr.push(now); hits.set(key, arr);
-  if (hits.size > 3000) for (const k of hits.keys()) { if (!(hits.get(k) || []).some(t => now - t < windowMs)) hits.delete(k); }
-  return arr.length > max;
-}
-const ipOf = req => req.headers.get('x-nf-client-connection-ip') || (req.headers.get('x-forwarded-for') || '').split(',')[0] || 'x';
-const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+const limited = makeLimiter();
 export const cleanTopic = t => { const s = String(t || '').trim(); return /^[A-Za-z0-9_-]{8,64}$/.test(s) ? s : ''; };
 // vezérlőkarakterek ki, hossz korlátozva — az ntfy sima szövegként jeleníti meg
 export const cleanText = (t, n) => String(t || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
 const cleanCode = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
 
-const isAdmin = isAdminRequest;   // v4.19: admin munkamenet (vagy régi Netlify token)
+const isAdmin = isAdminRequest;   // v4.19: admin munkamenet
 
 async function sendPush(topic, title, message, click) {
   const q = new URLSearchParams({ title, tags: 'art,bell' });
@@ -55,11 +44,11 @@ export default async (req) => {
   let body = {};
   try { body = await req.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
   const store = getStore({ name: 'picasso-notify', consistency: 'strong' });
-  const read = async () => {
-    const v = await store.get(KEY, { type: 'json' }).catch(() => null);
+  const tidy = v => {
     const d = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
     return { on: d.on === true, topic: cleanTopic(d.topic), day: String(d.day || ''), n: Number(d.n) || 0, last: Number(d.last) || 0 };
   };
+  const read = async () => tidy(await store.get(KEY, { type: 'json' }).catch(() => null));
   const url = new URL(req.url);
   const site = url.origin + '/';
 
@@ -72,7 +61,7 @@ export default async (req) => {
       const topic = cleanTopic(body.topic);
       const on = body.on === true;
       if (on && !topic) return json({ error: 'bad topic' }, 400);
-      await store.setJSON(KEY, Object.assign({}, cfg, { on, topic }));
+      await updateJSON(store, KEY, raw => ({ value: Object.assign(tidy(raw), { on, topic }) }));
       return json({ ok: true, on, topic });
     }
     if (!cfg.topic) return json({ ok: false, detail: 'nincs elmentett csatornanév' });
@@ -82,12 +71,8 @@ export default async (req) => {
 
   if (body.action === 'notify') {
     if (limited('n|' + ipOf(req), 6, 3600000)) return json({ ok: true, skipped: 'ip' });
-    const cfg = await read();
-    if (!cfg.on || !cfg.topic) return json({ ok: true, skipped: 'off' });
-    const today = new Date().toISOString().slice(0, 10);
-    if (cfg.day !== today) { cfg.day = today; cfg.n = 0; }
-    if (cfg.n >= DAILY_CAP) return json({ ok: true, skipped: 'daily cap' });
-    if (Date.now() - cfg.last < MIN_GAP_MS) return json({ ok: true, skipped: 'too soon' });
+    const pre = await read();
+    if (!pre.on || !pre.topic) return json({ ok: true, skipped: 'off' });
 
     const code = cleanCode(body.code);
     const isPublic = body.public === true;
@@ -109,9 +94,19 @@ export default async (req) => {
     const title = `🎨 Új szoba: ${name}`;
     const msg = isPublic ? `${host} nyitott egy nyilvános szobát. Koppints ide a csatlakozáshoz!` : `${host} nyitott egy zárt szobát.`;
     const click = isPublic && code ? `${site}?join=${encodeURIComponent(code)}` : site;
-    cfg.n += 1; cfg.last = Date.now();
-    await store.setJSON(KEY, cfg);
-    const r = await sendPush(cfg.topic, title, msg, click);
+    // v4.30: a számláló ütközésbiztosan nő (két egyszerre nyíló szoba sem lépi át a plafont)
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await updateJSON(store, KEY, raw => {
+      const cfg = tidy(raw);
+      if (!cfg.on || !cfg.topic) return { write: false, result: { skipped: 'off' } };
+      if (cfg.day !== today) { cfg.day = today; cfg.n = 0; }
+      if (cfg.n >= DAILY_CAP) return { write: false, result: { skipped: 'daily cap' } };
+      if (Date.now() - cfg.last < MIN_GAP_MS) return { write: false, result: { skipped: 'too soon' } };
+      cfg.n += 1; cfg.last = Date.now();
+      return { value: cfg, result: { topic: cfg.topic } };
+    });
+    if (res.skipped) return json({ ok: true, skipped: res.skipped });
+    const r = await sendPush(res.topic, title, msg, click);
     return json({ ok: r.ok });
   }
 
