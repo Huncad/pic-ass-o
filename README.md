@@ -26,7 +26,7 @@ Nincs build-lépés: a Netlify a fájlokat úgy szolgálja ki, ahogy vannak.
 ```bash
 npm install
 npm test            # szabályok, Netlify-függvények, játékszerver
-npm run test:e2e    # teljes kör két böngészőben (Playwright + Chromium kell hozzá)
+npm run test:e2e    # teljes kör + elárasztás/csalás elleni védelem két böngészőben (Playwright + Chromium)
 ```
 
 Vizuális összevetés (pl. CSS-módosítás előtt és után):

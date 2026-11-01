@@ -571,6 +571,7 @@
       <li><b>Közös ranglista:</b> a befejezett játékokból a becenevek és a pontszámok kerülnek a saját játékszerverre, <b>1 évig</b>. Valódi nevet nem kérünk — ha a becenevedet törölnéd, írj a fenti címre. <i>Jogalap: jogos érdek (6. cikk (1) f) — tiltakozhatsz ellene.</i></li>
       <li><b>Kitiltás:</b> ha a szobanyitó kirúg, egy véletlen eszközazonosítót és az IP-címed titkos kulccsal képzett lenyomatát (nem magát a címet) tároljuk a Netlify-on, hogy ne tudj visszalépni. Szobás tiltás legfeljebb 30, egész játékból való tiltás 7 napig marad meg. <i>Jogalap: jogos érdek a játék rendjének védelméhez (6. cikk (1) f).</i></li>
       <li><b>E-mail értesítő új szobákról (csak ha feliratkozol):</b> az e-mail címedet, a feliratkozás és a megerősítés időpontját tároljuk a Netlify-on. Megerősítés nélkül 24 óra után, leiratkozáskor azonnal töröljük. Csak az új szobákról szóló értesítéshez használjuk, senkinek nem adjuk ki. Csak 16 éven felüliek iratkozhatnak fel. <i>Jogalap: a hozzájárulásod (6. cikk (1) a), amit bármikor visszavonhatsz a levelek alján lévő linkkel — a visszavonás az addigi küldések jogszerűségét nem érinti.</i></li>
+      <li><b>Szabálytalan játék jelzése:</b> ha egy játékos eszközéről olyan üzenet érkezik, amit a játék módosítatlan változata nem küld (például üzenetáradat, más nevében küldött üzenet, a megfejtés a chatben), a többi eszköz ezt jelzi az üzemeltetőnek: a becenév, a véletlen eszközazonosító, a szoba, a gyanú fajtája és a jelző beceneve kerül a Netlify-on tárolt naplóba, <b>60 napig</b>. Az IP-címet nem tároljuk, csak egy lenyomatát. <i>Jogalap: jogos érdek a játék rendjének védelméhez (6. cikk (1) f).</i></li>
       <li><b>Visszajelzés-űrlap:</b> amit beírsz (a név és az elérhetőség önkéntes), a Netlify Forms tárolja; a válasz után, de legkésőbb 1 év múlva töröljük. <i>Jogalap: hozzájárulás (6. cikk (1) a).</i></li>
       <li><b>„Mi ez?” gomb:</b> ha megnyomod, a keresett szót a játék elküldi a magyar Wikipédiának (Wikimedia Foundation), hogy leírást és képet kérjen róla; ehhez a Wikipédia látja az IP-címedet. Csak a gomb megnyomásakor történik. <i>Jogalap: 6. cikk (1) b.</i></li>
       <li><b>Az eszközödön marad:</b> a böngésződ helyi tárhelyén két fajta adat van. <b>A működéshez szükséges:</b> beceneved, beállításaid (például hang, téma) és egy kapcsolódási hibanapló (24 óra után törlődik). <b>Kényelmi funkció:</b> a saját statisztikád (játékok, győzelmek, pontok). Egyik sem kerül máshová, kivéve ha a naplót te magad kimásolod és elküldöd, és mindet bármikor törölheted az alábbi gombbal.</li>
@@ -953,6 +954,7 @@
       <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-kozlemeny" data-tab="kozlemeny" aria-controls="admin-tab-kozlemeny">📢 Közlemény és értesítés</button>
       <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-zene" data-tab="zene" aria-controls="admin-tab-zene">🎵 Zene</button>
       <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-visszajelzes" data-tab="visszajelzes" aria-controls="admin-tab-visszajelzes">📬 Visszajelzések</button>
+      <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-gyanus" data-tab="gyanus" aria-controls="admin-tab-gyanus">🚩 Gyanús esetek</button>
       <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-beallitas" data-tab="beallitas" aria-controls="admin-tab-beallitas">⚙️ Beállítások</button>
     </div>
 
@@ -1157,6 +1159,24 @@
       </div>
       <div id="admin-fb-status" class="admin-warning" style="text-align:left;"></div>
       <div id="admin-fb-list"></div>
+    </div>
+    </div>
+
+    <!-- v4.32: a játékosok eszközei által jelzett szabálytalan / hamisított / elárasztó üzenetek -->
+    <div class="admin-tabpanel" id="admin-tab-gyanus" role="tabpanel" aria-labelledby="admin-tabbtn-gyanus">
+    <div class="admin-note" style="margin-bottom:18px;">
+      <div class="admin-panel-header" style="margin-bottom:6px;">
+        <strong style="color:var(--chalk);">🚩 Gyanús esetek <span id="admin-sus-count" style="color:var(--chalk-dim);font-weight:400;"></span></strong>
+      </div>
+      Ide kerül, ha egy játékos eszközéről olyan üzenet érkezik, amit a játék módosítatlan változata nem küld
+      (például túl sok üzenet egyszerre, más nevében kihirdetett kör, a megfejtés a chatben). Ez tájékoztató napló,
+      nem bizonyíték — a jelzést is a játékosok böngészője küldi. A bejegyzések 60 nap után maguktól törlődnek.
+      <div class="admin-add-row" style="margin-top:10px;">
+        <button class="secondary small" id="admin-sus-load">🔄 Betöltés</button>
+        <button class="ghost small" id="admin-sus-clear">🗑️ Mind törlése</button>
+      </div>
+      <div id="admin-sus-status" class="admin-warning" style="text-align:left;"></div>
+      <div id="admin-sus-list"></div>
     </div>
     </div>
 

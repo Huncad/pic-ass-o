@@ -143,6 +143,22 @@ test('ranglista: túl rövid játék nem kerül fel, a JSON-végpont működik',
   await Promise.all([a.close(), b.close()]);
 });
 
+test('akciókorlát: a chat-áradatot a szerver eldobja, a rajz forgalmát nem', async () => {
+  const a = client('kkkk1'), b = client('llll1');
+  await Promise.all([a.connect(), b.connect()]);
+  await a.join('v2:szoba-5'); await b.join('v2:szoba-5');
+  for (let i = 0; i < 30; i++) a.send('chat', { text: 'spam ' + i });
+  for (let i = 0; i < 30; i++) a.send('stroke', { n: i });
+  await sleep(400);
+  const chats = b.msgs.filter(m => m.a === 'chat').length, strokes = b.msgs.filter(m => m.a === 'stroke').length;
+  assert.equal(chats, 10, `10 chatüzenet ment át (${chats})`);
+  assert.equal(strokes, 30, 'a rajz minden darabja átment');
+  // a kliens nem küldi újra az eldobottakat (nyugtázva lettek)
+  await sleep(4500);
+  assert.equal(b.msgs.filter(m => m.a === 'chat').length, 10);
+  await Promise.all([a.close(), b.close()]);
+});
+
 test('leállításkor (SIGTERM) a ranglista elmentődik és a folyamat rendben kilép', async () => {
   const exited = new Promise(res => proc.once('exit', (code, sig) => res({ code, sig })));
   proc.kill('SIGTERM');

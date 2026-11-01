@@ -1,6 +1,6 @@
-import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes } from './rules.js';
+import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.31';
+const APP_VERSION = '4.32';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -516,6 +516,82 @@ const SRV = (function(){
   // v4.30: the basic checkers (isPlainObject, cleanText, clampNum,
   // sanitizeStrokes…) and the guess rules live in js/rules.js.
   // =====================================================================
+  // =====================================================================
+  // v4.32: flood limits and the log of suspicious behaviour
+  // ---------------------------------------------------------------------
+  // Every limit is checked twice: on my own device when I send (so an honest
+  // player is slowed down in time, with a friendly note), and on the devices
+  // that RECEIVE the message — that is the real protection, because a browser
+  // changed with the developer tools can skip its own checks. The receiving
+  // limits are a little more lenient, so an honest player never reaches them:
+  // whoever does, sent from a modified page — that goes into the log.
+  // =====================================================================
+  const myChatGuard = makeSpamGuard({ max:5, windowMs:10000, dupMs:30000 });
+  const peerChatGuard = makeSpamGuard({ max:7, windowMs:10000, dupMs:20000 });
+  const myVoiceMsgGuard = makeSpamGuard({ max:3, windowMs:60000 });
+  const peerVoiceMsgGuard = makeSpamGuard({ max:4, windowMs:60000 });
+  const myGuessGuard = makeSpamGuard({ max:6, windowMs:8000, dupMs:15*60000 });
+  const mySpokenGuessGuard = makeSpamGuard({ max:10, windowMs:8000, dupMs:15*60000 });
+  const peerGuessGuard = makeSpamGuard({ max:14, windowMs:8000, dupMs:15*60000 });
+  const myChatReactGuard = makeSpamGuard({ max:8, windowMs:10000 });
+  const peerChatReactGuard = makeSpamGuard({ max:12, windowMs:10000 });
+  const dupDrops = new Map();          // peerId|kind -> [times] of dropped repeats (old versions may repeat once or twice)
+  function noteDupDrop(peerId, kind, detail){
+    const k = peerId + '|' + kind, now = Date.now();
+    const arr = (dupDrops.get(k) || []).filter(t=>now - t < 60000); arr.push(now); dupDrops.set(k, arr);
+    if(arr.length >= 3) suspect(peerId, kind, detail);
+  }
+  // a peer that was the drawer a moment ago may still have messages on the
+  // way (a late stroke, the last hint) — those are not forgeries
+  const drawerSeenAt = new Map();      // peerId -> last time a message was accepted from them as drawer
+  function wasDrawerJustNow(peerId){ return Date.now() - (drawerSeenAt.get(peerId) || 0) < 20000; }
+  const SUSPECT_URL = '/.netlify/functions/report';
+  const SUSPECT_LABELS = {
+    'chat-flood':'túl sok chatüzenet egyszerre', 'chat-dup':'ugyanaz az üzenet újra és újra',
+    'voice-flood':'túl sok hangüzenet', 'guess-flood':'túl sok tipp egyszerre',
+    'react-flood':'túl sok gyorsreakció', 'chatreact-flood':'túl sok reakció a chatüzenetekre',
+    'forged':'más nevében vagy szabálytalanul küldött üzenet', 'fast-guess':'gyanúsan gyors helyes tipp',
+    'spoiler':'a megfejtést írta a chatbe', 'bad-data':'hibás / túl nagy adat'
+  };
+  const suspectSeen = new Map();       // peerId|kind -> { at, n }
+  const suspectNoticeAt = new Map();
+  function suspectName(peerId){
+    return cleanText((meta && meta.playerNames[peerId]) || lobbyPlayers[peerId] || (typeof spectators !== 'undefined' && spectators[peerId]) || 'ismeretlen', 16);
+  }
+  function suspect(peerId, kind, detail){
+    if(!peerId || peerId === selfId || !SUSPECT_LABELS[kind]) return;
+    const now = Date.now(), k = peerId + '|' + kind;
+    const s = suspectSeen.get(k);
+    if(s && now - s.at < 60000){ s.n++; return; }   // one entry per minute and kind is plenty
+    suspectSeen.set(k, { at: now, n: 1 });
+    const name = suspectName(peerId);
+    const d = cleanText(detail || '', 120);
+    try{ clog('X01', `gyanús: ${name} — ${SUSPECT_LABELS[kind]}${d ? ' (' + d + ')' : ''}`); }catch(e){}
+    // the room owner sees it at once (only on their own screen, nobody is shamed in public)
+    if(isHost && now - (suspectNoticeAt.get(k) || 0) > 5 * 60000){
+      suspectNoticeAt.set(k, now);
+      try{ addSystemChatMessage(`⚠️ ${name}: ${SUSPECT_LABELS[kind]} — ezt csak te látod (szobanyitó).`); }catch(e){}
+    }
+    // and it goes to the admin's log on the server
+    try{
+      fetch(SUSPECT_URL, { method:'POST', keepalive:true, headers:{ 'content-type':'application/json' },
+        body: JSON.stringify({ action:'report', room: roomCode || '', roomName: currentRoomName || '', subject: name,
+          subjectDev: (typeof peerDev !== 'undefined' && peerDev[peerId]) || '', kind, detail: d, reporter: myName || '', v: APP_VERSION }) }).catch(()=>{});
+    }catch(e){}
+  }
+  // the sender's own friendly note when a limit is reached
+  let lastSlowNoteAt = 0;
+  function slowNote(where, res){
+    const secs = Math.max(1, Math.ceil((res.waitMs || 1000) / 1000));
+    const msg = res.reason === 'dup' ? (where === 'guess' ? '🔁 Ezt a tippet már elküldted ebben a körben.' : '🔁 Ezt az üzenetet az előbb már elküldted.')
+      : `⏳ Lassíts egy kicsit — ${secs} mp múlva küldhetsz újra.`;
+    if(Date.now() - lastSlowNoteAt < 1500) return msg;
+    lastSlowNoteAt = Date.now();
+    if(where === 'guess'){ try{ showFxBanner(msg, ''); }catch(e){} }
+    else { try{ addSystemChatMessage(msg); }catch(e){} }
+    return msg;
+  }
+
   let renameAction = null, pendingRename = null;
   let roomNoCustom = false;   // v3.63: guest side — the owner switched own words off
   let resyncAction = null, behindBeacons = 0, resyncAskedAt = 0, resyncPending = false;
@@ -3795,7 +3871,9 @@ const SRV = (function(){
     };
     hintAction.onMessage = (data, {peerId})=>{
       // only the person actually drawing may reveal letters
-      if(!isPlainObject(data) || !currentRound || peerId !== currentRound.drawerId) return;
+      if(!isPlainObject(data) || !currentRound) return;
+      if(peerId !== currentRound.drawerId){ if(meta && meta.playerNames[peerId] && !wasDrawerJustNow(peerId)) suspect(peerId, 'forged', 'betű-súgó, pedig nem ő rajzol'); return; }
+      drawerSeenAt.set(peerId, Date.now());
       const mask = cleanText(data.mask, 200);
       if(!mask) return;
       showHint(mask);
@@ -3805,7 +3883,7 @@ const SRV = (function(){
       if(tooOften(peerId, 'reaction', 400)) return;        // no reaction spam
       // v4.26: and at most 4 per 10 s from one player, whatever their client does
       const now = Date.now(), arr = (peerReactTimes.get(peerId) || []).filter(t=>now - t < 10000);
-      if(arr.length >= 4){ peerReactTimes.set(peerId, arr); return; }
+      if(arr.length >= 4){ peerReactTimes.set(peerId, arr); suspect(peerId, 'react-flood', '10 mp alatt 4-nél több'); return; }
       arr.push(now); peerReactTimes.set(peerId, arr);
       spawnFloatingReaction(data.emoji, displayNameFor(peerId, lobbyPlayers[peerId]));
     };
@@ -3813,7 +3891,7 @@ const SRV = (function(){
       // Starting (or restarting) a game is the room owner's call only — a
       // guest must not be able to reset everybody's game or hand themselves
       // the first turn.
-      if(isHost || peerId !== hostPeerId) return;
+      if(isHost || peerId !== hostPeerId){ if(hostPeerId && peerId !== hostPeerId && peerId !== selfId) suspect(peerId, 'forged', 'játékindítás, pedig nem ő a szobanyitó'); return; }
       const clean = sanitizeMeta(data);
       if(!clean) return;
       applyMeta(clean);
@@ -3821,7 +3899,7 @@ const SRV = (function(){
     roundAction.onMessage = (rd, {peerId})=>{
       if(!meta || !isPlainObject(rd)) return;              // not part of a running game
       if(!meta.playerNames[peerId]) return;                // unknown sender
-      if(cleanPeerId(rd.drawerId) !== peerId) return;      // you may only announce your OWN round
+      if(cleanPeerId(rd.drawerId) !== peerId){ suspect(peerId, 'forged', 'más nevében hirdetett kört'); return; }      // you may only announce your OWN round
       const idx = clampNum(rd.idx, 0, 500, -1);
       if(idx < 0 || idx >= meta.turnOrder.length) return;
       noteOfferedKeys(rd.offeredKeys);                    // v3.83
@@ -3878,7 +3956,12 @@ const SRV = (function(){
     };
     strokeAction.onMessage = (strokes, {peerId})=>{
       // only the current drawer's pen ends up on everybody's canvas
-      if(!currentRound || peerId !== currentRound.drawerId) return;
+      if(!currentRound) return;
+      if(peerId !== currentRound.drawerId){
+        if(meta && meta.playerNames[peerId] && !wasDrawerJustNow(peerId) && currentRound.phase === 'drawing') suspect(peerId, 'forged', 'rajzolt, pedig nem ő a rajzoló');
+        return;
+      }
+      drawerSeenAt.set(peerId, Date.now());
       if(processedResultRounds.has(roundKey(currentRound))) return;
       if(Array.isArray(strokes)){
         latestStrokes = sanitizeStrokes(strokes);          // an older version sends the whole drawing
@@ -3907,6 +3990,10 @@ const SRV = (function(){
       if(tooOften(peerId, 'guess', 250)) return;           // no guess flooding
       let text = cleanText(data.text, 80);
       if(!text.trim()) return;
+      { // v4.32: per-round flood / repeat limit (honest devices stay well below it)
+        const lim = peerGuessGuard.check(peerId + '|' + roundKey(currentRound), text);
+        if(!lim.ok){ if(lim.reason === 'rate') suspect(peerId, 'guess-flood', '8 mp alatt 14-nél több'); else noteDupDrop(peerId, 'guess-flood', 'ugyanaz a tipp újra'); return; }
+      }
       const multi = settings.guessMode === 'all';
       // v2.89: someone who already found the word this round is done guessing
       // (their further "guesses" could only give the answer away)
@@ -3953,6 +4040,8 @@ const SRV = (function(){
       }
       // Timing uses the drawer's own clock.
       const elapsedMs = Date.now() - currentRound.roundStartAt;
+      // v4.32: found it almost before anything was on the paper — maybe luck, maybe not
+      if(elapsedMs < 2500 && fdStrokes.length <= 1) suspect(peerId, 'fast-guess', `${(elapsedMs/1000).toFixed(1)} mp, ${fdStrokes.length} vonal után`);
       if(multi){
         roundHits.push({ pid:peerId, ms:elapsedMs });
         drawerCheckAllGuessed();
@@ -3966,7 +4055,9 @@ const SRV = (function(){
     };
     feedAction.onMessage = (data, {peerId})=>{
       // only the current drawer may put entries into the guess feed
-      if(!currentRound || peerId !== currentRound.drawerId || !isPlainObject(data)) return;
+      if(!currentRound || !isPlainObject(data)) return;
+      if(peerId !== currentRound.drawerId){ if(meta && meta.playerNames[peerId] && !wasDrawerJustNow(peerId)) suspect(peerId, 'forged', 'tipp-eredményt küldött, pedig nem ő a rajzoló'); return; }
+      drawerSeenAt.set(peerId, Date.now());
       const pid = cleanPeerId(data.pid);
       const gid = data.r === roundKey(currentRound) ? clampNum(data.gid, 1, 1e6, 0) : 0;
       const text = cleanText(data.text, 80);
@@ -3992,7 +4083,13 @@ const SRV = (function(){
         if(typeof data.word === 'string') markUsedEver(data.word);
       }
       // The drawer alone decides how a round ends (see guessAction below).
-      if(!currentRound || !isPlainObject(data) || peerId !== currentRound.drawerId) return;
+      if(!currentRound || !isPlainObject(data)) return;
+      if(peerId !== currentRound.drawerId){
+        if(meta && meta.playerNames[peerId] && !wasDrawerJustNow(peerId) && Number.isFinite(data.idx) && data.idx === currentRound.idx && !processedResultRounds.has(roundKey(currentRound)))
+          suspect(peerId, 'forged', 'lezárta a kört, pedig nem ő rajzol');
+        return;
+      }
+      drawerSeenAt.set(peerId, Date.now());
       if(Number.isFinite(data.idx) && data.idx !== currentRound.idx) return;   // v3.62: a result of another drawing
       const type = data.type === 'correct' ? 'correct' : (data.type === 'pass' ? 'pass' : 'timeout');
       const clean = { type, word: cleanText(data.word, 60) };
@@ -4067,7 +4164,22 @@ const SRV = (function(){
     };
     chatAction.onMessage = (data, {peerId})=>{
       const clean = sanitizeChatMessage(data, peerId);
-      if(!clean) return;
+      if(!clean){ if(isPlainObject(data) && data.type === 'voice' && typeof data.dataUrl === 'string' && data.dataUrl.length > MAX_VOICE_CHARS) suspect(peerId, 'bad-data', 'túl nagy hangüzenet'); return; }
+      // v4.32: flood / repeat limits on the receiving side (the real protection)
+      if(clean.type === 'voice'){
+        if(!peerVoiceMsgGuard.check(peerId).ok){ suspect(peerId, 'voice-flood', 'percenként 4-nél több'); return; }
+      } else {
+        const lim = peerChatGuard.check(peerId, clean.text);
+        if(!lim.ok){
+          if(lim.reason === 'rate') suspect(peerId, 'chat-flood', '10 mp alatt 7-nél több');
+          else noteDupDrop(peerId, 'chat-dup', cleanText(clean.text, 40));
+          return;
+        }
+        // I am drawing and someone writes my word into the chat: the others may already have read it
+        if(currentRound && currentRound.drawerId === selfId && currentRound.phase === 'drawing' && currentRound.word &&
+           !processedResultRounds.has(roundKey(currentRound)) && squash(currentRound.word).length >= 3 &&
+           squash(clean.text).includes(squash(currentRound.word))) suspect(peerId, 'spoiler', 'rajzolás közben');
+      }
       typingPeers.delete(peerId);
       renderTypingIndicator();
       addChatMessage(clean, false, peerId);
@@ -4078,6 +4190,7 @@ const SRV = (function(){
       const emoji = String(data.emoji || '');
       // only known messages and only emojis from the fixed list are accepted
       if(!mid || !CHAT_QUICK_REACTIONS.includes(emoji) || !chatMsgIndex.has(mid)) return;
+      if(!peerChatReactGuard.check(peerId).ok){ suspect(peerId, 'chatreact-flood', '10 mp alatt 12-nél több'); return; }   // v4.32
       const on = !!data.on;
       setChatReaction(mid, emoji, peerId, on);
       // someone reacted to MY message while the chat is closed: show it on the badge
@@ -6658,6 +6771,11 @@ const SRV = (function(){
     if(data.type === 'voice'){
       const audioEl = document.createElement('audio');
       audioEl.controls = true;
+      // v4.32: no download / save option on the player (the browser's own menu included)
+      audioEl.setAttribute('controlsList', 'nodownload noplaybackrate noremoteplayback');
+      audioEl.disableRemotePlayback = true;
+      audioEl.addEventListener('contextmenu', (e)=>e.preventDefault());
+      audioEl.draggable = false;
       // set as a property (never parsed as HTML), and only if it really is audio data
       if(typeof data.dataUrl === 'string' && data.dataUrl.startsWith('data:audio/')) audioEl.src = data.dataUrl;
       el.appendChild(audioEl);
@@ -7293,6 +7411,8 @@ const SRV = (function(){
     const m = chatReactions.get(mid);
     const has = !!(m && m.get(emoji) && m.get(emoji).has(selfId));
     setChatReaction(mid, emoji, selfId, !has);
+    const rl = myChatReactGuard.check('me');   // v4.32
+    if(!rl.ok){ slowNote('chat', rl); return; }
     chatReactAction.send({ mid, emoji, on:!has });
   }
   function closeReactRows(){
@@ -7346,6 +7466,8 @@ const SRV = (function(){
       try{ shakeEl(input); }catch(e){}
       return;
     }
+    const lim = myChatGuard.check('me', text);   // v4.32
+    if(!lim.ok){ slowNote('chat', lim); try{ shakeEl(input); }catch(e){} return; }
     input.value = '';
     stopTypingNotice();
     const data = { type:'text', id:newMsgId(), name:myName, text, ts:Date.now() };
@@ -7483,6 +7605,8 @@ const SRV = (function(){
             addChatMessage({ name:'Rendszer', text:'Ez a hangüzenet túl nagy lett — próbáld meg rövidebben.' }, false);
             return;
           }
+          const vlim = myVoiceMsgGuard.check('me');   // v4.32
+          if(!vlim.ok){ slowNote('chat', vlim); return; }
           const data = { type:'voice', id:newMsgId(), name:myName, dataUrl, ts:Date.now() };
           const reply = takeReplyMeta();
           if(reply) data.replyTo = reply;
@@ -9798,6 +9922,10 @@ const SRV = (function(){
     const wait = 280 - (Date.now() - voice.lastSend);
     if(wait > 0){ clearTimeout(voice.pumpT); voice.pumpT = setTimeout(voicePump, wait); return; }
     const item = voice.queue.shift();
+    if(!mySpokenGuessGuard.check(roundKey(currentRound), item.text).ok){   // v4.32: the recogniser repeats itself
+      if(voice.queue.length){ clearTimeout(voice.pumpT); voice.pumpT = setTimeout(voicePump, 280); }
+      return;
+    }
     voice.lastSend = Date.now();
     try{ guessAction.send({ name:myName, text:item.text, alts:item.alts, v:1 }, { target: currentRound.drawerId }); }catch(e){}
     if(voice.queue.length){ clearTimeout(voice.pumpT); voice.pumpT = setTimeout(voicePump, 280); }
@@ -9967,6 +10095,8 @@ const SRV = (function(){
     if(currentRound.drawerId === selfId) return;
     if(processedResultRounds.has(roundKey(currentRound))) return;   // the round is already decided
     if(myRoundHit && myRoundHit.key === roundKey(currentRound)) return;   // already found it
+    const lim = myGuessGuard.check(roundKey(currentRound), text);   // v4.32: no flood, no repeats in a round
+    if(!lim.ok){ slowNote('guess', lim); if(lim.reason === 'dup') input.value = ''; try{ shakeEl(input); }catch(e){} return; }
     input.value = '';
     // This device doesn't know the word. The guess goes to the drawer, who
     // checks it and shows it to everyone (me included) with the verdict.
@@ -11868,6 +11998,62 @@ const SRV = (function(){
   });
 
 
+
+  // ---- v4.32: admin — suspicious behaviour log ----
+  const REPORT_URL = '/.netlify/functions/report';
+  const SUS_KIND_TEXT = {
+    'chat-flood':'💬 túl sok chatüzenet', 'chat-dup':'🔁 ugyanaz az üzenet újra és újra', 'voice-flood':'🎤 túl sok hangüzenet',
+    'guess-flood':'✍️ túl sok tipp', 'react-flood':'😀 túl sok gyorsreakció', 'chatreact-flood':'👍 túl sok reakció a chatre',
+    'forged':'🕵️ szabálytalan / más nevében küldött üzenet', 'fast-guess':'⚡ gyanúsan gyors helyes tipp',
+    'spoiler':'🤫 megfejtés a chatben', 'bad-data':'📦 hibás / túl nagy adat'
+  };
+  function adminSusStatus(text, kind){
+    const el = document.getElementById('admin-sus-status'); if(!el) return;
+    el.style.color = kind === 'err' ? 'var(--red)' : kind === 'ok' ? 'var(--green)' : 'var(--chalk-dim)';
+    el.textContent = text;
+  }
+  async function adminSusCall(payload){
+    if(!adminSession) throw new Error('Lépj be újra az admin oldalra.');
+    const r = await fetch(REPORT_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'x-admin-session': adminSession }, body: JSON.stringify(payload) });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    return j;
+  }
+  async function loadAdminSuspects(){
+    adminSusStatus('Betöltés…');
+    try{
+      const j = await adminSusCall({ action:'list' });
+      const items = Array.isArray(j.items) ? j.items : [];
+      document.getElementById('admin-sus-count').textContent = items.length ? `(${items.length})` : '';
+      const fmt = ts => new Date(ts).toLocaleString('hu-HU', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+      document.getElementById('admin-sus-list').innerHTML = items.length ? items.map(it=>`
+        <div class="admin-note" style="margin:8px 0;padding:10px 12px;text-align:left;">
+          <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;">
+            <b style="color:var(--chalk);">${escapeHtml(it.subject)}</b>
+            <span>${escapeHtml(SUS_KIND_TEXT[it.kind] || it.kind)}</span>
+            ${it.count > 1 ? `<span style="color:var(--yellow);">×${Number(it.count) || 1}</span>` : ''}
+            <button class="ghost small admin-sus-del" data-id="${escapeHtml(it.id)}" style="margin-left:auto;" aria-label="Bejegyzés törlése">✕</button>
+          </div>
+          <div style="font-size:.85rem;color:var(--chalk-dim);margin-top:3px;">
+            ${escapeHtml(fmt(it.at))}${it.last && it.last !== it.at ? ' – ' + escapeHtml(fmt(it.last)) : ''}
+            · szoba: ${escapeHtml(it.roomName || '')} ${it.room ? '(' + escapeHtml(it.room) + ')' : ''}
+            ${it.detail ? ' · ' + escapeHtml(it.detail) : ''}
+            · jelezte: ${escapeHtml((it.reporters || []).join(', '))}
+            ${it.subjectDev ? ' · eszköz: ' + escapeHtml(String(it.subjectDev).slice(0, 8)) + '…' : ''}
+          </div>
+        </div>`).join('') : '<p class="center-note">Nincs gyanús eset. 🎉</p>';
+      document.querySelectorAll('.admin-sus-del').forEach(b=>b.addEventListener('click', async ()=>{
+        try{ await adminSusCall({ action:'delete', id: b.dataset.id }); loadAdminSuspects(); }catch(e){ adminSusStatus(e.message, 'err'); }
+      }));
+      adminSusStatus('', 'ok');
+    }catch(e){ adminSusStatus(e instanceof TypeError ? 'A szerver nem érhető el.' : e.message, 'err'); }
+  }
+  document.getElementById('admin-sus-load').addEventListener('click', ()=>{ sndClick(); loadAdminSuspects(); });
+  document.getElementById('admin-sus-clear').addEventListener('click', async ()=>{
+    if(!confirm('Minden gyanús esetet törölsz a naplóból?')) return;
+    try{ await adminSusCall({ action:'clear' }); loadAdminSuspects(); }catch(e){ adminSusStatus(e.message, 'err'); }
+  });
+  document.getElementById('admin-tabbtn-gyanus').addEventListener('click', ()=>{ if(adminSession) loadAdminSuspects(); });
 
   async function renderChangelog(){
     const currentVersion = APP_VERSION;

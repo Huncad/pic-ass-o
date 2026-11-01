@@ -2,6 +2,12 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.32', changes:[
+    'A chatben és a tippmezőben nem lehet sok üzenetet egyszerre küldeni, és ugyanazt az üzenetet vagy tippet sem lehet újra és újra elküldeni.',
+    'A gyorsreakciók és a chatüzenetekre adott reakciók száma korlátozva — billentyűzettel sem lehet elárasztani velük a többieket.',
+    'Hangüzenetet nem lehet lementeni a lejátszóból.',
+    'Ha valaki szabálytalanul (a játék módosításával) próbál csalni vagy elárasztani a többieket, a szobanyitó jelzést kap, és az eset bekerül az üzemeltető naplójába.'
+  ]},
   { version:'4.31', changes:[
     'Fekvő telefonon a rajzoló nézet új elrendezést kapott: balra a rajzlap teljes magasságban, jobbra a játékosok, az eszközök és a tippek. Régen alig maradt hely a rajzra.',
     'Kis telefonon (pl. iPhone SE) minden szín látszik, az eszközök egy sorban vannak, és nagyobb a rajzlap.',

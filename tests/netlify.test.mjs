@@ -256,3 +256,33 @@ test('subscribe: napi plafon — a maradék a sorban vár', async () => {
   assert.equal(q.items.length, 24);
   delete process.env.MAIL_DAILY_CAP;
 });
+
+test('report: gyanús eset naplózása, összevonás, admin listázás és törlés', async () => {
+  const { default: rep } = await import('../netlify/functions/report.mjs');
+  const url = '/.netlify/functions/report';
+  const base = { action: 'report', room: 'abcde', roomName: 'Teszt', subject: 'Csaló Csaba', subjectDev: 'dev123', kind: 'chat-flood', detail: 'x', v: '4.32' };
+  let r = await rep(post(url, { ...base, reporter: 'Anna' }));
+  assert.equal((await r.json()).ok, true);
+  // ugyanaz 10 percen belül, másik jelzőtől: egy bejegyzés, kettes számlálóval
+  await rep(post(url, { ...base, reporter: 'Bence' }, { 'x-nf-client-connection-ip': '9.8.7.6' }));
+  await rep(post(url, { ...base, kind: 'forged', reporter: 'Anna' }));
+  r = await rep(post(url, { ...base, kind: 'nincs-ilyen', reporter: 'Anna' }));
+  assert.equal(r.status, 400);
+  // admin nélkül nem olvasható
+  r = await rep(post(url, { action: 'list' }));
+  assert.equal(r.status, 401);
+  const { makeSession } = await import('../netlify/lib/adminauth.mjs');
+  const sess = { 'x-admin-session': await makeSession() };
+  r = await rep(post(url, { action: 'list' }, sess));
+  const items = (await r.json()).items;
+  assert.equal(items.length, 2);
+  const flood = items.find(x => x.kind === 'chat-flood');
+  assert.equal(flood.count, 2);
+  assert.deepEqual(flood.reporters.sort(), ['Anna', 'Bence']);
+  assert.equal(flood.room, 'ABCDE');
+  assert.ok(!JSON.stringify(items).includes('1.2.3.4'), 'IP-cím nem tárolódik');
+  r = await rep(post(url, { action: 'delete', id: flood.id }, sess));
+  assert.equal((await r.json()).left, 1);
+  r = await rep(post(url, { action: 'clear' }, sess));
+  assert.equal((await r.json()).left, 0);
+});

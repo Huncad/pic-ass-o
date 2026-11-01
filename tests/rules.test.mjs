@@ -102,3 +102,19 @@ test('a verziószám és a kiadási napló első bejegyzése egyezik', async () 
   assert.equal(CHANGELOG[0].version, m[1]);
   assert.ok(CHANGELOG.every(e => e.version && Array.isArray(e.changes) && e.changes.length));
 });
+
+test('makeSpamGuard: időablakos korlát és ismétlésszűrés', async () => {
+  const { makeSpamGuard } = await import('../js/rules.js');
+  const g = makeSpamGuard({ max: 3, windowMs: 1000, dupMs: 5000 });
+  assert.equal(g.check('a', 'szia', 0).ok, true);
+  assert.equal(g.check('a', 'Szia ', 10).reason, 'dup');          // kis- és nagybetű, szóköz nem számít
+  assert.equal(g.check('a', 'SZÍA', 20).reason, 'dup');           // ékezet sem
+  assert.equal(g.check('a', 'hello', 30).ok, true);
+  assert.equal(g.check('a', 'mi', 40).ok, true);
+  const r = g.check('a', 'újabb', 50);
+  assert.equal(r.reason, 'rate');
+  assert.ok(r.waitMs > 0 && r.waitMs <= 1000);
+  assert.equal(g.check('b', 'szia', 60).ok, true);                // másik kulcs (játékos) független
+  assert.equal(g.check('a', 'újabb', 1100).ok, true);             // letelt az ablak
+  assert.equal(g.check('a', 'szia', 6000).ok, true);              // letelt az ismétlési idő
+});

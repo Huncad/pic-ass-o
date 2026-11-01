@@ -94,3 +94,33 @@ export function sanitizeStrokes(raw){
   }
   return out;
 }
+
+// v4.32: a flood / repeat guard. One guard keeps, per key (e.g. a player's id),
+// the times of the last messages and the recent texts. check() says whether a
+// new message may go through: at most `max` in `windowMs`, and the same text
+// (compared case-, accent- and space-insensitively) not again within `dupMs`.
+// Used both when sending (to slow down the player in time) and when receiving
+// (the real protection — a modified browser can skip its own limits).
+export function makeSpamGuard({ max = 5, windowMs = 10000, dupMs = 0, maxKeys = 200 } = {}){
+  const seen = new Map();   // key -> { times:[], texts: Map(norm -> time) }
+  const norm = t => String(t == null ? '' : t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  function check(key, text, now = Date.now()){
+    let s = seen.get(key);
+    if(!s){
+      if(seen.size >= maxKeys) seen.delete(seen.keys().next().value);
+      s = { times: [], texts: new Map() }; seen.set(key, s);
+    }
+    s.times = s.times.filter(t => now - t < windowMs);
+    if(s.times.length >= max) return { ok:false, reason:'rate', waitMs: windowMs - (now - s.times[0]) };
+    if(dupMs && text !== undefined){
+      const n = norm(text);
+      for(const [k, t] of s.texts) if(now - t >= dupMs) s.texts.delete(k);
+      if(n && s.texts.has(n)) return { ok:false, reason:'dup', waitMs: dupMs - (now - s.texts.get(n)) };
+      if(n){ s.texts.set(n, now); if(s.texts.size > 50) s.texts.delete(s.texts.keys().next().value); }
+    }
+    s.times.push(now);
+    return { ok:true };
+  }
+  function reset(key){ if(key === undefined) seen.clear(); else seen.delete(key); }
+  return { check, reset };
+}

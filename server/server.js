@@ -58,7 +58,11 @@ const FANOUT_BURST = 24 * 1024 * 1024;
 const MAX_WS_BUFFER = 8 * 1024 * 1024;           // ha egy lassú kliens kimenő puffere ennél nagyobb, várunk
 const MAX_CONN_PER_IP = 40;                      // egyszerre ennyi kapcsolat egy IP-ről (egy család bőven elfér)
 const MAX_RING_BYTES = 16 * 1024 * 1024; // játékosonként ennyi megőrzött üzenet fér el
-const HEARTBEAT_MS = 5_000;          // ilyen sűrűn nézzük, él-e a kapcsolat (régen 20 mp volt)
+const HEARTBEAT_MS = 5_000;
+// v4.32: játékon belüli akciók korlátja (üzenet / időablak / küldő). A böngészők
+// maguk is korlátoznak (szigorúbban), ide csak egy módosított kliens áradata jut el:
+// a felesleget a szerver eldobja, és naplózza (a tartalmat nem).
+const ACTION_LIMITS = { chat: [10, 10_000], chatreact: [15, 10_000], reaction: [6, 10_000], guess: [20, 8_000], typing: [30, 10_000] };          // ilyen sűrűn nézzük, él-e a kapcsolat (régen 20 mp volt)
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -623,6 +627,19 @@ wss.on('connection', (ws, req) => {
       case 'send': {
         if(!peer.room || !isStr(m.a, 32)) return;
         if(typeof m.s === 'number' && m.s <= peer.inSeq) return;   // újraküldött példány, amit már továbbítottunk
+        const lim = ACTION_LIMITS[m.a];
+        if(lim){
+          const now2 = Date.now();
+          peer.act = peer.act || {};
+          const arr = (peer.act[m.a] || []).filter(t => now2 - t < lim[1]);
+          if(arr.length >= lim[0]){
+            peer.act[m.a] = arr;
+            if(typeof m.s === 'number') peer.inSeq = m.s;   // szándékosan eldobva: nem kell újraküldeni
+            if(!peer.actLogAt || now2 - peer.actLogAt > 30_000){ peer.actLogAt = now2; log('áradat eldobva', peer.id.slice(0,6), m.a, 'szoba', String(peer.room).slice(0,8)); }
+            return;
+          }
+          arr.push(now2); peer.act[m.a] = arr;
+        }
         const set = roomMembers(peer.room);
         const out = JSON.stringify({ t:'msg', a: m.a, d: m.d, f: peer.id });
         const targets = Array.isArray(m.to) ? m.to.filter(id => typeof id === 'string' && set.has(id)).length : Math.max(0, set.size - 1);
