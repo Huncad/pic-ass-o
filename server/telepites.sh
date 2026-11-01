@@ -9,8 +9,21 @@ BRANCH="${BRANCH:-main}"
 DIR=/opt/pic-ass-o
 
 echo "==> Csomagok (Node.js, git)…"
-apt-get update -qq
-apt-get install -y -qq nodejs npm git curl >/dev/null
+# v4.32: csak a hiányzót telepítjük. Ha a Node.js már fent van más forrásból
+# (pl. NodeSource — az npm-et is tartalmazza), a Debian "npm" csomagja ütközne
+# vele ("held broken packages"), ezért azt ilyenkor nem kérjük.
+NEED=""
+command -v git  >/dev/null 2>&1 || NEED="$NEED git"
+command -v curl >/dev/null 2>&1 || NEED="$NEED curl"
+if ! command -v node >/dev/null 2>&1; then
+  NEED="$NEED nodejs npm"
+elif ! command -v npm >/dev/null 2>&1; then
+  NEED="$NEED npm"
+fi
+if [ -n "$NEED" ]; then
+  apt-get update -qq
+  apt-get install -y -qq $NEED >/dev/null
+fi
 
 NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]')
 if [ "$NODE_MAJOR" -lt 18 ]; then
