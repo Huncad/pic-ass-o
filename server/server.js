@@ -352,6 +352,8 @@ setTimeout(() => { if(pruneOldGames()) saveGames(); }, 5000).unref?.();
 // jut be, és nem is "foglalhatja le" a szoba helyét a valódi elől.
 // Őszinte korlát: aki több böngészőfüllel egyedül játszik "kétfős" játékot,
 // azt a szerver nem tudja megkülönböztetni — ezt a napi/IP korlát fogja vissza.
+// pl. 1 óra 12 perc / 37 perc
+function idotartam(ms){ const p = Math.max(1, Math.round(ms / 60000)), o = Math.floor(p / 60), m = p % 60; return o ? `${o} óra${m ? ' ' + m + ' perc' : ''}` : `${m} perc`; }
 function recordGame(peer, rows){
   if(!peer.room) return 'nincs szobában';
   const roomId = peer.room;
@@ -393,7 +395,7 @@ function recordGame(peer, rows){
   recent.push(now); recordsByIpSet.set(ipKey, recent);
   e.done = true;
   lastReportByRoom.set(roomId, now);
-  games.push({ at: now, players: e.rows });
+  games.push({ at: now, start: info.createdAt, players: e.rows });
   pruneOldGames();
   if(games.length > 20000) games.splice(0, games.length - 20000);
   saveGames();
@@ -459,7 +461,7 @@ ${rows.length ? `<table><thead><tr><th class="rank">#</th><th>Név</th><th>Győz
 ${rows.map((r, i) => `<tr><td class="rank">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td><td>${escapeHtml(r.name)}</td><td>${r.wins}</td><td>${r.games}</td><td>${r.avg}</td><td class="hide-s">${r.best}</td></tr>`).join('')}
 </tbody></table>` : `<p class="empty">Még nincs befejezett játék ebben az időszakban.</p>`}
 <h2>Legutóbbi játékok</h2>
-${recent.length ? recent.map(g => { const s = [...g.players].sort((a,b)=>b.score-a.score); return `<div class="g"><time>${fmt(g.at)}</time>${s.map((p,i)=>`${i===0?'👑 ':''}<b>${escapeHtml(p.name)}</b> ${p.score}`).join(' · ')}</div>`; }).join('') : '<p class="empty">Még nincs.</p>'}
+${recent.length ? recent.map(g => { const s = [...g.players].sort((a,b)=>b.score-a.score); return `<div class="g"><time>${fmt(g.at)}${g.start ? ' · ⏱ a szoba ' + idotartam(g.at - g.start) + ' élt' : ''}</time>${s.map((p,i)=>`${i===0?'👑 ':''}<b>${escapeHtml(p.name)}</b> ${p.score}`).join(' · ')}</div>`; }).join('') : '<p class="empty">Még nincs.</p>'}
 </main></body></html>`;
 }
 
