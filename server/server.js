@@ -432,7 +432,7 @@ function leaderboardPage(days){
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PIC-ASS-O ranglista</title>
 <style>
-  :root{ --bg:#16302A; --card:#1f3d35; --chalk:#F4F1E8; --dim:#b9c7bf; --yellow:#F5D76E; }
+  :root{ --bg:#1b1c1f; --card:#25262a; --line:#33353a; --chalk:#F4F1E8; --dim:#a9adb5; --yellow:#F5D76E; }
   *{ box-sizing:border-box; }
   body{ margin:0; background:var(--bg); color:var(--chalk); font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; padding:20px 16px 40px; }
   main{ max-width:680px; margin:0 auto; }
@@ -440,8 +440,8 @@ function leaderboardPage(days){
   .sub{ color:var(--dim); margin:0 0 16px; }
   .tabs{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
   .tabs a{ color:var(--chalk); text-decoration:none; padding:6px 12px; border-radius:999px; background:var(--card); font-size:.9rem; }
-  .tabs a.on{ background:var(--yellow); color:#16302A; font-weight:600; }
-  table{ width:100%; border-collapse:collapse; background:var(--card); border-radius:12px; overflow:hidden; }
+  .tabs a.on{ background:var(--yellow); color:#1b1c1f; font-weight:600; }
+  table{ width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
   th,td{ padding:9px 10px; text-align:right; font-variant-numeric:tabular-nums; }
   th{ font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; color:var(--dim); font-weight:600; }
   td:nth-child(2), th:nth-child(2){ text-align:left; }
