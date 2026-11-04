@@ -1,23 +1,24 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.32';
+const APP_VERSION = '4.33';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
 // relays that never find each other.
 // v4.11: the libraries are served from THIS site (/vendor, built from the same
 // pinned 0.25.4 packages), not from a third-party CDN: no outside code runs in
-// the page, and loading no longer depends on esm.run being reachable. The CDN
-// copy is only a fallback if the local file cannot be loaded at all.
+// the page, and loading no longer depends on esm.run being reachable.
 const VENDOR_V = '0.25.4';
-async function vendorImport(local, cdn, ms){
-  const t = (p)=>Promise.race([p, new Promise((_, rej)=>setTimeout(()=>rej(new Error('timeout')), ms))]);
-  try{ return await t(import(local)); }catch(e){ return await t(import(cdn)); }
+// v4.33: no third-party CDN fallback any more — code from a CDN cannot be
+// integrity-checked when imported dynamically. If the local copy can't be
+// loaded, the start-up watchdog shows its "reload" message instead.
+async function vendorImport(local, _cdn, ms){
+  return await Promise.race([import(local), new Promise((_, rej)=>setTimeout(()=>rej(new Error('timeout')), ms))]);
 }
 // the three are fetched AT THE SAME TIME (they used to be one after the other: up to 18 s)
-const _trysteroP = vendorImport('../vendor/trystero.js', 'https://esm.run/trystero@' + VENDOR_V, 12000);
-const _torrentP = vendorImport('../vendor/trystero-torrent.js', 'https://esm.run/@trystero-p2p/torrent@' + VENDOR_V, 8000).catch(()=>null);
-const _mqttP = vendorImport('../vendor/trystero-mqtt.js', 'https://esm.run/@trystero-p2p/mqtt@' + VENDOR_V, 10000).catch(()=>null);
+const _trysteroP = vendorImport('../vendor/trystero.js', '', 12000);
+const _torrentP = vendorImport('../vendor/trystero-torrent.js', '', 8000).catch(()=>null);
+const _mqttP = vendorImport('../vendor/trystero-mqtt.js', '', 10000).catch(()=>null);
 const Trystero = await _trysteroP;
 const {joinRoom, selfId} = Trystero;
 // v2.50: the Nostr relays stopped carrying the connection set-up messages
@@ -212,6 +213,16 @@ function clog(code, text){
   }, 1000);
 }
 function clogNow(){ try{ localStorage.setItem(CONNLOG_KEY, JSON.stringify(connLog)); }catch(e){} }
+// v4.33: errors nobody caught are no longer lost silently — they go into the
+// connection log (the ⓘ report shows it), at most 20 per page load
+let uncaughtLogged = 0;
+function logUncaught(kind, msg, where){
+  if(uncaughtLogged >= 20) return;
+  uncaughtLogged++;
+  try{ clog('E00', `${kind}: ${String(msg || '?').slice(0, 160)}${where ? ' @ ' + String(where).slice(0, 80) : ''}`); }catch(e){}
+}
+window.addEventListener('error', (e)=>{ if(e && e.message) logUncaught('hiba', e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || '?')); });
+window.addEventListener('unhandledrejection', (e)=>{ const r = e && e.reason; logUncaught('elutasított ígéret', r && (r.message || r)); });
 clog('----', 'oldal betöltve');
 window.addEventListener('online', ()=>clog('N02', 'a böngésző szerint VAN internet'));
 window.addEventListener('offline', ()=>clog('N01', 'a böngésző szerint NINCS internet'));
@@ -408,6 +419,25 @@ const SRV = (function(){
   return api;
 })();
 
+// v4.33: back into the same room after an accidental reload. The tab
+// remembers (sessionStorage — this tab only) which room it was in; a reload
+// within 3 minutes offers that room as if an invite link had been opened.
+// The owner's device recognises the returning name and hands back the seat.
+const REJOIN_KEY = 'picasso-last-room';
+let REJOIN_OFFERED = false;
+try{
+  const last = JSON.parse(sessionStorage.getItem(REJOIN_KEY) || 'null');
+  const params = new URLSearchParams(location.search);
+  if(last && /^[A-Z0-9]{4,8}$/.test(last.code || '') && Date.now() - (last.at || 0) < 180000){
+    const inUrl = (params.get('join') || '').toUpperCase();
+    if(!inUrl){
+      params.set('join', last.code);
+      history.replaceState(null, '', location.pathname + '?' + params.toString() + location.hash);
+      REJOIN_OFFERED = true;
+    } else if(inUrl === last.code) REJOIN_OFFERED = true;   // came with this very invite link
+  }
+}catch(e){}
+
 (function(){
   "use strict";
 
@@ -469,16 +499,26 @@ const SRV = (function(){
       }
     });
   }
+  // v4.33: the owner also remembers the kicked devices locally — if the ban
+  // server can't be reached (then it lets everybody in), a kicked player
+  // still can't come straight back into THIS room
+  const localKickedDevs = new Set();
   function reportKick(peerId){
     const td = peerDev[peerId];
+    if(td) localKickedDevs.add(td);
     if(!isHost || !banHostKey || !td || !roomCode) return;
     banCall({ action:'kick', room: roomCode, hostKey: banHostKey, targetDev: td });
   }
   function gateHello(data, peerId){
     if(pendingVerify.has(peerId)) return;
+    const d = String((isPlainObject(data) && data.dev) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+    if(d && localKickedDevs.has(d)){
+      try{ kickAction.send({ reason:'banned' }, { target: peerId }); }catch(e){}
+      clog('K19', `kirúgott eszköz próbált visszalépni: ${String(peerId).slice(0,5)}`);
+      return;
+    }
     pendingVerify.add(peerId);
     const thisRoom = room;
-    const d = String((isPlainObject(data) && data.dev) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
     const tok = String((isPlainObject(data) && data.tok) || '').slice(0, 400);
     banCall({ action:'verify', room: roomCode, dev: d, token: tok }, 7000).then(res=>{
       pendingVerify.delete(peerId);
@@ -579,6 +619,38 @@ const SRV = (function(){
           subjectDev: (typeof peerDev !== 'undefined' && peerDev[peerId]) || '', kind, detail: d, reporter: myName || '', v: APP_VERSION }) }).catch(()=>{});
     }catch(e){}
   }
+  // v4.33: the game's own yes/no window instead of the browser's confirm() —
+  // same look as the rest of the game, works in in-app browsers (some block
+  // confirm()), keyboard: Enter = yes, Esc = no, focus returns afterwards.
+  function askConfirm(text, opts){
+    const o = Object.assign({ ok:'Igen', cancel:'Mégse' }, opts || {});
+    return new Promise(resolve=>{
+      const back = document.activeElement;
+      const ov = document.createElement('div');
+      ov.className = 'pc-confirm'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
+      const box = document.createElement('div'); box.className = 'pc-confirm-box';
+      const p = document.createElement('p'); p.className = 'pc-confirm-text'; p.id = 'pc-confirm-text-' + Date.now();
+      p.textContent = text; ov.setAttribute('aria-labelledby', p.id);
+      const row = document.createElement('div'); row.className = 'pc-confirm-row';
+      const okB = document.createElement('button'); okB.type = 'button'; okB.textContent = o.ok;
+      let cancelB = null;
+      if(o.cancel){ cancelB = document.createElement('button'); cancelB.type = 'button'; cancelB.className = 'secondary'; cancelB.textContent = o.cancel; row.appendChild(cancelB); }
+      row.appendChild(okB);
+      box.append(p, row); ov.appendChild(box); document.body.appendChild(ov);
+      const done = (v)=>{ document.removeEventListener('keydown', onKey, true); ov.remove(); try{ back && back.focus && back.focus(); }catch(e){} resolve(v); };
+      const onKey = (e)=>{
+        if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); done(false); }
+        else if(e.key === 'Tab'){ const f = [cancelB, okB].filter(Boolean); const i = f.indexOf(document.activeElement); e.preventDefault(); f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus(); }
+      };
+      document.addEventListener('keydown', onKey, true);
+      okB.addEventListener('click', ()=>done(true));
+      if(cancelB) cancelB.addEventListener('click', ()=>done(false));
+      ov.addEventListener('click', (e)=>{ if(e.target === ov) done(false); });
+      (cancelB || okB).focus();
+    });
+  }
+  const askInfo = (text)=>askConfirm(text, { ok:'Rendben', cancel:null });
+
   // the sender's own friendly note when a limit is reached
   let lastSlowNoteAt = 0;
   function slowNote(where, res){
@@ -792,6 +864,16 @@ const SRV = (function(){
     const combined = [...easy, ...medium, ...hard];
     if(combined.length > 0) WORDS = combined;
     try{ clog('W11', combined.length ? 'szavak: tartalék .txt fájlok, ' + tally(combined) : 'szavak: CSAK A BEÉPÍTETT MINI LISTA (' + WORDS.length + ' szó) — az élő lista nem töltődött be'); }catch(e){}
+    // v4.33: say it on screen too — with the tiny backup list words repeat a lot
+    if(!combined.length){
+      try{
+        const p = document.createElement('p');
+        p.className = 'center-note words-warn'; p.setAttribute('role', 'status');
+        p.textContent = `⚠️ A szólista most nem töltődött be — csak ${WORDS.length} beépített szó áll rendelkezésre, ezek sokat ismétlődnek. Próbáld újratölteni az oldalt.`;
+        const sc = document.getElementById('screen-create');
+        if(sc) sc.insertBefore(p, sc.firstChild);
+      }catch(e){}
+    }
     // else: keep FALLBACK_WORDS so the game still works if everything else is missing
   }
 
@@ -1434,20 +1516,35 @@ const SRV = (function(){
     // travels over the network (as before) — every device maps it back to the
     // avatar, so no message format changed and older versions just show the colour.
     const box = document.getElementById('home-avatars'), nameEl = document.getElementById('home-name');
+    // v4.33: a radio group the keyboard way — ONE tab stop (the chosen avatar),
+    // the arrow keys move between them (it used to be 24 separate tab stops)
+    function chooseAv(c, focus){
+      sndClick(); myAvatarColor = c; playerAvatars[selfId] = c;
+      try{ localStorage.setItem('picasso-avatar-color', c); }catch(e){}
+      drawAv();
+      if(focus){ const cur = box.querySelector('.home-av[aria-checked="true"]'); if(cur) cur.focus(); }
+    }
     function drawAv(){
       box.innerHTML = '';
-      AVATARS.forEach((av)=>{
+      AVATARS.forEach((av, i)=>{
         const c = av.c;
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'home-av'; b.style.setProperty('--avc', c);
         b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', c === myAvatarColor ? 'true' : 'false');
+        b.tabIndex = c === myAvatarColor ? 0 : -1;
         b.setAttribute('aria-label', av.n);
         b.title = av.n;
         b.textContent = av.e;
-        b.addEventListener('click', ()=>{
-          sndClick(); myAvatarColor = c; playerAvatars[selfId] = c;
-          try{ localStorage.setItem('picasso-avatar-color', c); }catch(e){}
-          drawAv();
+        b.addEventListener('click', ()=>chooseAv(c, false));
+        b.addEventListener('keydown', (e)=>{
+          const cols = Math.max(1, getComputedStyle(box).gridTemplateColumns.split(' ').length);
+          const step = { ArrowRight:1, ArrowDown:cols, ArrowLeft:-1, ArrowUp:-cols }[e.key];
+          if(e.key === 'Home' || e.key === 'End' || step){
+            e.preventDefault();
+            const n = AVATARS.length;
+            const j = e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : (i + step + n) % n;
+            chooseAv(AVATARS[j].c, true);
+          }
         });
         box.appendChild(b);
       });
@@ -1478,11 +1575,8 @@ const SRV = (function(){
       if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
       showSubCount(j.count);
       st.style.color='var(--green)';
-      st.textContent = j.already
-        ? (j.mailed ? '✅ Ez a cím már fel van iratkozva — küldtünk rá egy levelet, amiben egy kattintással leiratkozhatsz.'
-                    : '✅ Ez a cím már fel van iratkozva. Az elmúlt 10 percben már küldtünk rá levelet — ha leiratkoznál, próbáld újra kicsit később.')
-        : (j.throttled ? '📬 Nemrég már küldtünk megerősítő levelet erre a címre — nézd meg a postafiókodat (a Spam mappát is). Újat 10 perc múlva kérhetsz.'
-                       : '📬 Elküldtük a megerősítő levelet — nézd meg a postafiókodat (a Spam mappát is)!');
+      // v4.33: a szerver mindig ugyanazt válaszolja (a válaszból nem derül ki, fel van-e iratkozva a cím)
+      st.textContent = '📬 Ha ez a cím még nincs feliratkozva, küldtünk rá egy megerősítő levelet; ha már fel van, egy levelet a leiratkozó linkkel. Nézd meg a postafiókodat (a Spam mappát is)! Ugyanarra a címre 10 percenként egy levél megy.';
       input.value = '';
     }catch(e){ st.style.color='var(--red)'; st.textContent = 'Nem sikerült: ' + e.message; }
     finally{ btn.disabled = false; }
@@ -1892,7 +1986,11 @@ const SRV = (function(){
       applyAudioSession();
       actx = new (window.AudioContext || window.webkitAudioContext)();
       reverbNode = actx.createConvolver();
-      reverbNode.buffer = makeImpulseResponse(actx, 1.4, 2.2);
+      // v4.33: the reverb's impulse is computed a moment later, not inside the
+      // first tap (it made the first interaction ~50–150 ms slower on phones);
+      // until then the very first sound just plays without the echo
+      const buildReverb = ()=>{ try{ reverbNode.buffer = makeImpulseResponse(actx, 1.4, 2.2); }catch(e){} };
+      if(typeof requestIdleCallback === 'function') requestIdleCallback(buildReverb, { timeout: 1500 }); else setTimeout(buildReverb, 200);
       reverbSend = actx.createGain(); reverbSend.gain.value = 0.5;
       // v2.56: every sound effect goes through one volume knob
       sfxBus = actx.createGain(); sfxBus.gain.value = sfxMuted ? 0 : volCurve(sfxVolume);
@@ -3003,6 +3101,7 @@ const SRV = (function(){
 
   function fatalError(msg){
     document.getElementById('error-detail').textContent = msg;
+    document.body.classList.remove('booting');
     showOnly(['screen-error']);
   }
 
@@ -3024,6 +3123,7 @@ const SRV = (function(){
 
   try{
     showOnly(['screen-home']);
+    document.body.classList.remove('booting');   // v4.33: the home screen's controls come alive
     // Wait (briefly) for the relay list, so the very FIRST room-list
     // connection attempt already offers it — no separate "switch to relay
     // later" step, and so no confusing back-and-forth status text.
@@ -3036,7 +3136,9 @@ const SRV = (function(){
     });
     if(pendingInviteCode){
       document.getElementById('invite-banner').classList.remove('hidden');
-      document.getElementById('invite-room-hint').textContent = `Írd be a neved, és irány a szoba!`;
+      document.getElementById('invite-room-hint').textContent = REJOIN_OFFERED
+        ? '↩️ Újratöltődött az oldal — egy koppintással visszaléphetsz az előző szobádba.'
+        : `Írd be a neved, és irány a szoba!`;
       document.getElementById('invite-join-wrap').classList.remove('hidden');
       document.getElementById('invite-or-label').classList.remove('hidden');
     }
@@ -4250,16 +4352,16 @@ const SRV = (function(){
     }
     return votes;
   }
-  function castVoteKick(target){
+  async function castVoteKick(target){
     if(!voteKickAction || !target || target === selfId || target === roomHostId()) return;
     const players = currentRoomPlayerIds();
     if(!players.includes(target)) return;
     const eligible = players.filter(id=>id !== target);
-    if(eligible.length < 2){ alert('Szavazásos kizáráshoz legalább 3 játékos kell a szobában.'); return; }
+    if(eligible.length < 2){ askInfo('Szavazásos kizáráshoz legalább 3 játékos kell a szobában.'); return; }
     const name = roomNameOf(target);
     const set = voteKicks[target] || (voteKicks[target] = new Set());
-    if(set.has(selfId)){ alert(`Már szavaztál ${name} kizárására.`); return; }
-    if(!confirm(`Szavazol ${name} kizárására?\n\nHa a többi játékos többsége (${voteKickNeed(eligible.length)} fő) is így szavaz, kikerül a szobából.`)) return;
+    if(set.has(selfId)){ askInfo(`Már szavaztál ${name} kizárására.`); return; }
+    if(!(await askConfirm(`Szavazol ${name} kizárására?\n\nHa a többi játékos többsége (${voteKickNeed(eligible.length)} fő) is így szavaz, kikerül a szobából.`, { ok:'Szavazok' }))) return;
     sndClick();
     set.add(selfId);
     try{ voteKickAction.send({ target }); }catch(e){}
@@ -5141,17 +5243,27 @@ const SRV = (function(){
   //   p: = 20 000 PBKDF2 iterations (up to v2.35)
   //   q: = 150 000 PBKDF2 iterations (from v2.36)
   //   f: = plain hash fallback where WebCrypto is unavailable
-  const FP_ITERATIONS = { p:20000, q:150000 };
-  const FP_DEFAULT_SCHEME = 'q';
-  async function roomFingerprint(code, scheme){
-    const salt = 'picasso-room-dir-v1';
+  //   s: = 150 000 iterations with a RANDOM salt per room (from v4.33), written
+  //        into the fingerprint itself ("s:" + 8 hex salt + 16 hex bits). With
+  //        the old fixed salt every possible code could be hashed ONCE and then
+  //        every closed room in the list looked up at once; now each room
+  //        would need its own full search.
+  const FP_ITERATIONS = { p:20000, q:150000, s:150000 };
+  const FP_DEFAULT_SCHEME = 's';
+  async function roomFingerprint(code, scheme, announced){
     const which = FP_ITERATIONS[scheme] ? scheme : FP_DEFAULT_SCHEME;
+    let salt = 'picasso-room-dir-v1', saltHex = '';
+    if(which === 's'){
+      saltHex = (typeof announced === 'string' && /^s:[0-9a-f]{8}/.test(announced)) ? announced.slice(2, 10)
+        : Array.from(crypto.getRandomValues(new Uint8Array(4)), b=>b.toString(16).padStart(2,'0')).join('');
+      salt = 'picasso-room-dir-v2|' + saltHex;
+    }
     try{
       if(window.crypto && crypto.subtle){
         const enc = new TextEncoder();
         const key = await crypto.subtle.importKey('raw', enc.encode(code), 'PBKDF2', false, ['deriveBits']);
         const bits = await crypto.subtle.deriveBits({ name:'PBKDF2', salt:enc.encode(salt), iterations:FP_ITERATIONS[which], hash:'SHA-256' }, key, 64);
-        return which + ':' + [...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
+        return which + ':' + saltHex + [...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
       }
     }catch(e){}
     // Fallback for very old / non-secure contexts (no WebCrypto) — a plain hash.
@@ -5993,9 +6105,9 @@ const SRV = (function(){
       if(m.t === 'diag' && isPlainObject(m.d) && (!m.to || m.to === selfId)){
         const prev = peerDiags.get(from);
         peerDiags.set(from, { d: m.d, at: Date.now() });
-        if(!prev || Date.now() - prev.at > 5000) clog('D01', `diagnosztika érkezett: ${cleanText(m.d.name, 16) || '?'} (${String(from).slice(0,5)})`);
+        if(!prev || Date.now() - prev.at > 5000) clog('D01', `diagnosztika érkezett: ${diagPeerName(from, '?')} (${String(from).slice(0,5)})`);
       }
-      if(m.t === 'diagreq') sendMyDiag(m.k, from);
+      if(m.t === 'diagreq' && isKnownDiagPeer(from)) sendMyDiag(m.k, from);
     }
     // v3.04: a page in this room is closing / reloading — no need to wait
     // for its connection to time out
@@ -6008,6 +6120,7 @@ const SRV = (function(){
     }
     if(m.t === 'knockack' && m.to === selfId && typeof m.k === 'string' && pendingKnockKey && m.k === pendingKnockKey){
       knockAckedAt = Date.now();
+      knownDiagPeers.add(from);
     }
   }
   // =====================================================================
@@ -6153,17 +6266,31 @@ const SRV = (function(){
   }
   // v3.11: two devices on the same network share their public address. Only
   // a short hash of it is sent, never the address itself.
-  let pubHashCache = { ip:'', h:'' };
+  // v4.33: only 12 bits (3 hex digits), salted with the room code. The old
+  // 48-bit hash had a public salt, so trying all ~4 billion IPv4 addresses
+  // gave the address back — and it went out on public MQTT brokers. 12 bits
+  // still tell "probably the same wifi", but say nothing about the address.
+  let pubHashCache = { key:'', h:'' };
   async function publicAddrHash(){
     const ip = lastNatInfo && lastNatInfo.pubIp;
     if(!ip) return '';
-    if(pubHashCache.ip === ip) return pubHashCache.h;
+    const key = ip + '|' + (roomCode || '');
+    if(pubHashCache.key === key) return pubHashCache.h;
     try{
-      const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(APP_ID + '|net|' + ip));
-      const h = Array.from(new Uint8Array(d)).slice(0, 6).map(b=>b.toString(16).padStart(2,'0')).join('');
-      pubHashCache = { ip, h };
+      const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(APP_ID + '|net2|' + String(roomCode || '').toUpperCase() + '|' + ip));
+      const h = Array.from(new Uint8Array(d)).slice(0, 2).map(b=>b.toString(16).padStart(2,'0')).join('').slice(0, 3);
+      pubHashCache = { key, h };
       return h;
     }catch(e){ return ''; }
+  }
+  // v4.33: diagnostics are answered only for devices we actually know: room
+  // members, a guest knocking on my room, or the host that answered my knock
+  const knownDiagPeers = new Set();
+  function isKnownDiagPeer(id){
+    return knownDiagPeers.has(id) || knocksHeard.has(id) || !!lobbyPlayers[id] || !!(meta && meta.playerNames[id]) || id === hostPeerId;
+  }
+  function diagPeerName(id, fallback){
+    return cleanText((meta && meta.playerNames[id]) || lobbyPlayers[id] || (knocksHeard.get(id) || {}).name || fallback || 'a másik fél', 16);
   }
   async function buildDiagSummary(){
     // a fresh look at this device's network (at most once a minute; ~8 s)
@@ -6178,16 +6305,17 @@ const SRV = (function(){
     try{ peers = room && room.getPeers ? Object.keys(room.getPeers() || {}).length : 0; }catch(e){}
     const ua = navigator.userAgent;
     const dev = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'Mac' : 'egyéb';
+    // v4.33: this goes out on PUBLIC brokers (anyone can read the topic) — only
+    // technical facts: no nickname, no connection log, no error texts
     return {
-      v: APP_VERSION, name: myName, dev, apple: IS_APPLE_WEBKIT, inapp: IS_IN_APP_BROWSER,
+      v: APP_VERSION, dev, apple: IS_APPLE_WEBKIT, inapp: IS_IN_APP_BROWSER,
       mqtt: [dirqOpenCount(), dirqClients.length], turn: turnLoadState, turnN: turnIceServers.length,
       probe: turnProbeInfo ? !!turnProbeInfo.relay : null,
       nat: lastNatInfo ? { host: lastNatInfo.host, mdns: lastNatInfo.mdns, srflx: lastNatInfo.srflx, relay: lastNatInfo.relay, ms: lastNatInfo.ms } : null,
       net: await publicAddrHash(),
       relayOk: turnRelayTest ? turnRelayTest.ok : null,
       unlocked: !!appleNetUnlocked, host: !!isHost, inRoom: !!room, peers,
-      online: navigator.onLine, vis: document.visibilityState,
-      errs: recentConnErrors.slice(-3), log: connLog.slice(-15)
+      online: navigator.onLine, vis: document.visibilityState
     };
   }
   async function sendMyDiag(k, to){
@@ -6274,7 +6402,7 @@ const SRV = (function(){
     const me = await buildDiagSummary();
     for(let i = 0; i < 10 && !latestPeerDiag(); i++) await new Promise(r=>setTimeout(r, 500));
     const other = latestPeerDiag();
-    const lines = diagnose(me, other && other.d, other && cleanText(other.d.name, 16) || 'a szobanyitó');
+    const lines = diagnose(me, other && other.d, other && diagPeerName(other.id, 'a szobanyitó') || 'a szobanyitó');
     const fixHere = IS_APPLE_WEBKIT && !appleNetUnlocked && other && other.d && me.net && other.d.net === me.net;
     box.innerHTML = '🔎 <b>Diagnózis:</b><ul>' + lines.map(l=>'<li>' + escapeHtml(l) + '</li>').join('') + '</ul>' +
       (fixHere ? '<div style="margin-top:8px;text-align:center;"><button class="secondary small" id="join-diag-fix">📶 iPhone-kapcsolat javítása és újrapróbálás</button></div>' : '') +
@@ -6315,7 +6443,7 @@ const SRV = (function(){
     let lib = null;
     try{
       const mod = await Promise.race([
-        import('../vendor/mqtt.js').catch(()=>import('https://esm.run/mqtt@5.15.2')),
+        import('../vendor/mqtt.js'),
         new Promise((_, rej)=>setTimeout(()=>rej(new Error('timeout')), 12000))
       ]);
       lib = (mod && mod.default && typeof mod.default.connect === 'function') ? mod.default : mod;
@@ -6351,7 +6479,28 @@ const SRV = (function(){
     });
     setInterval(()=>dirqPublish({ t:'here' }), DIRQ_HERE_MS);
   }
-  startDirectMqttDirectory();
+  // v4.33: the public MQTT brokers are needed only for the direct (P2P) way.
+  // While the own game server works, nobody's address goes to three outside
+  // brokers: they are started only if the server does not answer within 3 s,
+  // or later, if it stays unreachable for 10 s.
+  let dirqStarted = false;
+  function ensureDirectMqttDirectory(why){
+    if(dirqStarted) return;
+    dirqStarted = true;
+    try{ clog('M00', 'nyilvános MQTT-szobalista indul: ' + why); }catch(e){}
+    startDirectMqttDirectory();
+  }
+  if(!SRV.enabled) ensureDirectMqttDirectory('nincs saját szerver beállítva');
+  else {
+    SRV.ready(3000).then(up=>{ if(!up) ensureDirectMqttDirectory('a játékszerver nem válaszolt'); });
+    let srvDownSince = 0;
+    setInterval(()=>{
+      if(dirqStarted) return;
+      if(SRV.up){ srvDownSince = 0; return; }
+      if(!srvDownSince) srvDownSince = Date.now();
+      else if(Date.now() - srvDownSince > 10000) ensureDirectMqttDirectory('a játékszerver 10 mp óta nem érhető el');
+    }, 2000);
+  }
   // host side of knocking: keep my key in step with the room I'm hosting
   setInterval(async ()=>{
     const want = (isHost && roomCode) ? String(roomCode) : '';
@@ -6559,13 +6708,11 @@ const SRV = (function(){
       lines.push('— Ez az eszköz röviden —', fmtDiag(me));
       const others = [...peerDiags.entries()].filter(([id, v])=>Date.now() - v.at < 180000);
       others.forEach(([id, v])=>{
-        lines.push(`— ${cleanText(v.d.name, 16) || '?'} eszköze (automatikusan, a háttércsatornán; ${Math.round((Date.now()-v.at)/1000)} mp-es) —`, fmtDiag(v.d));
-        (v.d.errs || []).forEach(e=>lines.push('   hiba: ' + e));
-        (v.d.log || []).slice(-8).forEach(l=>lines.push('   ' + l));
+        lines.push(`— ${diagPeerName(id, '?')} eszköze (automatikusan, a háttércsatornán; ${Math.round((Date.now()-v.at)/1000)} mp-es) —`, fmtDiag(v.d));
       });
       const o = latestPeerDiag();
       lines.push('— 🔎 DIAGNÓZIS —');
-      if(o || roomCode || lastJoinKnockKey) diagnose(me, o && o.d, o && cleanText(o.d.name, 16)).forEach(l=>lines.push('• ' + l));
+      if(o || roomCode || lastJoinKnockKey) diagnose(me, o && o.d, o && diagPeerName(o.id)).forEach(l=>lines.push('• ' + l));
       else diagnose(me, { v: me.v, mqtt:[1,1], nat:{ relay:1, srflx:1 } }, '').forEach(l=>lines.push('• ' + l));
     }catch(e){}
     lines.push('— Kapcsolati napló (utolsó 25 esemény; a teljes: ☰ Menü → 📋 Kapcsolati napló) —');
@@ -7567,7 +7714,10 @@ const SRV = (function(){
       // A browser may not support the default container: fall back to
       // whatever it does support instead of throwing.
       let rec = null;
-      const candidates = ['', 'audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+      // v4.33: MP4/AAC first where the browser can record it — that plays
+      // everywhere (older iPhones can't play the WebM/Opus that Chrome records
+      // by default); otherwise the browser's own choice, as before
+      const candidates = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', '', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
       for(const mime of candidates){
         try{
           if(mime && MediaRecorder.isTypeSupported && !MediaRecorder.isTypeSupported(mime)) continue;
@@ -7755,7 +7905,7 @@ const SRV = (function(){
       // room's fingerprint before even trying to connect.
       // verify with the same scheme the room announced, so a room opened by
       // an older version can still be joined
-      const fp = await roomFingerprint(code, pendingPrivateRoom.fp.charAt(0));
+      const fp = await roomFingerprint(code, pendingPrivateRoom.fp.charAt(0), pendingPrivateRoom.fp);
       const sameScheme = fp.charAt(0) === pendingPrivateRoom.fp.charAt(0);
       if(sameScheme && fp !== pendingPrivateRoom.fp){
         warn.style.color = 'var(--red)';
@@ -7796,6 +7946,7 @@ const SRV = (function(){
     roomConnErrors = 0;
     let joinRetried = false;
     let joined = false;
+    let srvHadNoRoom = false;
     const joinT0 = Date.now();
     const joinTick = setInterval(()=>{
       const sec = Math.round((Date.now() - joinT0)/1000);
@@ -7811,7 +7962,7 @@ const SRV = (function(){
         // v2.96: knock on the host's door over the direct list while waiting
         pendingKnockKey = await knockKeyFor(roomCode);
         knockAckedAt = 0;
-        const knock = ()=>{ if(pendingKnockKey) dirqPublish({ t:'knock', k: pendingKnockKey, n: myName }); };
+        const knock = ()=>{ if(pendingKnockKey) dirqPublish({ t:'knock', k: pendingKnockKey }); };   // v4.33: no nickname on public brokers
         knock();
         const knockTimer = setInterval(knock, 3000);
         // v3.10: still not in after 15 s → swap diagnostics with the host
@@ -7827,7 +7978,11 @@ const SRV = (function(){
             clog('J05', 'a szoba nem válaszolt a játékszerveren — próbálom a közvetlen (P2P) úton');
             warn.style.color = 'var(--chalk-dim)';
             try{ await turnReady(9000, true); }catch(e){}
-            result = await connect(roomCode, { expectPeer:true, timeoutMs:JOIN_WAIT_MS, mode:'p2p' });
+            // v4.33: the game server works but has no such room — the direct way
+            // gets 15 s only (it used to be 45 s, the player waited almost a minute
+            // for a mistyped code)
+            srvHadNoRoom = true;
+            result = await connect(roomCode, { expectPeer:true, timeoutMs:15000, mode:'p2p' });
           }
           // the host demonstrably hears us, but no connection came of it:
           // one fresh attempt (new connection offers) before giving up
@@ -7863,7 +8018,9 @@ const SRV = (function(){
         document.getElementById('reaction-toggle-btn').classList.add('hidden');
         warn.style.color = 'var(--red)';
         const appleCase = currentRoomMode !== 'srv' && IS_APPLE_WEBKIT && !IS_STANDALONE && !appleNetUnlocked && turnIceServers.length === 0;
-        warn.textContent = currentRoomMode === 'srv'
+        warn.textContent = (srvHadNoRoom && !knockAckedAt && !lastJoinKnockAcked)
+          ? 'Nincs ilyen nyitott szoba — ellenőrizd a kódot, vagy kérj új meghívót a szobanyitótól.'
+          : currentRoomMode === 'srv'
           ? 'Ez a szoba nem található a játékszerveren — lehet, hogy már megszűnt, vagy elírtad a kódot. Kérj új meghívót a szobanyitótól.'
           : roomConnErrors > 0
           ? (appleCase
@@ -7965,11 +8122,11 @@ const SRV = (function(){
       btn.addEventListener('click', (e)=>{ e.stopPropagation(); castVoteKick(btn.dataset.peer); });
     });
     document.querySelectorAll('.lobby-kick-btn:not(.lobby-vote-btn)').forEach(btn=>{
-      btn.addEventListener('click', (e)=>{
+      btn.addEventListener('click', async (e)=>{
         e.stopPropagation();
         const peerId = btn.dataset.peer;
         const name = lobbyPlayers[peerId] || 'A játékos';
-        if(!confirm(`Biztosan kirúgod ${name} játékost a szobából?`)) return;
+        if(!(await askConfirm(`Biztosan kirúgod ${name} játékost a szobából?`, { ok:'Kirúgom' }))) return;
         sndClick();
         kickAction.send({ reason:'kicked' }, { target:peerId });
         reportKick(peerId);
@@ -7980,10 +8137,10 @@ const SRV = (function(){
     });
     document.getElementById('lobby-players').insertAdjacentHTML('beforeend', spectatorListHtml());
     document.querySelectorAll('.spec-kick').forEach(btn=>{
-      btn.addEventListener('click', (e)=>{
+      btn.addEventListener('click', async (e)=>{
         e.stopPropagation();
         const pid = btn.dataset.peer, nm = spectators[pid] || 'A néző';
-        if(!confirm(`Biztosan eltávolítod ${nm} nézőt a szobából?`)) return;
+        if(!(await askConfirm(`Biztosan eltávolítod ${nm} nézőt a szobából?`, { ok:'Eltávolítom' }))) return;
         sndClick();
         kickAction.send({ reason:'kicked' }, { target:pid });
         reportKick(pid);
@@ -10949,8 +11106,8 @@ const SRV = (function(){
   document.getElementById('stats-close-btn').addEventListener('click', ()=>document.getElementById('stats-overlay').classList.add('hidden'));
   document.getElementById('stats-overlay').addEventListener('click', e=>{ if(e.target.id === 'stats-overlay') e.target.classList.add('hidden'); });
   document.addEventListener('keydown', e=>{ if(e.key === 'Escape') document.getElementById('stats-overlay').classList.add('hidden'); });
-  document.getElementById('stats-reset-btn').addEventListener('click', ()=>{
-    if(!confirm('Biztosan nullázod a statisztikádat ezen az eszközön? Ez nem vonható vissza.')) return;
+  document.getElementById('stats-reset-btn').addEventListener('click', async ()=>{
+    if(!(await askConfirm('Biztosan nullázod a statisztikádat ezen az eszközön? Ez nem vonható vissza.', { ok:'Nullázom' }))) return;
     try{ localStorage.removeItem(STATS_KEY); }catch(e){}
     savePersonalStats(loadPersonalStats());   // a fresh start date
     renderStatsPage(); renderHomeStats(); fitStatsBox();
@@ -11025,8 +11182,8 @@ const SRV = (function(){
     document.getElementById('privacy-close-btn').addEventListener('click', close);
     ov.addEventListener('click', e=>{ if(e.target === ov) close(); });
     document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && !ov.classList.contains('hidden')) close(); });
-    document.getElementById('privacy-clear-btn').addEventListener('click', ()=>{
-      if(!confirm('Törlöd a becenevedet, a beállításaidat, a statisztikádat és a kapcsolódási naplót erről az eszközről?')) return;
+    document.getElementById('privacy-clear-btn').addEventListener('click', async ()=>{
+      if(!(await askConfirm('Törlöd a becenevedet, a beállításaidat, a statisztikádat és a kapcsolódási naplót erről az eszközről?', { ok:'Törlöm' }))) return;
       try{ Object.keys(localStorage).filter(k=>k.startsWith('picasso-')).forEach(k=>localStorage.removeItem(k)); }catch(e){}
       connLog = [];
       renderHomeStats();
@@ -11091,7 +11248,7 @@ const SRV = (function(){
         clearInterval(rematchTicker); rematchTicker = null;
         if(!rematchYesVotes.has(selfId)){
           leaveRoomAndGoHome();
-          try{ alert('⏰ Lejárt a szavazási idő, ezért kiléptél a szobából.'); }catch(e){}
+          try{ askInfo('⏰ Lejárt a szavazási idő, ezért kiléptél a szobából.'); }catch(e){}
           return;
         }
       }
@@ -11225,13 +11382,14 @@ const SRV = (function(){
   });
 
   function leaveRoomAndGoHome(){
+    try{ sessionStorage.removeItem(REJOIN_KEY); }catch(e){}   // v4.33: a deliberate leave (or a kick) is not offered back
     try{ flushPlayTime(); }catch(e){}
     if(isHost) withdrawMyRoom();
     // Everything that could still fire for the room being left is
     // invalidated in one go (delayed handoffs, a pending game-end screen, a
     // recorder that is still finishing, re-sends).
     roomGeneration++;
-    verifiedPeers.clear(); pendingVerify.clear(); noTokenSince.clear(); banHostKey = ''; banToken = '';
+    verifiedPeers.clear(); pendingVerify.clear(); noTokenSince.clear(); banHostKey = ''; banToken = ''; localKickedDevs.clear();
     for(const k of Object.keys(peerDev)) delete peerDev[k];
     // Tell the others we're leaving on purpose so they update right away
     // (otherwise they'd only notice after the disconnect grace period).
@@ -11361,9 +11519,9 @@ const SRV = (function(){
   // (watch screen, drawing screen, round-end) — not just the lobby/gameend
   // screens — so there's always a way out mid-game.
   document.querySelectorAll('.leave-game-link').forEach(el=>{
-    el.addEventListener('click', (e)=>{
+    el.addEventListener('click', async (e)=>{
       e.preventDefault();
-      if(!confirm('Biztosan elhagyod a szobát? Ez megszakítja a játékot számodra.')) return;
+      if(!(await askConfirm('Biztosan elhagyod a szobát? Ez megszakítja a játékot számodra.', { ok:'Kilépek' }))) return;
       sndClick();
       leaveRoomAndGoHome();
     });
@@ -12079,6 +12237,15 @@ const SRV = (function(){
   });
   document.getElementById('app-version').textContent = `PIC-ASS-O · v${APP_VERSION}`;
 
+  // v4.33: keep the current room in this tab's memory (see REJOIN_KEY), and ask
+  // before the page is left in the middle of a game (Back button, reload,
+  // closing the tab) — a phone's back gesture used to end the game silently
+  setInterval(()=>{
+    try{ if(room && roomCode) sessionStorage.setItem(REJOIN_KEY, JSON.stringify({ code: roomCode, at: Date.now() })); }catch(e){}
+  }, 3000);
+  window.addEventListener('beforeunload', (e)=>{
+    if(room && meta && !gameEnded){ e.preventDefault(); e.returnValue = ''; }
+  });
   // Called from the page-level 'pagehide' hook: closing the tab must not
   // leave the microphone running or a dead room advertised in the list.
   window.__picassoCleanup = function(ev){

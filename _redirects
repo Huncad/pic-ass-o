@@ -1,0 +1,13 @@
+# PIC-ASS-O (v4.33): a repó belső részei ne legyenek letölthetők a játék oldaláról.
+# A Netlify a repó gyökerét szolgálja ki; ezek a fájlok a működéshez nem kellenek
+# (a függvények a /.netlify/functions/ alatt futnak, nem érintettek).
+/server/*        /404  404!
+/tests/*         /404  404!
+/netlify/*       /404  404!
+/node_modules/*  /404  404!
+/README.md       /404  404!
+/package.json    /404  404!
+/package-lock.json /404 404!
+/px              /404  404!
+/_headers        /404  404!
+/vendor/README.md /404 404!

@@ -11,14 +11,26 @@ const ROOT = process.env.PICASSO_ROOT || path.join(__dirname, '..', '..');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.txt': 'text/plain; charset=utf-8',
   '.woff2': 'font/woff2', '.png': 'image/png', '.json': 'application/json' };
 
-function staticServer(port) {
+// v4.33: a _headers fájl CSP-je a tesztekben is érvényes (a helyi játékszerver
+// címét hozzáadjuk), így egy tiltott forrás a tesztekben is kiderül
+function cspFor(srvPort) {
+  try {
+    const m = /Content-Security-Policy:\s*(.+)/.exec(fs.readFileSync(path.join(ROOT, '_headers'), 'utf8'));
+    if (!m) return '';
+    return m[1].trim().replace("connect-src 'self'", `connect-src 'self' http://127.0.0.1:${srvPort} ws://127.0.0.1:${srvPort}`);
+  } catch (e) { return ''; }
+}
+function staticServer(port, srvPort) {
+  const csp = process.env.NO_CSP ? '' : cspFor(srvPort);
   return http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     let p = decodeURIComponent(u.pathname);
     if (p === '/') p = '/index.html';
     const f = path.join(ROOT, path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
     if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { 'content-type': TYPES[path.extname(f)] || 'application/octet-stream', 'cache-control': 'no-store' });
+    const headers = { 'content-type': TYPES[path.extname(f)] || 'application/octet-stream', 'cache-control': 'no-store' };
+    if (csp && f.endsWith('.html')) headers['content-security-policy'] = csp;
+    res.writeHead(200, headers);
     fs.createReadStream(f).pipe(res);
   }).listen(port, '127.0.0.1');
 }
@@ -31,7 +43,7 @@ async function startServers() {
   const srv = spawn(process.execPath, [path.join(ROOT, 'server', 'server.js')], {
     env: { ...process.env, PORT: String(srvPort), DATA_DIR: dataDir }, stdio: 'ignore'
   });
-  const web = staticServer(webPort);
+  const web = staticServer(webPort, srvPort);
   for (let i = 0; i < 60; i++) {
     try { if ((await fetch(`http://127.0.0.1:${srvPort}/api/health`)).ok) break; } catch (e) {}
     await new Promise(r => setTimeout(r, 100));
@@ -71,6 +83,8 @@ async function newPlayer(browser, servers, label, contextOpts, opts = {}) {
     await page.clock.setFixedTime(page.fakeNow);
   }
   page.pageErrors = [];
+  page.cspViolations = [];
+  page.on('console', m => { if (/Content Security Policy|Refused to/.test(m.text())) page.cspViolations.push(m.text().slice(0, 200)); });
   page.on('pageerror', e => page.pageErrors.push(`${label}: ${e.message}`));
   page.framesIn = [];
   page.on('websocket', ws => ws.on('framereceived', f => page.framesIn.push(String(f.payload))));

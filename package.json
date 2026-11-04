@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test --experimental-test-module-mocks tests/*.test.mjs",
-    "test:e2e": "node tests/e2e/round.cjs && node tests/e2e/antispam.cjs",
+    "test:e2e": "node tests/e2e/round.cjs && node tests/e2e/antispam.cjs && node tests/e2e/ux.cjs",
     "test:visual": "node tests/visual/snap.cjs",
     "test:visual:game": "node tests/visual/game.cjs"
   },

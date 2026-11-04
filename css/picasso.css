@@ -2511,3 +2511,42 @@ body.fit-frame .setup-adv-toggle{ display:none; }
    kijelzőn: "cirkus / z"); a hosszú szó inkább kisebb betűvel fér ki */
 #chosen-word-flash{ max-width:calc(100vw - 24px); }
 #chosen-word-flash b{ overflow-wrap:normal; word-break:keep-all; hyphens:manual; font-size:clamp(1.3rem, 9vw, 2.4rem); }
+
+/* ===== v4.33: betöltés közben is látható kezdőképernyő =====
+   A kezdőképernyő már a HTML-ből kirajzolódik (régen csak a P2P-könyvtárak
+   letöltése után jelent meg, és az egész tábla felugrott — CLS 1,0). Amíg a
+   játék motorja be nem tölt, a vezérlők nem kattinthatók, és egy jelzés mutatja. */
+.boot-note{ display:none; }
+body.booting .boot-note{ display:block; margin:6px 0 0; text-align:center; color:var(--chalk-dim); font-size:.9rem; }
+body.booting #screen-home button, body.booting #screen-home input, body.booting #screen-home .room-item{ pointer-events:none; }
+body.booting #screen-home .create-cta, body.booting #screen-home .home-tile, body.booting #screen-home .home-av{ opacity:.55; }
+
+/* ===== v4.33: avatarok billentyűzettel ===== */
+/* a fókusz mindig látszik (a korábbi outline:none !important elnyomta) */
+.home-av:focus-visible{ outline:3px solid var(--yellow) !important; outline-offset:2px; }
+
+/* ===== v4.33: a lebegő reakció- és chatgomb ne takarja a tartalmat telefonon ===== */
+@media (max-width:859px){
+  /* csak akkor, ha a lebegő gombok tényleg látszanak (egy szobában) */
+  body.in-game:not(.fabs-top):has(#chat-toggle-btn:not(.hidden)) #main-board{ padding-bottom:84px; }
+}
+.words-warn{ color:var(--yellow) !important; margin:0 0 10px; }
+
+/* ===== v4.33: saját megerősítő ablak (a böngésző confirm() helyett) ===== */
+.pc-confirm{ position:fixed; inset:0; z-index:5000; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:16px; }
+.pc-confirm-box{ background:var(--panel); color:var(--chalk); border:1.5px solid rgba(var(--line-rgb),.2); border-radius:16px; padding:20px; max-width:420px; width:100%; box-shadow:0 20px 50px rgba(0,0,0,.5); }
+.pc-confirm-text{ margin:0 0 16px; font-size:1.05rem; line-height:1.45; white-space:pre-line; }
+.pc-confirm-row{ display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+.pc-confirm-row button{ min-width:96px; min-height:44px; }
+
+/* ===== v4.33: régebbi böngészők (color-mix nélkül: Safari < 16.2, Chrome < 111,
+   Firefox < 113) — a sötét mód színei ott érvénytelenné válnának, és eltűnne a
+   háttér. Ilyenkor a téma saját alapszínei maradnak (világosabb, de olvasható). */
+@supports not (color: color-mix(in srgb, red 50%, blue)){
+  html.dark-mode{
+    --bg:var(--bg-base); --bg2:var(--bg2-base); --panel:var(--panel-base);
+    --chalk:var(--chalk-base); --chalk-dim:var(--chalk-dim-base);
+    --pink:var(--pink-base); --yellow:var(--yellow-base); --blue:var(--blue-base); --red:var(--red-base);
+    --green:var(--green-base); --purple:var(--purple-base);
+  }
+}

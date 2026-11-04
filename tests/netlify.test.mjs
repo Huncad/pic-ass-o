@@ -286,3 +286,28 @@ test('report: gyanús eset naplózása, összevonás, admin listázás és törl
   r = await rep(post(url, { action: 'clear' }, sess));
   assert.equal((await r.json()).left, 0);
 });
+
+test('admin belépés: a fék hálózatonként működik — egy támadó nem zárhatja ki az admint', async () => {
+  const { default: admin } = await import('../netlify/functions/admin.mjs?brake=1');
+  const url = '/.netlify/functions/admin';
+  // a támadó hálózat (5.5.5.x): sok rossz jelszó, több IP-ről (az IP-nkénti 5-ös korlát kikerülésére)
+  let last;
+  for (let i = 0; i < 25; i++) last = await admin(post(url, { action: 'login', password: 'rossz' + i }, { 'x-nf-client-connection-ip': '5.5.5.' + (i % 5 + 1) }));
+  assert.equal(last.status, 429, 'a támadó hálózat megáll');
+  // a valódi admin másik hálózatról be tud lépni
+  const r = await admin(post(url, { action: 'login', password: 'uj-jelszo-456789' }, { 'x-nf-client-connection-ip': '8.8.4.4' }));
+  assert.equal(r.status, 200);
+});
+
+test('report: hálózatonként napi plafon (a példányokon átívelően)', async () => {
+  // két külön függvénypéldány (mintha a Netlify két gépen futtatná): a példányonkénti
+  // 40-es fék egyiken sem telik be, a tárolóban számolt 60-as napi plafon viszont igen
+  const send = async (rep, i) => (await (await rep(post('/.netlify/functions/report', { action: 'report', room: 'QQQQQ', subject: 'S' + i, kind: 'chat-flood', reporter: 'X' }, { 'x-nf-client-connection-ip': '6.6.6.6' }))).json());
+  const { default: rep1 } = await import('../netlify/functions/report.mjs?ipcap=1');
+  const { default: rep2 } = await import('../netlify/functions/report.mjs?ipcap=2');
+  const res = [];
+  for (let i = 0; i < 35; i++) res.push(await send(rep1, i));
+  for (let i = 35; i < 70; i++) res.push(await send(rep2, i));
+  assert.equal(res.filter(j => j.ok).length, 60, 'pontosan 60 jelzés került be');
+  assert.ok(res.slice(60).every(j => j.skipped === 'ip-cap'), 'a többit a napi plafon állította meg');
+});

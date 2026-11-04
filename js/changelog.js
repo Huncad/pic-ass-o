@@ -2,6 +2,17 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.33', changes:[
+    'Gyorsabb indulás: a kezdőképernyő azonnal megjelenik (lassú neten sem kell üres oldalt nézni), és betöltéskor nem ugrál.',
+    'Ha véletlenül frissül az oldal játék közben, egy koppintással visszaléphetsz ugyanabba a szobába; elhagyás előtt (Vissza gomb, bezárás) a böngésző rákérdez.',
+    'Elírt vagy megszűnt szobakódnál fél perc helyett hamar kiderül, hogy nincs ilyen szoba.',
+    'A kirúgás, kilépés és hasonló kérdések a játék saját ablakában jelennek meg; a kirúgott játékos akkor sem léphet vissza, ha a tiltó szerver épp nem érhető el.',
+    'Akadálymentesség: az avatarok nyilakkal is választhatók, látható a fókusz; a tippeket és a chatet a képernyőolvasó is felolvassa.',
+    'Telefonon a reakció- és chatgomb nem takarja a szöveget.',
+    'Biztonság és adatvédelem: szigorúbb tartalombiztonsági szabályok, a hálózati hibakereséshez nem megy ki becenév és IP-címre visszavezethető adat, a nyilvános jelzőszervereket csak akkor használja a játék, ha a saját szerver nem érhető el.',
+    'Ha a szólista nem töltődik be, a szobabeállításnál figyelmeztetés jelenik meg.',
+    'Hangüzenet: ahol lehet, minden telefonon lejátszható formátumban készül.'
+  ]},
   { version:'4.32', changes:[
     'A chatben és a tippmezőben nem lehet sok üzenetet egyszerre küldeni, és ugyanazt az üzenetet vagy tippet sem lehet újra és újra elküldeni.',
     'A gyorsreakciók és a chatüzenetekre adott reakciók száma korlátozva — billentyűzettel sem lehet elárasztani velük a többieket.',

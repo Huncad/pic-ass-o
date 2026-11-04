@@ -24,6 +24,7 @@ const KEEP_MS = 60 * 86400000;
 const MERGE_MS = 10 * 60000;          // ugyanaz a gyanú ugyanarról a játékosról 10 percen belül: egy bejegyzés
 const MAX_ITEMS = 400;
 const DAY_CAP = 1500;                 // ennyi új jelzés naponta összesen (szemetelés ellen)
+const IP_DAY_CAP = 60;                // v4.33: egy hálózatról naponta ennyi (a példányokon átívelően, a tárolóban számolva)
 
 const limited = makeLimiter();
 const clean = (s, n) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -71,8 +72,11 @@ export default async (req) => {
   const ipH = createHash('sha256').update('picasso-report|' + ip).digest('hex').slice(0, 10);
   const res = await updateJSON(store, KEY, raw => {
     const d = tidy(raw);
-    if (d.day !== today) { d.day = today; d.n = 0; }
+    if (d.day !== today) { d.day = today; d.n = 0; d.byIp = {}; }
     if ((d.n || 0) >= DAY_CAP) return { write: false, result: 'cap' };
+    d.byIp = (d.byIp && typeof d.byIp === 'object') ? d.byIp : {};
+    if ((d.byIp[ipH] || 0) >= IP_DAY_CAP) return { write: false, result: 'ip-cap' };
+    d.byIp[ipH] = (d.byIp[ipH] || 0) + 1;
     const same = d.items.find(x => x.room === room && x.subject === subject && x.kind === kind && now - (x.last || 0) < MERGE_MS);
     if (same) {
       same.count = (same.count || 1) + 1; same.last = now;

@@ -252,9 +252,12 @@ export default async (req) => {
           });
         } catch (e) { console.error(e); }
       }
-      return json({ ok: true, already: true, mailed, count: count(d) });
+      // v4.33: ugyanaz a válasz, mint egy új feliratkozásnál — a válaszból ne
+      // derüljön ki, hogy egy cím fel van-e iratkozva (a levél a címre megy, ott látszik)
+      void mailed;
+      return json({ ok: true, pending: true, count: count(d) });
     }
-    if (cur && Date.now() - (cur.sentAt || 0) < RESEND_MS) return json({ ok: true, pending: true, throttled: true, count: count(d) });
+    if (cur && Date.now() - (cur.sentAt || 0) < RESEND_MS) return json({ ok: true, pending: true, count: count(d) });
     if (!cur && Object.keys(d.subs).length >= MAX_SUBS) return json({ error: 'Megtelt a lista.' }, 503);
     const s = Object.assign({}, cur || { email, status: 'pending', ut: token() });
     s.ct = token(); s.at = Date.now(); s.sentAt = Date.now();

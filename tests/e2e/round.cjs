@@ -65,7 +65,7 @@ const fail = (msg) => { throw new Error(msg); };
       const shown = (await p.textContent('#roundend-word')) || '';
       if (!shown.toLowerCase().includes(word.toLowerCase())) fail(`a kör végén nem a szó látszik: "${shown}"`);
     }
-    const errs = pages.flatMap(p => p.pageErrors);
+    const errs = pages.flatMap(p => [...p.pageErrors, ...p.cspViolations.map(v => 'CSP: ' + v)]);
     if (errs.length) fail('oldalhibák:\n' + errs.join('\n'));
     ok = true;
     console.log('✅ A teljes kör rendben lement.');

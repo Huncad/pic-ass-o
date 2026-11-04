@@ -19,14 +19,17 @@ Ingyenes, magyar rajzolós-kitalálós party játék a böngészőben, regisztr�
 | `szavak-*.txt` | Tartalék szólista (az élő lista a Gistben van) |
 | `tests/` | Tesztek |
 
-Nincs build-lépés: a Netlify a fájlokat úgy szolgálja ki, ahogy vannak.
+Nincs build-lépés: a Netlify a fájlokat úgy szolgálja ki, ahogy vannak. A `_redirects`
+elzárja a belső részeket (`/server/`, `/tests/`, `/netlify/` stb.), a `_headers` érvényesített
+CSP-t ad (soron belüli szkript és eseménykezelő nem megengedett — `onclick=`, `onsubmit=`
+helyett `addEventListener`). A böngészős tesztek ugyanezzel a CSP-vel futnak.
 
 ## Tesztek
 
 ```bash
 npm install
 npm test            # szabályok, Netlify-függvények, játékszerver
-npm run test:e2e    # teljes kör + elárasztás/csalás elleni védelem két böngészőben (Playwright + Chromium)
+npm run test:e2e    # teljes kör, elárasztás/csalás elleni védelem, betöltés/visszalépés/akadálymentesség (Playwright + Chromium)
 ```
 
 Vizuális összevetés (pl. CSS-módosítás előtt és után):

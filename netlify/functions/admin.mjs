@@ -129,16 +129,20 @@ export default async (req) => {
 
   if (body.action === 'login') {
     if (limited('l|' + ip, 5, 10 * 60000)) return json({ error: 'Túl sok próbálkozás — várj 10 percet.' }, 429);
-    // országos (példányon átívelő) fék: óránként legfeljebb 40 hibás próba összesen
+    // v4.33: a példányokon átívelő fék HÁLÓZATONKÉNT (IPv4 /24, IPv6 /48) működik:
+    // óránként 20 hibás próba. Régen egy közös, óránként 40-es plafon volt — egy
+    // támadó 40 rossz jelszóval mindenkit, a valódi admint is kizárhatta.
     const store = adminStore();
     const hour = new Date().toISOString().slice(0, 13);
-    const fails = await store.get('fails', { type: 'json' }).catch(() => null) || {};
-    if (fails.h === hour && fails.n >= 40) return json({ error: 'Túl sok hibás próbálkozás — próbáld újra egy óra múlva.' }, 429);
+    const net = ip.includes(':') ? ip.split(':').slice(0, 3).join(':') : ip.split('.').slice(0, 3).join('.');
+    const failKey = 'fails|' + net;
+    const fails = await store.get(failKey, { type: 'json' }).catch(() => null) || {};
+    if (fails.h === hour && fails.n >= 20) return json({ error: 'Túl sok hibás próbálkozás erről a hálózatról — próbáld újra egy óra múlva.' }, 429);
     const { rec, from } = await passwordRecord().catch(() => ({ rec: null, from: '' }));
     // nincs beépített tartalék jelszó: ha nincs rekord, a belépés elutasítva
     const ok = !!rec && eqHex(hashPw(body.password, rec), rec.hash);
     if (!ok) {
-      await updateJSON(store, 'fails', f => {
+      await updateJSON(store, failKey, f => {
         const cur = (f && typeof f === 'object') ? f : {};
         return { value: { h: hour, n: (cur.h === hour ? Number(cur.n) || 0 : 0) + 1 } };
       }).catch(() => {});

@@ -77,7 +77,7 @@ const check = (name, ok, info = '') => { results.push(ok); console.log(`  ${ok ?
     const ctxBlocked = await host.evaluate(() => { const a = document.querySelector('#chat-messages audio'); if (!a) return false; const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true }); a.dispatchEvent(ev); return ev.defaultPrevented; });
     check('a jobb gombos (mentés) menü tiltva a lejátszón', ctxBlocked);
 
-    const errs = [...host.pageErrors, ...guest.pageErrors];
+    const errs = [...host.pageErrors, ...guest.pageErrors, ...host.cspViolations, ...guest.cspViolations];
     check('nincs oldalhiba', !errs.length, errs.join(' | '));
   } catch (e) {
     console.error('❌ ' + e.message); results.push(false);

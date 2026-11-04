@@ -1,16 +1,7 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-<script>
-// v4.10: a mentett téma és sötét mód AZONNAL, még az első kirajzolás előtt —
-// különben egy pillanatra az alap zöld háttér villan fel
-(function(){ try{
-  // v4.29: a new player starts on the grey (Grafit) theme
-  var d = document.documentElement, t = localStorage.getItem('picasso-theme') || 'graphite';
-  if(t !== 'forest') d.setAttribute('data-theme', t);
-  if(localStorage.getItem('picasso-dark-mode') === '1') d.classList.add('dark-mode');
-}catch(e){ document.documentElement.setAttribute('data-theme', 'graphite'); } })();
-</script>
+<script src="js/boot-theme.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- v3.18: basic hardening that cannot break the P2P / CDN traffic: no plugins, no <base> hijack, forms only to this site -->
@@ -18,7 +9,7 @@
 <title>PIC-ASS-O — party rajzjáték (több eszközön)</title>
 <meta name="description" content="PIC-ASS-O: ingyenes, magyar rajzolós-kitalálós party játék. Rajzolj, találd ki a szavakat, nevess a barátaiddal — telefonon vagy gépen, regisztráció nélkül.">
 <meta property="og:title" content="PIC-ASS-O — party rajzjáték">
-<meta property="og:image" content="https://pic-ass-o.netlify.app/og-image.png">
+<meta property="og:image" content="https://test--pic-ass-o.netlify.app/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
@@ -39,9 +30,9 @@
 <link rel="modulepreload" href="js/rules.js">
 <link rel="stylesheet" href="css/picasso.css">
 </head>
-<body>
+<body class="booting">
 
-<canvas id="fx-canvas"></canvas>
+<canvas id="fx-canvas" aria-hidden="true"></canvas>
 <div id="flash" class="flash"></div>
 <div id="fx-banner" class="fx-banner" aria-live="polite"></div>
 
@@ -88,7 +79,8 @@
     </div>
   </div>
 
-  <div id="screen-home" class="hidden">
+  <!-- v4.33: a kezdőképernyő a betöltés alatt is látszik ("booting": a gombok még nem élnek) -->
+  <div id="screen-home">
     <div class="home-fx" aria-hidden="true">
       <span style="left:4%; animation-duration:7.5s; animation-delay:0s; --drift:24px;">🎨</span>
       <span style="left:14%; animation-duration:9.2s; animation-delay:1.1s; --drift:-18px;">⭐</span>
@@ -139,7 +131,7 @@
         <input type="checkbox" id="join-as-spectator"><span>👀 Csak nézőként csatlakozom</span>
       </label>
       <div class="home-label">Válassz avatart</div>
-      <div class="home-avatars" id="home-avatars" role="radiogroup" aria-label="Az avatarod a játékban"></div>
+      <div class="home-avatars" id="home-avatars" role="radiogroup" aria-label="Az avatarod a játékban"><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Cica" title="Cica" style="--avc:#FFD166">🐱</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Pingvin" title="Pingvin" style="--avc:#5FB6DE">🐧</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Béka" title="Béka" style="--avc:#7BD389">🐸</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Unikornis" title="Unikornis" style="--avc:#C79CF0">🦄</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Polip" title="Polip" style="--avc:#FF6B5B">🐙</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Bálna" title="Bálna" style="--avc:#4FD6E8">🐳</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Róka" title="Róka" style="--avc:#F5A623">🦊</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Teknős" title="Teknős" style="--avc:#A8D86E">🐢</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Maci" title="Maci" style="--avc:#E0B48A">🐻</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Panda" title="Panda" style="--avc:#9FB0FF">🐼</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Malac" title="Malac" style="--avc:#F4A9A0">🐷</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Bagoly" title="Bagoly" style="--avc:#D7C49E">🦉</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Bohóc" title="Bohóc" style="--avc:#FF8FB1">🤡</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Ufó" title="Ufó" style="--avc:#8EF0A0">👽</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Robot" title="Robot" style="--avc:#B8C4D6">🤖</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Szellem" title="Szellem" style="--avc:#E6E6FA">👻</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Dínó" title="Dínó" style="--avc:#6FCF7F">🦖</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Álruhás" title="Álruhás" style="--avc:#E9C46A">🥸</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Cowboy" title="Cowboy" style="--avc:#D9A066">🤠</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Kaki" title="Kaki" style="--avc:#B07A4F">💩</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Csirke" title="Csirke" style="--avc:#FFE08A">🐔</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Fagyos" title="Fagyos" style="--avc:#7FD8FF">🥶</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Bolondos" title="Bolondos" style="--avc:#FF9966">🤪</button><button type="button" class="home-av" role="radio" aria-checked="false" tabindex="-1" disabled aria-label="Laza" title="Laza" style="--avc:#C9A0FF">😎</button></div>
       <!-- v4.16: the main action sits right under the name — on a phone it is
            visible without scrolling; the open rooms follow below -->
       <div id="invite-join-wrap" class="hidden">
@@ -147,6 +139,7 @@
       </div>
       <p class="center-note hidden" id="invite-or-label">— vagy —</p>
       <div id="panel-create">
+      <p class="boot-note" role="status">⏳ Betöltés…</p>
       <div class="create-wrap">
         <button class="big create-cta" id="card-create"><span class="cta-plus" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></span><span>Szoba létrehozása</span><svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4 L13 10 L7 16" fill="none" stroke="#0f2a1d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       </div>
@@ -393,19 +386,19 @@
     </div>
     <div id="watch-live" class="hidden">
       <div class="watch-content-wrap">
-        <div class="canvas-area"><div class="timebar" id="watch-timebar" aria-hidden="true"><i></i></div><div id="watch-hint-chip" class="hidden" aria-live="polite"></div><canvas id="watch-canvas" width="900" height="500"></canvas></div>
+        <div class="canvas-area"><div class="timebar" id="watch-timebar" aria-hidden="true"><i></i></div><div id="watch-hint-chip" class="hidden" aria-live="polite"></div><canvas id="watch-canvas" width="900" height="500" role="img" aria-label="A rajzoló élő rajza"></canvas></div>
         <div class="guess-sidebar">
           <div class="guess-inputs">
             <h3>Tippeld meg, mit rajzol!</h3>
             <div class="guess-row">
-              <form class="pw-form" autocomplete="off" onsubmit="return false" role="presentation"><input type="text" id="watch-guess-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" placeholder="Ide írd a tipped…" aria-label="Tipp"></form>
+              <form class="pw-form" autocomplete="off" data-nosubmit role="presentation"><input type="text" id="watch-guess-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" placeholder="Ide írd a tipped…" aria-label="Tipp"></form>
               <button class="small hidden" id="btn-watch-voice" type="button" aria-label="Tippelés hanggal" aria-pressed="false" title="Tippelés hanggal — mondd ki a tippjeidet, akár többet egymás után"><svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
               <button class="small" id="btn-watch-guess" aria-label="Tipp elküldése" title="Küld"><svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg></button>
             </div>
           </div>
           <div class="guess-feed">
             <h3>Korábbi tippek</h3>
-            <div id="watch-guess-feed"></div>
+            <div id="watch-guess-feed" role="log" aria-live="polite" aria-label="Tippek"></div>
           </div>
         </div>
       </div>
@@ -557,7 +550,7 @@
       <h2 id="privacy-title">🔒 Adatvédelem</h2>
       <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
     </div>
-    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. október 25-től · v4.15</p>
+    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. november 4-től · v4.33</p>
     <h3 class="pv-h">Ki kezeli az adatokat?</h3>
     <p><b>Adatkezelő:</b> Ádám, magánszemély, a PIC-ASS-O hobbiprojekt fejlesztője és üzemeltetője.<br>
     <b>Kapcsolat:</b> <a href="mailto:picasso.ertesito@gmail.com" style="color:var(--blue);">picasso.ertesito@gmail.com</a> — minden adatvédelmi kérdéssel és kéréssel ide írhatsz.</p>
@@ -565,7 +558,8 @@
 
     <h3 class="pv-h">Milyen adatot, miért és meddig?</h3>
     <ul>
-      <li><b>Játék közben (becenév, rajz, tippek, chat, hangüzenet):</b> két úton mehetnek. <b>(1) Saját játékszerveren át</b> (ha elérhető, ez az alapértelmezett): a kapcsolat titkosított (HTTPS/WSS), de ez a titkosítás csak az útvonalat védi — <b>a játékszerver maga technikailag látja az üzenetek tartalmát</b>, mert ő adja tovább őket a szobában; nincs végpontok közötti titkosítás. A szerver a tartalmat nem menti el, nem naplózza és nem nézi; csak egy megszakadt kapcsolatnál tartja meg legfeljebb 1 percig, hogy a visszatérő játékos megkapja. <b>(2) Közvetlenül a játékosok között</b> (WebRTC), vagy tartalék úton nyilvános MQTT-szervereken át: itt a tartalom a szobakódból képzett kulccsal titkosítva megy, ezek a szerverek nem látják. Egyik esetben sem tároljuk a játékot, a játék végével eltűnik. <i>Jogalap: a játék nyújtása, amit te kértél (GDPR 6. cikk (1) b).</i></li>
+      <li><b>Játék közben (becenév, rajz, tippek, chat, hangüzenet):</b> két úton mehetnek. <b>(1) Saját játékszerveren át</b> (ha elérhető, ez az alapértelmezett): a kapcsolat titkosított (HTTPS/WSS), de ez a titkosítás csak az útvonalat védi — <b>a játékszerver maga technikailag látja az üzenetek tartalmát</b>, mert ő adja tovább őket a szobában; nincs végpontok közötti titkosítás. A szerver a tartalmat nem menti el, nem naplózza és nem nézi; csak egy megszakadt kapcsolatnál tartja meg legfeljebb 1 percig, hogy a visszatérő játékos megkapja. <b>(2) Közvetlenül a játékosok között</b> (WebRTC), vagy tartalék úton nyilvános MQTT-szervereken át: itt a tartalom a szobakódból képzett kulccsal titkosítva megy, ezek a szerverek nem látják. <b>Közvetlen kapcsolatnál a többi játékos eszköze technikailag látja az IP-címedet</b> (így jön létre a kapcsolat). Ez az út csak akkor indul, ha a saját játékszerver nem érhető el. Egyik esetben sem tároljuk a játékot, a játék végével eltűnik. <i>Jogalap: a játék nyújtása, amit te kértél (GDPR 6. cikk (1) b).</i></li>
+      <li><b>Nyilvános MQTT-szerverek (EMQX, HiveMQ, Eclipse Mosquitto):</b> csak akkor kapcsolódik hozzájuk a játék, ha a saját játékszerver nem érhető el (tartalék szobalista és csatlakozás). Ilyenkor egy véletlen, oldalbetöltésenként új azonosítót, a nyilvános szobák adatait és — sikertelen csatlakozásnál — technikai hálózati adatokat (eszköztípus, kapcsolattípusok; becenevet, naplót, IP-címet NEM) küld. <i>Jogalap: 6. cikk (1) b.</i></li>
       <li><b>IP-cím a kapcsolódáshoz:</b> a jelzőszerverek (Nostr / BitTorrent tracker / MQTT), a hálózati címet felderítő STUN-szerverek (Google, Cloudflare), a közvetítő (TURN) és a saját játékszerver látja, mert e nélkül nem jön létre a kapcsolat. Mi nem mentjük el. <i>Jogalap: jogos érdek a játék működtetéséhez (6. cikk (1) f).</i></li>
       <li><b>Nyilvános szobák listája:</b> a szoba neve, a szobanyitó beceneve és a létszám, amíg a szoba nyitva van. Zárt szoba nem jelenik meg névvel. <i>Jogalap: 6. cikk (1) b.</i></li>
       <li><b>Közös ranglista:</b> a befejezett játékokból a becenevek és a pontszámok kerülnek a saját játékszerverre, <b>1 évig</b>. Valódi nevet nem kérünk — ha a becenevedet törölnéd, írj a fenti címre. <i>Jogalap: jogos érdek (6. cikk (1) f) — tiltakozhatsz ellene.</i></li>
@@ -675,10 +669,10 @@
   <div id="fd-content-wrap">
     <div id="fd-canvas-wrap">
       <div class="timebar" id="fd-timebar" aria-hidden="true"><i></i></div>
-      <canvas id="fd-canvas"></canvas>
+      <canvas id="fd-canvas" role="img" aria-label="Rajzlap — itt rajzolsz"></canvas>
       <div id="fd-toast" class="fd-toast hidden" role="status"></div>
     </div>
-    <div class="fd-guess-feed" id="fd-guess-feed"></div>
+    <div class="fd-guess-feed" id="fd-guess-feed" role="log" aria-live="polite" aria-label="Tippek"></div>
   </div>
   <div class="fd-toolbar">
     <div class="swatches" id="fd-swatches"></div>
@@ -791,7 +785,7 @@
       <button class="ghost small" id="chat-close-btn" aria-label="Chat bezárása">✕</button>
     </div>
   </div>
-  <div id="chat-messages"></div>
+  <div id="chat-messages" role="log" aria-live="polite" aria-label="Chatüzenetek"></div>
   <div id="chat-typing-indicator" class="idle" aria-live="polite"></div>
   <div id="chat-mic-hint" class="hidden">🎙️ Felvétel… (max 15 mp, kattints a leállításhoz)</div>
   <div id="chat-reply-bar" class="hidden">
@@ -800,7 +794,7 @@
   </div>
   <div id="emoji-picker" class="hidden"></div>
   <div class="chat-input-row">
-    <form class="pw-form" autocomplete="off" onsubmit="return false" role="presentation"><input type="text" id="chat-text-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" maxlength="200" placeholder="Írj valamit..."></form>
+    <form class="pw-form" autocomplete="off" data-nosubmit role="presentation"><input type="text" id="chat-text-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" maxlength="200" placeholder="Írj valamit..."></form>
     <button class="small" id="chat-emoji-btn" title="Emoji" aria-label="Emoji választó megnyitása">😊</button>
     <button class="small" id="chat-mic-btn" title="Hangüzenet" aria-label="Hangüzenet felvétele">🎙️</button>
     <button class="small" id="chat-send-btn">Küld</button>
@@ -934,7 +928,7 @@
 <div id="admin-overlay" class="hidden">
   <div id="admin-login-box" class="admin-box">
     <h2>🔒 Admin belépés</h2>
-    <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-password-input" autocomplete="off" placeholder="Jelszó"></form>
+    <form class="pw-form" autocomplete="off" data-nosubmit><input type="password" id="admin-password-input" autocomplete="off" placeholder="Jelszó"></form>
     <div id="admin-login-warning" class="admin-warning"></div>
     <div class="admin-actions">
       <button class="secondary" id="admin-login-btn">Belépés</button>
@@ -972,7 +966,7 @@
     <div id="admin-cloud-save" class="admin-note hidden">
       ☁️ A szólista módosításai a <b>Mentés élesben</b> gombbal jutnak el minden játékoshoz.
       <div class="admin-add-row" style="margin-top:10px;">
-        <form class="pw-form hidden" autocomplete="off" onsubmit="return false"><input type="password" id="admin-gh-token-2" autocomplete="off" placeholder="GitHub token (ghp_...)"></form>
+        <form class="pw-form hidden" autocomplete="off" data-nosubmit><input type="password" id="admin-gh-token-2" autocomplete="off" placeholder="GitHub token (ghp_...)"></form>
       </div>
       <button class="secondary small" id="admin-save-live-btn">☁️ Mentés élesben</button>
       <div id="admin-dirty-note" class="hidden" style="color:var(--yellow);font-weight:800;margin-top:6px;">⚠️ Mentetlen módosítások — a változások csak a „Mentés élesben” után jutnak el a játékosokhoz.</div>
@@ -1135,7 +1129,7 @@
           <input type="text" id="admin-music-repo" placeholder="GitHub tároló: felhasznalo/tarolo" autocomplete="off">
         </div>
         <div class="admin-add-row">
-          <form class="pw-form hidden" autocomplete="off" onsubmit="return false"><input type="password" id="admin-music-token" placeholder="GitHub token (ghp_...)" autocomplete="off"></form>
+          <form class="pw-form hidden" autocomplete="off" data-nosubmit><input type="password" id="admin-music-token" placeholder="GitHub token (ghp_...)" autocomplete="off"></form>
         </div>
         <div class="admin-add-row">
           <input type="file" id="admin-music-file" accept=".mp3,audio/mpeg" multiple style="color:var(--chalk);">
@@ -1154,7 +1148,7 @@
       </div>
       A játékosok visszajelzései a Netlify Forms-ban gyűlnek (privát, csak a te Netlify fiókodból érhetők el).
       <div class="admin-add-row" style="margin-top:10px;">
-        <form class="pw-form hidden" autocomplete="off" onsubmit="return false"><input type="password" id="admin-fb-token" placeholder="Netlify token (nfp_...)" autocomplete="off"></form>
+        <form class="pw-form hidden" autocomplete="off" data-nosubmit><input type="password" id="admin-fb-token" placeholder="Netlify token (nfp_...)" autocomplete="off"></form>
         <button class="secondary small" id="admin-fb-load">📬 Betöltés</button>
       </div>
       <div id="admin-fb-status" class="admin-warning" style="text-align:left;"></div>
@@ -1193,8 +1187,8 @@
       Az új jelszó (pontosabban egy sózott, lassított ujjlenyomata) az élő tárhelyre kerül (a szerver menti).
       Mentés után minden eszközön az új jelszóval lehet belépni. Legalább 10 karakter legyen; egy hosszú, több szóból álló mondat a legjobb.
       <div class="admin-add-row" style="margin-top:8px;flex-direction:column;align-items:stretch;gap:6px;">
-        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-newpw-1" placeholder="Új jelszó" autocomplete="new-password"></form>
-        <form class="pw-form" autocomplete="off" onsubmit="return false"><input type="password" id="admin-newpw-2" placeholder="Új jelszó még egyszer" autocomplete="new-password"></form>
+        <form class="pw-form" autocomplete="off" data-nosubmit><input type="password" id="admin-newpw-1" placeholder="Új jelszó" autocomplete="new-password"></form>
+        <form class="pw-form" autocomplete="off" data-nosubmit><input type="password" id="admin-newpw-2" placeholder="Új jelszó még egyszer" autocomplete="new-password"></form>
       </div>
       <button class="secondary small" id="admin-newpw-save" type="button" style="margin-top:6px;">🔑 Jelszó mentése élesben</button>
       <div id="admin-newpw-status" class="admin-warning" style="text-align:left;"></div>
@@ -1208,7 +1202,7 @@
       (a fül bezárásáig) — statikus oldalon ennél biztonságosabban nem tárolható, ezért ha végeztél, érdemes
       visszavonni a GitHubon.
       <div class="admin-add-row" style="margin-top:10px;">
-        <form class="pw-form hidden" autocomplete="off" onsubmit="return false"><input type="password" id="admin-gh-token" autocomplete="off" placeholder="GitHub token (ghp_...)"></form>
+        <form class="pw-form hidden" autocomplete="off" data-nosubmit><input type="password" id="admin-gh-token" autocomplete="off" placeholder="GitHub token (ghp_...)"></form>
       </div>
       <button class="secondary small" id="admin-create-gist-btn">☁️ Tárhely létrehozása</button>
       <div id="admin-cloud-status" class="admin-warning"></div>
@@ -1225,25 +1219,7 @@
   </div>
 </div>
 
-<script>
-// v2.89: if the game engine (loaded from a CDN) never arrives — blocked
-// network, ad blocker, CDN outage — say so instead of leaving a blank board.
-(function(){
-  var started = Date.now();
-  function anyScreen(){
-    return [].some.call(document.querySelectorAll('[id^="screen-"]'), function(e){ return !e.classList.contains('hidden'); });
-  }
-  function check(){
-    if(window.__picassoBooted || anyScreen()) return;
-    if(Date.now() - started < 20000){ setTimeout(check, 1000); return; }
-    var box = document.getElementById('screen-error');
-    var det = document.getElementById('error-detail');
-    if(det) det.innerHTML = 'A játék motorja nem töltődött be (a böngésző nem érte el a szükséges internetes forrást).<br><br>Próbáld újratölteni az oldalt, vagy válts másik hálózatra (pl. wifi helyett mobilnetre). Ha reklámblokkolót használsz, kapcsold ki erre az oldalra.<br><br><button type="button" onclick="location.reload()" style="margin-top:6px;">Újratöltés 🔄</button>';
-    if(box) box.classList.remove('hidden');
-  }
-  window.addEventListener('DOMContentLoaded', function(){ setTimeout(check, 1000); });
-})();
-</script>
+<script src="js/watchdog.js"></script>
 <script type="module" src="js/picasso.js"></script>
 </body>
 </html>

@@ -36,7 +36,11 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 // A "*" kezdetű szabály végződésre illeszt, csak https-en: a
 // "*--pic-ass-o.netlify.app" a Netlify ág-előnézeteket (pl. test--pic-ass-o)
 // engedi, de MÁS netlify.app oldalt nem (v4.11: régen az összeset engedte).
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pic-ass-o.netlify.app,*--pic-ass-o.netlify.app,http://localhost,http://127.0.0.1')
+// v4.33: csak a test ág címe. A régi production (pic-ass-o.netlify.app, v4.13)
+// és a régi deployok állandó címei (<azonosító>--pic-ass-o.netlify.app) már
+// javított hibákat (pl. a titkos szó kiszivárgását) hordoznak, ezért nem
+// csatlakozhatnak ugyanabba a játékba. Más cím: ALLOWED_ORIGINS környezeti változó.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://test--pic-ass-o.netlify.app,http://localhost,http://127.0.0.1')
   .split(',').map(s => s.trim()).filter(Boolean);
 // Origin nélküli WebSocket (nem böngésző) alapból tiltva; teszthez: ALLOW_NO_ORIGIN=1
 const ALLOW_NO_ORIGIN = process.env.ALLOW_NO_ORIGIN === '1';

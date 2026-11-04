@@ -146,6 +146,11 @@ Nem kötelező beállítások: `WORD_USED_DAY_CAP` (alapból 300) és `WORD_BLOC
 
 A szerver leállításkor (`systemctl stop/restart`) azonnal elmenti a ranglistát.
 
+**Melyik weboldal csatlakozhat (v4.33):** alapból csak a `https://test--pic-ass-o.netlify.app`
+(és helyi teszteléshez a localhost). A régi production cím és a régi deployok saját címei nem,
+mert azokban már javított hibák vannak. Ha más címről is kell: `ALLOWED_ORIGINS` környezeti
+változó (vesszővel elválasztva) a `/etc/systemd/system/picasso.service.d/` alatti fájlban.
+
 ## Alternatíva: Cloudflare Tunnel
 
 Ha van saját domained a Cloudflare-en, a Funnel helyett mehet Cloudflare Tunnel is (`cloudflared`), az is portnyitás nélkül működik. Ehhez a Zero Trust felületen kell egy Tunnel, ami a `http://localhost:8787` címre mutat. Szólj, ha erre váltanál.
