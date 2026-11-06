@@ -2,6 +2,10 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.34', changes:[
+    'Telefonon nagyobbra állított szövegméretnél a „Szoba létrehozása” gomb felirata már nem lóg ki: szükség esetén két sorba törik, és a gomb megnő.',
+    'Az avatarok és a tipp-sáv bezáró gombja is alkalmazkodik a nagyobb szövegmérethez.'
+  ]},
   { version:'4.33', changes:[
     'Gyorsabb indulás: a kezdőképernyő azonnal megjelenik (lassú neten sem kell üres oldalt nézni), és betöltéskor nem ugrál.',
     'Ha véletlenül frissül az oldal játék közben, egy koppintással visszaléphetsz ugyanabba a szobába; elhagyás előtt (Vissza gomb, bezárás) a böngésző rákérdez.',

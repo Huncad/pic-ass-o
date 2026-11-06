@@ -2550,3 +2550,16 @@ body.booting #screen-home .create-cta, body.booting #screen-home .home-tile, bod
     --green:var(--green-base); --purple:var(--purple-base);
   }
 }
+
+/* ===== v4.34: nagyobb rendszer-betűméret (Android/iOS szövegméret) telefonon =====
+   A "Szoba létrehozása" gomb felirata régen nem törhetett (white-space:nowrap),
+   így nagyított szövegnél kilógott a gombból. Most két sorba törhet, és a gomb
+   a tartalomhoz nő; a felirat mérete a kijelző szélességéhez is igazodik. */
+@media (max-width:700px){
+  .create-cta{ white-space:normal; }
+  .create-cta > span:nth-child(2){ min-width:0; line-height:1.15; overflow-wrap:normal; text-wrap:balance; }
+  #player-card .create-cta > span:nth-child(2){ font-size:clamp(1rem, 5.2vw, 1.2rem); }
+  #player-card .create-cta{ height:auto; min-height:56px; }
+}
+/* az avatar-emoji a csempe méretéhez igazodik (nagy rendszer-betűméretnél se lógjon ki) */
+@media (max-width:640px){ .home-av{ font-size:clamp(1rem, 6.2vw, 1.5rem); line-height:1; overflow:hidden; } }

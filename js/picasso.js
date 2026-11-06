@@ -1,6 +1,6 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.33';
+const APP_VERSION = '4.34';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
