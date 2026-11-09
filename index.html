@@ -168,10 +168,15 @@
     <section class="home-card" id="subscribe-box">
       <button type="button" class="sub-head" id="sub-toggle" aria-expanded="false" aria-controls="sub-body">
         <span class="sub-mail"><svg viewBox="0 0 32 24" aria-hidden="true"><rect x="1" y="1" width="30" height="22" rx="4" fill="var(--blue)"/><path d="M3 4l13 10L29 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="sub-titles"><b>Értesítés új szobákról</b><small>Kapsz egy e-mailt, ha valaki új szobát nyit. <span id="sub-count"></span></small></span>
+        <span class="sub-titles"><b>Értesítés új szobákról</b><small>Szólunk, ha valaki új szobát nyit — értesítéssel vagy e-mailben. <span id="sub-count"></span></small></span>
         <svg class="sub-chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 12.5 10 7.5l5 5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <div class="sub-body" id="sub-body">
+        <div class="push-row">
+          <button class="secondary" id="btn-push-toggle" type="button">🔔 Értesítés ezen az eszközön</button>
+          <p class="sub-note" id="push-status"></p>
+        </div>
+        <p class="sub-or">— vagy e-mailben —</p>
         <div class="sub-row">
           <span class="input-icon sub-input"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5" fill="currentColor"/><path d="M3.5 7l8.5 6.5L20.5 7" fill="none" stroke="var(--panel)" stroke-width="1.8" stroke-linecap="round"/></svg>
           <input type="email" id="sub-email" maxlength="120" autocomplete="email" placeholder="e-mail címed" aria-label="E-mail cím az értesítéshez"></span>
@@ -193,6 +198,7 @@
     <div class="home-foot">
       <p class="home-stats hidden" id="home-stats"></p>
       <p class="home-stats hidden" id="home-ranglista-wrap"><a id="home-ranglista" href="#" target="_blank" rel="noopener" style="color:var(--yellow);">🏆 Közös ranglista</a></p>
+      <button class="ghost small stats-open-btn" id="btn-practice" type="button">✏️ Gyakorlás egyedül <span aria-hidden="true">›</span></button>
       <button class="ghost small stats-open-btn" id="btn-open-stats" type="button">📊 Statisztikáim <span aria-hidden="true">›</span></button>
     </div>
     <p class="center-note" id="words-loading-note">Szavak betöltése…</p>
@@ -290,6 +296,23 @@
         <button class="pill" data-guessmode="all">Ha már mindenki kitalálta 👥</button>
       </div>
       <p class="setup-hint">Tippelni mindig mindenki tud. Minél gyorsabb valaki, annál több pontot kap; a rajzoló akkor kap pontot, ha valaki kitalálta.</p>
+    </div>
+    <div class="setup-section">
+      <label class="field-label">Csapatmód</label>
+      <div class="pill-row" id="teammode-row">
+        <button class="pill active" data-teammode="off">Mindenki magának</button>
+        <button class="pill" data-teammode="on">Két csapat 🔴🔵</button>
+      </div>
+      <p class="setup-hint">Indításkor a játék véletlenszerűen két csapatba osztja a játékosokat, a csapatok felváltva rajzolnak. Tippelni mindenki tud; a csapat pontszáma a tagok pontjainak összege, és a jobb csapat nyer.</p>
+    </div>
+    <div class="setup-section">
+      <label class="field-label">Rajzolási mód</label>
+      <div class="pill-row" id="drawmode-row">
+        <button class="pill active" data-drawmode="normal">Hagyományos</button>
+        <button class="pill" data-drawmode="fade">Eltűnő tinta 👻</button>
+        <button class="pill" data-drawmode="oneline">Egy vonal ➰</button>
+      </div>
+      <p class="setup-hint">Eltűnő tinta: a vonalak 6 másodperc után eltűnnek (a kör végén a teljes rajz megjelenik). Egy vonal: a rajzoló egyetlen vonalat húzhat, a ceruza felemelése nélkül.</p>
     </div>
     <div class="setup-section">
       <label class="field-label">Hány pontot vonjunk le egy rossz tippért?</label>
@@ -555,7 +578,7 @@
       <h2 id="privacy-title">🔒 Adatvédelem</h2>
       <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
     </div>
-    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. november 9-től · v4.35</p>
+    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. november 9-től · v4.36</p>
     <h3 class="pv-h">Ki kezeli az adatokat?</h3>
     <p><b>Adatkezelő:</b> Ádám, magánszemély, a PIC-ASS-O hobbiprojekt fejlesztője és üzemeltetője.<br>
     <b>Kapcsolat:</b> <a href="mailto:picasso.ertesito@gmail.com" style="color:var(--blue);">picasso.ertesito@gmail.com</a> — minden adatvédelmi kérdéssel és kéréssel ide írhatsz.</p>
@@ -573,6 +596,7 @@
       <li><b>Szabálytalan játék jelzése:</b> ha egy játékos eszközéről olyan üzenet érkezik, amit a játék módosítatlan változata nem küld (például üzenetáradat, más nevében küldött üzenet, a megfejtés a chatben), a többi eszköz ezt jelzi az üzemeltetőnek: a becenév, a véletlen eszközazonosító, a szoba, a gyanú fajtája és a jelző beceneve kerül a Netlify-on tárolt naplóba, <b>60 napig</b>. Az IP-címet nem tároljuk, csak egy lenyomatát. <i>Jogalap: jogos érdek a játék rendjének védelméhez (6. cikk (1) f).</i></li>
       <li><b>Visszajelzés-űrlap:</b> amit beírsz (a név és az elérhetőség önkéntes), a Netlify Forms tárolja; a válasz után, de legkésőbb 1 év múlva töröljük. <i>Jogalap: hozzájárulás (6. cikk (1) a).</i></li>
       <li><b>„Mi ez?” gomb:</b> ha megnyomod, a keresett szót a játék elküldi a magyar Wikipédiának (Wikimedia Foundation), hogy leírást és képet kérjen róla; ehhez a Wikipédia látja az IP-címedet. Csak a gomb megnyomásakor történik. <i>Jogalap: 6. cikk (1) b.</i></li>
+      <li><b>Push értesítés új szobákról</b> (csak ha bekapcsolod): a böngésződ létrehoz egy véletlen értesítési címet a saját push-szolgáltatójánál (Chrome/Android: Google, Firefox: Mozilla, Safari/iPhone: Apple, Edge: Microsoft); ezt a címet és a hozzá tartozó két titkosító kulcsot tároljuk a Netlify-on, nevet, e-mail címet vagy IP-címet nem. Az értesítés tartalma (a szoba neve és a szobanyitó beceneve) titkosítva megy, a push-szolgáltató nem látja. Kikapcsoláskor azonnal töröljük; ha a cím megszűnik, a következő küldéskor magától törlődik. Jogalap: a hozzájárulásod (6. cikk (1) a) — a böngésző engedélykérése és a gomb megnyomása.</li>
       <li><b>Az eszközödön marad:</b> a böngésződ helyi tárhelyén két fajta adat van. <b>A működéshez szükséges:</b> beceneved, avatarod, beállításaid (például hang, téma), egy véletlen eszközazonosító (a kitiltáshoz, lásd fent), az utolsó szobád kódja (hogy frissítés után visszaléphess), a saját szavaid és a nemrég használt szavak, valamint egy kapcsolódási hibanapló (24 óra után törlődik). <b>Kényelmi funkció:</b> a saját statisztikád (játékok, győzelmek, pontok). Egyik sem kerül máshová, kivéve ha a naplót te magad kimásolod és elküldöd, és mindet bármikor törölheted az alábbi gombbal.</li>
       <li><b>Mikrofon:</b> csak akkor kér hozzáférést, ha hangüzenetet veszel fel, vagy bekapcsolod a hangos tippelést. A hangos tippelésnél a beszédet a böngésződ saját beszédfelismerője alakítja szöveggé (Chrome-ban a Google, Safariban az Apple szolgáltatása); a játék csak a felismert szavakat kapja meg, hangot nem rögzít és nem tárol.</li>
     </ul>
@@ -588,13 +612,14 @@
       <li><b>Wikimedia Foundation</b> (USA) — a „Mi ez?” gomb leírásai és képei.</li>
       <li><b>Google LLC és Cloudflare Inc.</b> (USA) — STUN-szerverek a közvetlen kapcsolat felépítéséhez (csak az IP-címet látják).</li>
       <li><b>Google LLC / Apple Inc.</b> (USA) — a böngésző beszédfelismerője, ha bekapcsolod a hangos tippelést.</li>
+      <li>A böngésződ push-szolgáltatója (Google, Mozilla, Apple vagy Microsoft) — csak ha bekapcsolod a push értesítést; a titkosított értesítést kézbesíti az eszközödre.</li>
       <li>Nyilvános jelzőszerverek (Nostr, BitTorrent tracker, MQTT) — csak kapcsolódáshoz, titkosított tartalommal.</li>
     </ul>
     <p>Az USA-beli szolgáltatóknál az adattovábbítás az EU–USA adatvédelmi keretrendszer, illetve az Európai Bizottság általános szerződési feltételei alapján történik.</p>
 
     <h3 class="pv-h">A jogaid</h3>
     <p>Kérheted, hogy megmondjuk, milyen adatot tárolunk rólad (hozzáférés), kijavítsuk vagy töröljük, korlátozzuk a kezelését, és tiltakozhatsz a jogos érdeken alapuló kezelés ellen. A hozzájárulásodat bármikor visszavonhatod. Írj a fenti címre — legkésőbb 30 napon belül válaszolunk. Ha úgy érzed, megsértettük a jogaidat, panaszt tehetsz a <b>Nemzeti Adatvédelmi és Információszabadság Hatóságnál</b> (NAIH, <a href="https://naih.hu" target="_blank" rel="noopener" style="color:var(--blue);">naih.hu</a>), vagy bírósághoz fordulhatsz.</p>
-    <p>Automatizált döntéshozatal, profilalkotás nincs. A játék telepíthető webalkalmazásként (a főmenü „Telepítés” gombjával): ez csak egy ikont tesz a kezdőképernyődre, ugyanazt az oldalt nyitja meg, és nem jár további adatkezeléssel vagy engedéllyel.</p>
+    <p>Automatizált döntéshozatal, profilalkotás nincs. A játék telepíthető webalkalmazásként (a főmenü „Telepítés” gombjával): ez csak egy ikont tesz a kezdőképernyődre, ugyanazt az oldalt nyitja meg, és nem jár további adatkezeléssel vagy engedéllyel. A „Gyakorlás egyedül” mód teljesen az eszközödön fut: semmit nem küld sehova.</p>
     <p>Mindent törölhetsz a böngésző „webhelyadatok törlése” funkciójával, vagy az alábbi gombbal.</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px;">
       <button class="secondary small" id="privacy-clear-btn">🧹 Helyi adataim törlése</button>
@@ -873,6 +898,7 @@
     </div>
     <div class="menu-list">
       <button class="big secondary hidden" id="btn-fd-giveup" style="width:100%;">🙅 Passz</button>
+      <button class="big secondary hidden" id="menu-btn-practice-next" style="width:100%;">🎲 Új szó</button>
       <button class="ghost" id="menu-btn-darkmode" style="width:100%;text-align:left;"></button>
       <button class="ghost" id="menu-btn-stats" style="width:100%;text-align:left;">📊 Statisztikáim</button>
       <div class="menu-theme">

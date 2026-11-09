@@ -311,3 +311,37 @@ test('report: hálózatonként napi plafon (a példányokon átívelően)', asyn
   assert.equal(res.filter(j => j.ok).length, 60, 'pontosan 60 jelzés került be');
   assert.ok(res.slice(60).every(j => j.skipped === 'ip-cap'), 'a többit a napi plafon állította meg');
 });
+
+// ---- v4.36: push értesítés ----
+test('push: csak ismert push-szolgáltató címe fogadható el', async () => {
+  const { cleanSubscription } = await import('../netlify/lib/push.mjs');
+  const keys = { p256dh: 'B'.repeat(87), auth: 'a'.repeat(22) };
+  assert.ok(cleanSubscription({ endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys }));
+  assert.ok(cleanSubscription({ endpoint: 'https://web.push.apple.com/abc', keys }));
+  assert.ok(cleanSubscription({ endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/abc', keys }));
+  assert.equal(cleanSubscription({ endpoint: 'https://evil.example/hook', keys }), null);
+  assert.equal(cleanSubscription({ endpoint: 'http://fcm.googleapis.com/x', keys }), null);
+  assert.equal(cleanSubscription({ endpoint: 'https://fcm.googleapis.com.evil.example/x', keys }), null);
+  assert.equal(cleanSubscription({ endpoint: 'https://picasso.taile8c93.ts.net/x', keys }), null);
+  assert.equal(cleanSubscription({ endpoint: 'https://fcm.googleapis.com/x', keys: { p256dh: 'x', auth: '' } }), null);
+});
+
+test('push: kulcs lekérése, feliratkozás, leiratkozás', async () => {
+  const { default: push } = await import('../netlify/functions/push.mjs');
+  const call = (method, body, ip = '9.9.9.1') => push(new Request('https://x.test/.netlify/functions/push', {
+    method, headers: { 'content-type': 'application/json', 'x-nf-client-connection-ip': ip }, body: body ? JSON.stringify(body) : undefined }));
+  const a = await (await call('GET')).json();
+  const b = await (await call('GET')).json();
+  assert.match(a.key, /^[A-Za-z0-9_-]{80,}$/);
+  assert.equal(a.key, b.key, 'a küldőkulcs állandó');
+  assert.equal(a.count, 0);
+  const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/teszt-1', keys: { p256dh: 'B'.repeat(87), auth: 'a'.repeat(22) } };
+  assert.equal((await call('POST', { action: 'subscribe', sub })).status, 200);
+  assert.equal((await call('POST', { action: 'subscribe', sub })).status, 200);   // kétszer ugyanaz: egy marad
+  assert.equal((await (await call('GET')).json()).count, 1);
+  assert.equal((await call('POST', { action: 'subscribe', sub: { endpoint: 'https://evil.example/x', keys: sub.keys } })).status, 400);
+  assert.equal((await call('POST', { action: 'unsubscribe', endpoint: sub.endpoint })).status, 200);
+  assert.equal((await (await call('GET')).json()).count, 0);
+  // a válaszban soha nincs benne a titkos kulcs
+  assert.ok(!JSON.stringify(a).includes('privateKey'));
+});

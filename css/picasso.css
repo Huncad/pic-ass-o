@@ -2574,3 +2574,25 @@ body.booting #screen-home .create-cta, body.booting #screen-home .home-tile, bod
 .deco-star{ left:1.2%; width:46px; }
 /* telefonon a játék végén maradjon hely a lebegő gombok (reakció, chat) alatt */
 @media (max-width:700px){ #screen-gameend{ padding-bottom:104px; } }
+/* ===== v4.36: csapatmód, rajzolási módok, gyakorlás ===== */
+.rchip.team-a{ box-shadow:inset 3px 0 0 #E5484D; }
+.rchip.team-b{ box-shadow:inset 3px 0 0 #3E8EDE; }
+.team-score{ display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; font-weight:900;
+  background:rgba(0,0,0,.28); border:1.5px solid rgba(var(--line-rgb),.22); white-space:nowrap; font-variant-numeric:tabular-nums; }
+.team-score .ts.mine{ text-decoration:underline; text-underline-offset:3px; }
+.team-score .ts-sep{ opacity:.6; }
+tr.team-row td{ font-weight:900; font-size:1.05em; }
+tr.team-row.team-a td{ box-shadow:inset 0 -2px 0 rgba(229,72,77,.55); }
+tr.team-row.team-b td{ box-shadow:inset 0 -2px 0 rgba(62,142,222,.55); }
+.team-dot{ font-size:.7em; margin-right:5px; vertical-align:middle; }
+/* egy vonal mód: csak a ceruza használható */
+body.mode-oneline #fd-tools .fd-tool:not([data-tool="pen"]), body.mode-oneline #fd-btn-eraser{ opacity:.3; pointer-events:none; }
+/* gyakorlás egyedül: nincs kinek írni vagy reagálni */
+body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practice #fd-guess-feed, body.practice .fd-feed, body.practice #fd-roster{ display:none !important; }
+/* push értesítés a feliratkozó dobozban */
+.push-row{ display:flex; flex-direction:column; gap:6px; align-items:stretch; }
+.push-row button{ border-radius:12px; min-height:44px; }
+.push-row .sub-note{ margin:0; }
+.sub-or{ text-align:center; margin:12px 0 10px; font-size:.84rem; color:var(--chalk-dim); }
+/* a csapatpontszám a görgethető játékossor elején mindig látszik */
+.team-score{ position:sticky; left:0; z-index:2; background:var(--panel); flex-shrink:0; }

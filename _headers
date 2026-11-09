@@ -11,3 +11,10 @@
 
 /vendor/*
   Cache-Control: public, max-age=86400
+
+/sw.js
+  Cache-Control: no-cache
+  Service-Worker-Allowed: /
+
+/manifest.webmanifest
+  Cache-Control: public, max-age=3600

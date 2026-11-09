@@ -93,7 +93,7 @@ async function newPlayer(browser, servers, label, contextOpts, opts = {}) {
 }
 
 /** Szobanyitás a kezdőképernyőről; visszaadja a szobakódot. */
-async function createRoom(host, servers, { roomName = 'Teszt szoba', name = 'Anna', rounds } = {}) {
+async function createRoom(host, servers, { roomName = 'Teszt szoba', name = 'Anna', rounds, pills = [] } = {}) {
   await host.goto(servers.base);
   await host.fill('#home-name', name);
   await host.click('#card-create');
@@ -101,6 +101,10 @@ async function createRoom(host, servers, { roomName = 'Teszt szoba', name = 'Ann
   if (rounds) {
     if (await host.isVisible('#setup-advanced-toggle') && await host.getAttribute('#setup-advanced-toggle', 'aria-expanded') !== 'true') await host.click('#setup-advanced-toggle');
     await host.click(`[data-rounds="${rounds}"]`);
+  }
+  if (pills.length) {   // további beállítások (pl. '[data-teammode="on"]')
+    if (await host.isVisible('#setup-advanced-toggle') && await host.getAttribute('#setup-advanced-toggle', 'aria-expanded') !== 'true') await host.click('#setup-advanced-toggle');
+    for (const sel of pills) await host.click(sel);
   }
   await host.click('#btn-create-room');
   await host.waitForFunction(() => /^[A-Z0-9]{5}$/.test((document.getElementById('lobby-code') || {}).textContent || ''), null, { timeout: 15000 });

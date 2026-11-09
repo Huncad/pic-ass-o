@@ -2,6 +2,14 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.36', changes:[
+    'Új: push értesítés új szobákról — a főmenü „Értesítés új szobákról” dobozában egy koppintással bekapcsolható, e-mail cím nélkül. Akkor is szól, ha a játék nincs megnyitva (iPhone-on a telepített alkalmazásban működik).',
+    'Új: csapatmód — a szobanyitó bekapcsolhatja, a játék két csapatba (🔴 Piros / 🔵 Kék) osztja a játékosokat, a csapatok felváltva rajzolnak, és a jobb csapat nyer.',
+    'Új: bolondos rajzolási módok — „Eltűnő tinta” (a vonalak 6 mp után eltűnnek, a kör végén a teljes rajz megjelenik) és „Egy vonal” (egyetlen vonalat húzhatsz).',
+    'Új: „Gyakorlás egyedül” a főmenüben — rajzolás időre véletlen szavakkal, szoba és játékostársak nélkül.',
+    'A telefon képernyője játék közben nem alszik el.',
+    'Rezgés jelzi, amikor te következel rajzolni.'
+  ]},
   { version:'4.35', changes:[
     'Új „Telepítés” gomb a főmenüben: a játék egy koppintással feltehető a kezdőképernyőre / az asztalra alkalmazásként (Chrome, Edge, Samsung böngésző). iPhone-on, iPaden és Firefoxban a gomb megmutatja a szükséges pár lépést.',
     'Saját, rendes alkalmazásikon minden méretben (Androidon alkalmazkodó ikon).',

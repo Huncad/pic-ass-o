@@ -1,6 +1,6 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.35';
+const APP_VERSION = '4.36';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -1541,6 +1541,89 @@ try{
   })();
   // v4.10: e-mail feliratkozás új szobákra
   const SUBSCRIBE_URL = '/.netlify/functions/subscribe';
+  // v4.36: push notification about new rooms on THIS device (no e-mail needed).
+  // The subscription is created by the browser; the server only stores its
+  // push address. sw.js shows the notification.
+  const PUSH_URL = '/.netlify/functions/push';
+  let myPushEndpoint = '';
+  (function setupPush(){
+    const btn = document.getElementById('btn-push-toggle'), st = document.getElementById('push-status');
+    if(!btn || !st) return;
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const supported = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+    const say = (t)=>{ st.textContent = t; };
+    const post = (body)=>fetch(PUSH_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const keyBytes = (b64)=>{ const pad = '='.repeat((4 - b64.length % 4) % 4); const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, ch=>ch.charCodeAt(0)); };
+    async function currentSub(){
+      const r = await navigator.serviceWorker.getRegistration();
+      return r ? r.pushManager.getSubscription() : null;
+    }
+    function show(on){
+      btn.dataset.on = on ? '1' : '0';
+      btn.textContent = on ? '🔕 Értesítés kikapcsolása ezen az eszközön' : '🔔 Értesítés ezen az eszközön';
+      btn.classList.toggle('ghost', on); btn.classList.toggle('secondary', !on);
+    }
+    async function refresh(){
+      show(false);
+      if(!supported){
+        btn.disabled = true;
+        say(isIOS ? 'iPhone-on és iPaden előbb telepítsd a játékot (főmenü → Telepítés), és a telepített alkalmazásban kapcsold be.' : 'Ez a böngésző nem tud push értesítést fogadni — az e-mailes értesítő itt is működik.');
+        return;
+      }
+      if(Notification.permission === 'denied'){
+        btn.disabled = true;
+        say('🔕 Az értesítéseket letiltottad erre az oldalra. A böngésző webhely-beállításainál (a címsor lakat ikonja) engedélyezheted.');
+        return;
+      }
+      btn.disabled = false;
+      let sub = null;
+      try{ sub = await currentSub(); }catch(e){ sub = null; }
+      myPushEndpoint = sub ? sub.endpoint : '';
+      show(!!sub);
+      say(sub ? '✅ Ez az eszköz értesítést kap, ha valaki nyilvános szobát nyit.' : 'Egy koppintás, e-mail cím nélkül — akkor is szól, ha a játék nincs megnyitva.');
+      // keep the server's copy alive (it may have been lost), at most once a week
+      if(sub){
+        try{
+          const last = Number(localStorage.getItem('picasso-push-sync') || 0);
+          if(Date.now() - last > 7 * 86400000){
+            const r = await post({ action:'subscribe', sub: sub.toJSON() });
+            if(r.ok) localStorage.setItem('picasso-push-sync', String(Date.now()));
+          }
+        }catch(e){}
+      }
+    }
+    btn.addEventListener('click', async ()=>{
+      try{ sndClick(); }catch(e){}
+      if(!supported || btn.disabled) return;
+      btn.disabled = true;
+      try{
+        if(btn.dataset.on === '1'){
+          const sub = await currentSub();
+          if(sub){ const ep = sub.endpoint; try{ await sub.unsubscribe(); }catch(e){} try{ await post({ action:'unsubscribe', endpoint: ep }); }catch(e){} }
+          try{ localStorage.removeItem('picasso-push-sync'); }catch(e){}
+        } else {
+          const perm = await Notification.requestPermission();
+          if(perm === 'granted'){
+            const reg = await navigator.serviceWorker.register('sw.js');
+            await navigator.serviceWorker.ready;
+            const kr = await fetch(PUSH_URL, { cache:'no-store' });
+            const key = kr.ok ? (await kr.json()).key : '';
+            if(!key) throw new Error('nincs kulcs');
+            const sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: keyBytes(key) });
+            const r = await post({ action:'subscribe', sub: sub.toJSON() });
+            if(!r.ok){ try{ await sub.unsubscribe(); }catch(e){} throw new Error('HTTP ' + r.status); }
+            try{ localStorage.setItem('picasso-push-sync', String(Date.now())); }catch(e){}
+          }
+        }
+        await refresh();
+      }catch(e){
+        await refresh();
+        say('⚠️ Most nem sikerült bekapcsolni. Próbáld újra kicsit később — az e-mailes értesítő addig is működik.');
+      }
+    });
+    refresh();
+  })();
   function showSubCount(n){
     const el = document.getElementById('sub-count');
     if(el && typeof n === 'number') el.textContent = `· ${n} fő feliratkozva`;
@@ -1611,7 +1694,7 @@ try{
     if(isPublic && currentRoomMode === 'srv'){
       setTimeout(()=>{
         try{ fetch(SUBSCRIBE_URL, { method:'POST', keepalive:true, headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ action:'notify', code }) }).catch(()=>{}); }catch(e){}
+          body: JSON.stringify({ action:'notify', code, skipPush: myPushEndpoint || '' }) }).catch(()=>{}); }catch(e){}
       }, 4000);
     }
     try{ if(localStorage.getItem(NOTIFY_SKIP_OWN_KEY) === '1') return; }catch(e){}
@@ -2602,7 +2685,7 @@ try{
   let roomCode = '';
   let currentRoomName = '';
   let isHost = false;
-  let settings = { difficulties:['konnyu','kozepes'], totalRounds:2, roundTime:60, maxPlayers:0, hintsEnabled:true, wordChoices:3, wrongPenalty:1, guessMode:'first', customWords:[], customOnly:false };
+  let settings = { difficulties:['konnyu','kozepes'], totalRounds:2, roundTime:60, maxPlayers:0, hintsEnabled:true, wordChoices:3, wrongPenalty:1, guessMode:'first', teamMode:false, drawMode:'normal', teams:{}, customWords:[], customOnly:false };
   const WORD_CHOICE_OPTIONS = [1,2,3,5,7,10];
   const WRONG_PENALTY_OPTIONS = [0,1,2,3,5,10];   // v4.29: points a wrong guess costs, set per room
   let roomIsPublic = false;
@@ -3176,7 +3259,7 @@ try{
         difficulties: [...document.querySelectorAll('#difficulty-row .pill.active')].map(b=>b.dataset.tier),
         totalRounds: settings.totalRounds, roundsAreCycles: true, roundTime: settings.roundTime,
         hintsEnabled: settings.hintsEnabled, maxPlayers: settings.maxPlayers, wordChoices: settings.wordChoices, wrongPenalty: settings.wrongPenalty,
-        guessMode: settings.guessMode,
+        guessMode: settings.guessMode, teamMode: !!settings.teamMode, drawMode: settings.drawMode || 'normal',
         customOnly: settings.customOnly, customOff: !!settings.customOff,
         visibility: vis ? vis.dataset.visibility : 'private',
         roomName: document.getElementById('room-name-input').value.slice(0,30)
@@ -3210,6 +3293,9 @@ try{
     settings.wordChoices = parseInt(pick('choices-row', 'choices', p.wordChoices, 3), 10);
     settings.wrongPenalty = parseInt(pick('penalty-row', 'penalty', p.wrongPenalty, 1), 10);
     settings.guessMode = pick('guessmode-row', 'guessmode', p.guessMode === 'all' ? 'all' : 'first', 'first') === 'all' ? 'all' : 'first';
+    settings.teamMode = pick('teammode-row', 'teammode', p.teamMode === true ? 'on' : 'off', 'off') === 'on';
+    settings.drawMode = cleanDrawMode(pick('drawmode-row', 'drawmode', cleanDrawMode(p.drawMode), 'normal'));
+    settings.teams = {};
     roomIsPublic = pick('visibility-row', 'visibility', p.visibility, 'private') === 'public';
     if(typeof p.roomName === 'string') document.getElementById('room-name-input').value = p.roomName.slice(0,30);
     settings.customWords = [];
@@ -3361,6 +3447,23 @@ try{
       sndClick();
       settings.guessMode = btn.dataset.guessmode === 'all' ? 'all' : 'first';
       document.querySelectorAll('#guessmode-row .pill').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  // v4.36: team mode and the playful drawing modes
+  document.querySelectorAll('#teammode-row .pill').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      sndClick();
+      settings.teamMode = btn.dataset.teammode === 'on';
+      document.querySelectorAll('#teammode-row .pill').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  document.querySelectorAll('#drawmode-row .pill').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      sndClick();
+      settings.drawMode = cleanDrawMode(btn.dataset.drawmode);
+      document.querySelectorAll('#drawmode-row .pill').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
     });
   });
@@ -4542,6 +4645,59 @@ try{
     });
     return [...byKey.values()];
   }
+  // v4.36 ---- team mode + drawing modes --------------------------------
+  // Teams are stored by (normalised) player name, so they survive a
+  // reconnect (which gives the player a new connection id). Scoring itself
+  // is unchanged: a team's score is the sum of its members' points.
+  const DRAW_MODES = { normal:{ label:'Hagyományos' }, fade:{ label:'👻 Eltűnő tinta', note:'A vonalak pár másodperc után eltűnnek — figyelj, amíg látszik!' },
+    oneline:{ label:'➰ Egy vonal', note:'A rajzoló egyetlen vonalat húzhat, a ceruza felemelése nélkül.' } };
+  function cleanDrawMode(v){ return (v === 'fade' || v === 'oneline') ? v : 'normal'; }
+  function cleanTeams(t){
+    const out = {};
+    if(isPlainObject(t)) Object.keys(t).slice(0, 40).forEach(k=>{ const key = nameKey(cleanText(k, 16)); if(key && (t[k] === 0 || t[k] === 1)) out[key] = t[k]; });
+    return out;
+  }
+  const TEAM_INFO = [{ name:'Piros', emoji:'🔴', cls:'team-a' }, { name:'Kék', emoji:'🔵', cls:'team-b' }];
+  function teamsOn(){ return !!(meta && settings && settings.teamMode); }
+  function teamOf(id){
+    if(!teamsOn()) return -1;
+    const k = nameKey(meta.playerNames[id] || '');
+    const t = settings.teams && settings.teams[k];
+    if(t === 0 || t === 1) return t;
+    // someone who joined after the start: the same answer on every device
+    let h = 0; for(let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0;
+    return h % 2;
+  }
+  function teamScores(){
+    const out = [0, 0];
+    if(teamsOn()) Object.keys(meta.playerNames).forEach(id=>{ const t = teamOf(id); if(t >= 0) out[t] += scores[id] || 0; });
+    return out;
+  }
+  // the host shuffles the players and deals them out alternately — the turn
+  // order follows the same shuffle, so the teams take turns drawing
+  function dealTeams(ids, nameOf){
+    for(let i = ids.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+    const teams = {};
+    ids.forEach((id, i)=>{ const k = nameKey(nameOf(id) || ''); if(k) teams[k] = i % 2; });
+    return teams;
+  }
+  function announceGameMode(){
+    if(!meta) return;
+    const lines = [];
+    if(teamsOn()){
+      const mine = teamOf(selfId);
+      const members = t => Object.keys(meta.playerNames).filter(id=>teamOf(id) === t).map(id=>meta.playerNames[id]).join(', ');
+      try{ addSystemChatMessage(`👥 Csapatmód — 🔴 Piros: ${members(0) || '—'} · 🔵 Kék: ${members(1) || '—'}`); }catch(e){}
+      if(mine >= 0 && !amSpectator) lines.push(`${TEAM_INFO[mine].emoji} ${TEAM_INFO[mine].name} csapat`);
+      else lines.push('👥 Csapatmód');
+    }
+    const dm = DRAW_MODES[settings.drawMode];
+    if(settings.drawMode !== 'normal' && dm){
+      try{ addSystemChatMessage(`${dm.label} mód — ${dm.note}`); }catch(e){}
+      lines.push(dm.label + ' mód');
+    }
+    if(lines.length){ try{ showFxBanner(lines[0], lines[1] || (teamsOn() ? (teamOf(selfId) >= 0 && !amSpectator ? 'Ebben a csapatban játszol' : 'Két csapat játszik egymás ellen') : '')); }catch(e){} }
+  }
   function sanitizeSettings(st){
     const s = isPlainObject(st) ? st : {};
     const out = {
@@ -4553,6 +4709,9 @@ try{
       wordChoices: WORD_CHOICE_OPTIONS.includes(Number(s.wordChoices)) ? Number(s.wordChoices) : 3,
       wrongPenalty: WRONG_PENALTY_OPTIONS.includes(Number(s.wrongPenalty)) ? Number(s.wrongPenalty) : 1,
       guessMode: s.guessMode === 'all' ? 'all' : 'first',
+      teamMode: s.teamMode === true,
+      drawMode: cleanDrawMode(s.drawMode),
+      teams: cleanTeams(s.teams),
       customWords: cleanCustomEntries(s.customWords),
       customOnly: s.customOnly === true && s.customOff !== true,
       customOff: s.customOff === true
@@ -8025,7 +8184,9 @@ try{
       }
       warn.textContent = '';
       document.getElementById('apple-fix-join-wrap').classList.add('hidden');
-      if(!lateJoinApplied) enterLobby();   // (joining a running game: the game screen is already up)
+      // v4.36: …and so it is when the host pressed Start while this join was still
+      // finishing — going back to the lobby then hid the game (fatal for the first drawer)
+      if(!lateJoinApplied && !meta) enterLobby();   // (joining a running game: the game screen is already up)
     }catch(e){
       roomActionInProgress = false;
       btn.disabled = false;
@@ -8168,6 +8329,7 @@ try{
     if(ids.length < 2) return;
     document.getElementById('btn-start-match').disabled = true;
     sndWhoosh();
+    settings.teams = settings.teamMode ? dealTeams(ids, id=>lobbyPlayers[id]) : {};
     const turnOrder = buildTurnOrder(ids);
     const playerNames = {}; ids.forEach(id=>playerNames[id]=lobbyPlayers[id]);
     lobbyCustom[selfId] = myWords();
@@ -8211,6 +8373,7 @@ try{
     latestStrokes = [];
     lastHintMask = null;
     hintRevealedCount = 0;
+    setTimeout(()=>{ try{ announceGameMode(); }catch(e){} }, 700);
     if(clean.turnOrder[0] === selfId){
       startRoundAsDrawer(0);
     } else {
@@ -8357,6 +8520,7 @@ try{
 
   function enterPrepareMine(idx, rd){
     if(!meta) return;
+    try{ if(navigator.vibrate) navigator.vibrate([160, 90, 160]); }catch(e){}   // v4.36: you're up
     showOnly(['fd-prepare']);
     document.getElementById('prep-round-num').textContent = roundOfTurn(idx);
     document.getElementById('prep-round-total').textContent = totalRoundCount();
@@ -8660,6 +8824,9 @@ try{
     setupFdCanvas();
     clearFdCanvas();
     startAfkWatch();
+    fdStartModeTimers();
+    if(practice) stopAfkWatch();
+    else if(fdMode() !== 'normal') setTimeout(()=>{ try{ showDrawToast(fdMode() === 'fade' ? '👻 Eltűnő tinta: a vonalaid 6 mp után eltűnnek!' : '➰ Egy vonal: egyetlen vonalat húzhatsz, a ceruza felemelése nélkül.'); }catch(e){} }, 2400);
     const wrap = document.getElementById('fd-canvas-wrap');
     rd.canvasAspect = CANVAS_ASPECT;
   }
@@ -9136,12 +9303,18 @@ try{
       fdLimitWarned = true;
       showDrawToast('⚠️ Hamarosan megtelik a rajz — már csak kevés vonás fér rá.');
     }
+    if(fdOneLine()){
+      // v4.36: one single freehand line per drawing
+      if(fdStrokes.length >= 1){ showDrawToast('➰ Egy vonal mód: csak egyetlen vonalat húzhatsz. A 🗑️ gombbal újrakezdheted.'); return; }
+      if(fdTool !== 'pen') setFdTool('pen');
+      if(fdEraser){ fdEraser = false; const eb = document.getElementById('fd-btn-eraser'); if(eb){ eb.style.background = ''; eb.style.color = ''; } }
+    }
     noteDrawActivity();
     const { w, h } = fdPaperSize();
     const pos = fdCanvasPosNorm(e);
     if(fdTool === 'fill'){
       const st = { t:'fill', color: fdBrushColor, sizeFrac: 0.01, eraser:false, points:[pos] };
-      fdStrokes.push(st);
+      fdStrokes.push(st); fdStrokeBorn.set(st, Date.now());
       fdAfterNewStroke();
       fdRedrawAll();                       // filled on the shared paper, like everyone else's
       fdStrokesDirty = true;
@@ -9222,7 +9395,7 @@ try{
     const finished = fdCurrentStroke;
     const added = !!(fdDrawing && finished && fdStrokes.length < MAX_STROKES);
     if(added){
-      fdStrokes.push(finished);
+      fdStrokes.push(finished); fdStrokeBorn.set(finished, Date.now());
       fdStrokesDirty = true;
       fdAfterNewStroke();
     }
@@ -9321,6 +9494,41 @@ try{
   // v2.89: history. "Törlés" can be undone (the ↶ button brings the whole
   // drawing back), and anything undone can be redone (↷) until a new stroke.
   let fdRedo = [], fdClearedBackup = null;
+  // v4.36: playful drawing modes — enforced on the drawer's device only, so
+  // every other device (any version) simply shows what it is sent.
+  const FADE_MS = 6000;
+  const fdStrokeBorn = new WeakMap();
+  let fdFadeArchive = [];
+  let fdFadeTimer = null;
+  function fdMode(){ return (practice || !settings) ? 'normal' : cleanDrawMode(settings.drawMode); }
+  function fdOneLine(){ return fdMode() === 'oneline'; }
+  function fdFadeSweep(){
+    if(fdMode() !== 'fade' || fdDrawing || !fdStrokes.length) return;
+    if(!currentRound || currentRound.drawerId !== selfId || processedResultRounds.has(roundKey(currentRound))) return;
+    const now = Date.now();
+    const keep = fdStrokes.filter(st=>now - (fdStrokeBorn.get(st) || now) < FADE_MS);
+    if(keep.length === fdStrokes.length) return;
+    fdStrokes.forEach(st=>{ if(!keep.includes(st) && fdFadeArchive.length < MAX_STROKES) fdFadeArchive.push(st); });
+    fdStrokes = keep; fdRedo = []; fdClearedBackup = null;
+    fdStrokesDirty = true; fdNeedFull = true;
+    fdRedrawAll(); maybeFlushStrokes(true); updateFdHistoryButtons();
+  }
+  function fdStartModeTimers(){
+    fdFadeArchive = [];
+    clearInterval(fdFadeTimer); fdFadeTimer = null;
+    document.body.classList.toggle('mode-oneline', fdOneLine());
+    if(fdMode() === 'fade') fdFadeTimer = setInterval(()=>{ try{ fdFadeSweep(); }catch(e){} }, 400);
+  }
+  // at the end of a round the whole drawing comes back, so the reveal (and
+  // the gallery) shows everything that was drawn
+  function fdRestoreFaded(){
+    clearInterval(fdFadeTimer); fdFadeTimer = null;
+    if(!fdFadeArchive.length) return;
+    fdStrokes = fdFadeArchive.concat(fdStrokes).slice(-MAX_STROKES);
+    fdFadeArchive = [];
+    fdStrokesDirty = true; fdNeedFull = true;
+    try{ fdRedrawAll(); maybeFlushStrokes(true); }catch(e){}
+  }
   function fdAfterNewStroke(){ fdRedo = []; fdClearedBackup = null; noteDrawingChanged(); requestAnimationFrame(updateFdHistoryButtons); }
   function fdResetHistory(){ fdRedo = []; fdClearedBackup = null; }
   function fdHistoryChanged(){
@@ -9386,7 +9594,77 @@ try{
     fdToolbarEl.addEventListener('click', ()=>requestAnimationFrame(()=>{ updateSizeDot(); updateFdHistoryButtons(); }));
     fdToolbarEl.addEventListener('input', ()=>requestAnimationFrame(updateSizeDot));
   }
+  // v4.36: keep the screen awake during a game (a phone that dims while
+  // somebody is thinking drops out of the round). Released outside a game.
+  (function keepScreenAwake(){
+    if(!('wakeLock' in navigator)) return;
+    let lock = null, asking = false;
+    const want = ()=> !!meta && !gameEnded && document.visibilityState === 'visible';
+    async function sync(){
+      if(want()){
+        if(lock || asking) return;
+        asking = true;
+        try{ lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', ()=>{ lock = null; }); }catch(e){ lock = null; }
+        asking = false;
+      } else if(lock){ const l = lock; lock = null; try{ await l.release(); }catch(e){} }
+    }
+    setInterval(sync, 3000);
+    document.addEventListener('visibilitychange', sync);
+  })();
+  // v4.36: practice alone — the real drawing screen with a random word and
+  // the clock, but no room, no network, no points and no statistics.
+  var practice = false;
+  let practiceIdx = 0;
+  function practiceNext(){
+    if(!practice) return;
+    stopTicker();
+    const tiers = (settings && Array.isArray(settings.difficulties) && settings.difficulties.length) ? settings.difficulties : ['konnyu','kozepes'];
+    let choices = [];
+    try{ choices = pickWordChoices(tiers, revealedWords, 1); }catch(e){ choices = []; }
+    if(!choices.length || !choices[0] || !choices[0].w){ revealedWords = []; try{ choices = pickWordChoices(tiers, revealedWords, 1); }catch(e){ choices = []; } }
+    const c = choices[0];
+    if(!c || !c.w){ stopPractice(); askInfo('A szavak még nem töltődtek be — próbáld újra pár másodperc múlva.'); return; }
+    revealedWords.push(c.w);
+    currentRound = { idx: practiceIdx++, drawerId: selfId, drawerName: myName || 'Te', word: c.w, tier: TIER_INFO[c.tier] ? c.tier : 'konnyu', phase:'drawing', roundStartAt: Date.now() };
+    resetBrushDefaults();
+    enterDrawingMine(currentRound.idx, currentRound);
+    showChosenWordFlash(c.w, false);
+  }
+  function startPractice(){
+    if(practice || room || meta) return;
+    practice = true; practiceIdx = 0;
+    settings = sanitizeSettings(Object.assign({}, settings, { teamMode:false, drawMode:'normal', teams:{}, customWords:[] }));
+    const me = (myName || document.getElementById('home-name').value || 'Te').trim().slice(0, 16) || 'Te';
+    meta = { settings, started:true, turnOrder:[selfId], playerNames:{ [selfId]: me } };
+    scores = { [selfId]: 0 };
+    activePlayerIds = new Set([selfId]);
+    processedResultRounds = new Set(); revealedWords = []; gameEnded = false;
+    document.body.classList.add('practice');
+    practiceNext();
+    setTimeout(()=>{ try{ showDrawToast('✏️ Gyakorló mód — új szó vagy kilépés: ☰ Menü'); }catch(e){} }, 2400);
+  }
+  function stopPractice(){
+    if(!practice) return;
+    practice = false;
+    document.body.classList.remove('practice');
+    stopTicker(); stopAfkWatch();
+    clearInterval(fdFadeTimer); fdFadeTimer = null;
+    meta = null; currentRound = null; scores = {}; activePlayerIds = new Set();
+    document.getElementById('ingame-menu-overlay').classList.add('hidden');
+    try{ document.getElementById('screen-fulldraw').classList.add('hidden'); }catch(e){}
+    showOnly(['screen-home']);
+  }
+  async function practiceTimeUp(){
+    stopTicker();
+    try{ sndWrong(); }catch(e){}
+    const again = await askConfirm(`⏰ Lejárt az idő! Ezt rajzoltad: „${currentRound ? currentRound.word : ''}”.\n\nJöhet egy új szó?`, { ok:'🎲 Új szó', cancel:'Kilépés' });
+    if(!practice) return;
+    if(again) practiceNext(); else stopPractice();
+  }
+  { const pb = document.getElementById('btn-practice'); if(pb) pb.addEventListener('click', ()=>{ sndClick(); startPractice(); }); }
+  { const nb = document.getElementById('menu-btn-practice-next'); if(nb) nb.addEventListener('click', ()=>{ sndClick(); document.getElementById('ingame-menu-overlay').classList.add('hidden'); practiceNext(); }); }
   document.getElementById('btn-fd-giveup').addEventListener('click', ()=>{
+    if(practice){ practiceNext(); return; }
     // guarded: this button is also reachable for a moment after the round
     // has already been decided, and currentRound can be null by then
     if(!currentRound || currentRound.drawerId !== selfId) return;
@@ -9506,6 +9784,7 @@ try{
           }
         }
       }
+      if(practice){ if(remaining <= 0) practiceTimeUp(); return; }
       if(isDrawerSide && remaining<=0 && currentRound && !processedResultRounds.has(roundKey(currentRound))){
         if(settings.guessMode === 'all') finishMultiRound('timeout');
         else finishRoundAsDrawer({ type:'timeout' });
@@ -9866,7 +10145,8 @@ try{
       const isMe = id === selfId, isDrawer = id === drawerId;
       const votable = !isMe && id !== roomHostId();
       const away = awayLabel(id);
-      return `<div class="rchip${isMe?' me':''}${isDrawer?' drawer':''}${votable?' votable':''}${away?' away':''}" data-id="${escapeHtml(id)}" title="${escapeHtml(name)}${away?' — '+away:''}${isDrawer?' — most ő rajzol':''}${votable?' · koppints a kizárás megszavazásához':''}">
+      const tm = teamOf(id);
+      return `<div class="rchip${tm >= 0 ? ' ' + TEAM_INFO[tm].cls : ''}${isMe?' me':''}${isDrawer?' drawer':''}${votable?' votable':''}${away?' away':''}" data-id="${escapeHtml(id)}" title="${escapeHtml(name)}${away?' — '+away:''}${isDrawer?' — most ő rajzol':''}${votable?' · koppints a kizárás megszavazásához':''}">
         ${avatarHtml(id, name)}
         <span class="rname">${escapeHtml(name)}</span>
         ${(gameStats.streak[id]||0) >= STREAK_SHOW ? `<span class="rstreak" title="${gameStats.streak[id]} jó tipp egymás után">🔥${gameStats.streak[id]}</span>` : ''}
@@ -9874,9 +10154,14 @@ try{
         ${away ? `<span class="raway">💤 ${away}</span>` : ''}<span class="rscore">${scores[id]||0}</span>
       </div>`;
     }).join('');
+    let teamHtml = '';
+    if(teamsOn()){
+      const ts = teamScores(), mine = teamOf(selfId);
+      teamHtml = `<div class="team-score" title="Csapatpontszám: a tagok pontjainak összege"><span class="ts ts-a${mine === 0 ? ' mine' : ''}">🔴 ${ts[0]}</span><span class="ts-sep">:</span><span class="ts ts-b${mine === 1 ? ' mine' : ''}">${ts[1]} 🔵</span></div>`;
+    }
     ['watch-roster','fd-roster'].forEach(rid=>{
       const el = document.getElementById(rid);
-      if(el) el.innerHTML = html;
+      if(el) el.innerHTML = teamHtml + html;
     });
   }
   ['watch-roster','fd-roster'].forEach(rid=>{
@@ -10278,6 +10563,7 @@ try{
       clog('K18', `HIBA: a kör szava menet közben megváltozott (${lockedWord.w} → ${currentRound.word}) — a kiválasztott marad`);
       currentRound.word = lockedWord.w;
     }
+    try{ fdRestoreFaded(); }catch(e){}
     result.word = currentRound.word;
     result.wrong = roundWrong.key === roundKey(currentRound) ? Object.assign({}, roundWrong.counts) : {};   // v4.14
     result.idx = currentRound.idx;   // v3.62: which drawing this result belongs to
@@ -10793,9 +11079,16 @@ try{
   }
   function renderScoreTable(tableId, rows){
     const top = rows.length ? rows[0].score : 0;
-    document.getElementById(tableId).innerHTML = rows.map(r=>
-      `<tr class="${r.score===top && top>0 ? 'leader':''}"><td>${nameDotHtml(r.id)}${escapeHtml(r.name)}</td><td>${r.score} pont</td></tr>`
-    ).join('');
+    let teamRows = '';
+    if(teamsOn()){
+      const ts = teamScores(), best = Math.max(ts[0], ts[1]);
+      teamRows = [0, 1].sort((a,b)=>ts[b]-ts[a]).map(t=>
+        `<tr class="team-row ${TEAM_INFO[t].cls}${ts[t] === best && best > 0 ? ' leader' : ''}"><td>${TEAM_INFO[t].emoji} ${TEAM_INFO[t].name} csapat</td><td>${ts[t]} pont</td></tr>`).join('');
+    }
+    document.getElementById(tableId).innerHTML = teamRows + rows.map(r=>{
+      const tm = teamOf(r.id);
+      return `<tr class="${r.score===top && top>0 && !teamRows ? 'leader':''}${tm >= 0 ? ' in-' + TEAM_INFO[tm].cls : ''}"><td>${tm >= 0 ? '<span class="team-dot" aria-hidden="true">' + TEAM_INFO[tm].emoji + '</span>' : ''}${nameDotHtml(r.id)}${escapeHtml(r.name)}</td><td>${r.score} pont</td></tr>`;
+    }).join('');
   }
   function renderScoreboardWatch(){ renderRosters(); }
 
@@ -11187,7 +11480,12 @@ try{
     showOnly(['screen-gameend']);
     const topScore = rows.length ? rows[0].score : 0;
     const winners = rows.filter(r=>r.score===topScore);
-    document.getElementById('gameend-winner').textContent = winners.length>1
+    let teamWin = -2;   // -2: no teams, -1: draw, 0/1: the winning team
+    if(teamsOn()){ const ts = teamScores(); teamWin = ts[0] === ts[1] ? -1 : (ts[0] > ts[1] ? 0 : 1); }
+    document.getElementById('gameend-winner').textContent = teamWin >= 0
+      ? `Győztes: ${TEAM_INFO[teamWin].emoji} ${TEAM_INFO[teamWin].name} csapat 🏆`
+      : teamWin === -1 ? 'Döntetlen a két csapat között 🏆'
+      : winners.length>1
       ? 'Döntetlen: '+winners.map(w=>w.name).join(' és ')+' 🏆'
       : 'Győztes: '+(winners[0]?winners[0].name:'—')+' 🏆';
     renderScoreTable('gameend-scores', rows);
@@ -11205,7 +11503,7 @@ try{
     sndFanfare();
     // v2.95: spread out over time instead of everything at once
     burstConfetti(90,-20); setTimeout(()=>burstConfetti(90,-20),900);
-    const iWon = winners.some(w=>w.id === selfId);
+    const iWon = teamWin >= 0 ? teamOf(selfId) === teamWin : winners.some(w=>w.id === selfId);
     fireworkShow(iWon ? 6 : 4, 450);
     if(iWon) setTimeout(()=>burstEmoji(['🏆','👑','⭐','🥇'], 10), 400);
   }
@@ -11369,6 +11667,7 @@ try{
   });
 
   function leaveRoomAndGoHome(){
+    if(practice){ stopPractice(); return; }
     try{ sessionStorage.removeItem(REJOIN_KEY); }catch(e){}   // v4.33: a deliberate leave (or a kick) is not offered back
     try{ flushPlayTime(); }catch(e){}
     if(isHost) withdrawMyRoom();
@@ -11464,6 +11763,7 @@ try{
     }
     warn.classList.add('hidden');
     sndWhoosh();
+    settings.teams = settings.teamMode ? dealTeams(ids, id=>meta.playerNames[id]) : {};
     const turnOrder = buildTurnOrder(ids);
     // Only the players who are still here carry over — anyone who left in the
     // meantime must not come back as a "ghost" player.
@@ -11609,6 +11909,7 @@ try{
   var settingsOnlyMenu = false;
   function openSettingsMenu(){
     settingsOnlyMenu = true;
+    { const nb = document.getElementById('menu-btn-practice-next'); if(nb) nb.classList.add('hidden'); }
     document.getElementById('btn-fd-giveup').classList.add('hidden');
     document.getElementById('menu-btn-leave').classList.add('hidden');
     updateMenuButtonsState();
@@ -11619,6 +11920,7 @@ try{
   document.getElementById('settings-fab').addEventListener('click', openSettingsMenu);
   function openIngameMenu(){
     settingsOnlyMenu = false;
+    { const nb = document.getElementById('menu-btn-practice-next'); if(nb) nb.classList.toggle('hidden', !practice); }
     document.getElementById('menu-btn-leave').classList.remove('hidden');
     const isDrawing = !document.getElementById('screen-fulldraw').classList.contains('hidden')
       && currentRound && currentRound.drawerId === selfId
@@ -12451,6 +12753,8 @@ try{
     const ch = activeText('choices-row')[0]; if(ch) parts.push(ch + ' szóból választ');
     const mp = document.querySelector('#maxplayers-row .pill.active');
     if(mp && mp.dataset.maxplayers !== '0') parts.push('max. ' + mp.textContent.trim());
+    { const tmode = document.querySelector('#teammode-row .pill.active'); if(tmode && tmode.dataset.teammode === 'on') parts.push('csapatmód'); }
+    { const dmode = document.querySelector('#drawmode-row .pill.active'); if(dmode && dmode.dataset.drawmode !== 'normal') parts.push(dmode.textContent.replace(/[^\p{L}\p{N} ]/gu, '').trim().toLowerCase()); }
     sum.textContent = parts.join(' · ');
   }
   // the pills are switched by the game's own code too (e.g. a rematch fills

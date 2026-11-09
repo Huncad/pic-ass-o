@@ -6,7 +6,7 @@
 //   GET                         -> { count }  (megerősített feliratkozók száma)
 //   POST { action:"subscribe", email }
 //   POST { action:"notify", code }   (nyilvános szoba nyílt — a játékszerver
-//        szobalistájából ellenőrizve, v4.11)
+//        szobalistájából ellenőrizve, v4.11; v4.36: push értesítés is megy)
 //   POST { action:"drain" } + x-picasso-internal -> a levélsor folytatása (v4.30)
 //   GET  ?confirm=TOKEN / ?unsub=TOKEN  -> HTML oldal egy gombbal
 //   POST ?confirm=TOKEN / ?unsub=TOKEN  -> elvégzi (a gomb, ill. a levelezők
@@ -30,6 +30,7 @@ import { getStore } from '@netlify/blobs';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { json, ipOf, makeLimiter, updateJSON } from '../lib/util.mjs';
+import { sendPushToAll, subId } from '../lib/push.mjs';
 
 const KEY = 'subs';
 const QUEUE_KEY = 'mailq';
@@ -313,8 +314,15 @@ ${btn(`${self}?confirm=${s.ct}`, '✅ Feliratkozás megerősítése')}
       return { value: d, result: { list: Object.values(d.subs).filter(s => s.status === 'ok').map(s => ({ to: s.email, ut: s.ut })) } };
     });
     if (res.skipped) return json({ ok: true, skipped: res.skipped });
-    if (!res.list.length) return json({ ok: true, queued: 0 });
     const joinUrl = `${site}/?join=${encodeURIComponent(code)}`;
+    // v4.36: push értesítés a feliratkozott eszközöknek (a szobát nyitó eszköz kivételével)
+    let push = { sent: 0 };
+    try {
+      const skip = String(body.skipPush || '').slice(0, 1000);
+      push = await sendPushToAll({ title: '🎨 Új szoba nyílt!', body: `${host} megnyitotta: ${name}. Koppints a csatlakozáshoz!`, url: joinUrl },
+        { skipId: skip ? subId(skip) : '', budgetMs: 5000 });
+    } catch (e) { push = { sent: 0, error: true }; }
+    if (!res.list.length) return json({ ok: true, queued: 0, push: push.sent });
     const at = Date.now();
     await updateJSON(store, QUEUE_KEY, raw => {
       const q = asObj(raw);
