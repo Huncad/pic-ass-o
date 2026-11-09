@@ -1,6 +1,6 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.34';
+const APP_VERSION = '4.35';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -58,71 +58,8 @@ const ROOM_NET = TrysteroMqtt ? 'mqtt' : 'nostr';
 window.__picassoBooted = true;
 const roomJoin = TrysteroMqtt ? TrysteroMqtt.joinRoom : joinRoom;
 
-// =====================================================================
-// "Add to Home Screen" support (single file, so no separate manifest.json
-// or icon files — both are generated in the browser and attached here,
-// as early as possible so the browser sees them before deciding whether
-// the page can be installed).
-// =====================================================================
-(function setupHomeScreenApp(){
-  try{
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 512;
-    const ctx = canvas.getContext('2d');
-    if(!ctx) return;
-    const r = 512 * 0.22;
-    ctx.fillStyle = '#16302A';
-    ctx.beginPath();
-    ctx.moveTo(r, 0);
-    ctx.arcTo(512, 0, 512, 512, r);
-    ctx.arcTo(512, 512, 0, 512, r);
-    ctx.arcTo(0, 512, 0, 0, r);
-    ctx.arcTo(0, 0, 512, 0, r);
-    ctx.closePath();
-    ctx.fill();
-    ctx.font = '300px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🎨', 256, 288);
-    const iconUrl = canvas.toDataURL('image/png');
-    canvas.width = canvas.height = 0;   // v3.13: free its memory (iOS)
-
-    const favicon = document.createElement('link');
-    favicon.rel = 'icon';
-    favicon.href = iconUrl;
-    document.head.appendChild(favicon);
-
-    const appleIcon = document.createElement('link');
-    appleIcon.rel = 'apple-touch-icon';
-    appleIcon.href = iconUrl;
-    document.head.appendChild(appleIcon);
-
-    const manifest = {
-      name: 'PIC-ASS-O — party rajzjáték',
-      short_name: 'PIC-ASS-O',
-      description: 'Böngészőben futó, regisztráció nélküli, többjátékos rajzoló-kitaláló party játék.',
-      start_url: location.pathname,
-      scope: location.pathname.replace(/[^/]*$/, ''),
-      display: 'standalone',
-      // Both orientations are fully supported (v2.41), so the manifest
-      // doesn't lock the installed app to just one.
-      orientation: 'any',
-      background_color: '#16302A',
-      theme_color: '#16302A',
-      lang: 'hu',
-      icons: [
-        { src: iconUrl, sizes: '512x512', type: 'image/png' },
-        { src: iconUrl, sizes: '192x192', type: 'image/png' }
-      ]
-    };
-    const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
-    const manifestLink = document.getElementById('app-manifest-link');
-    if(manifestLink) manifestLink.href = URL.createObjectURL(manifestBlob);
-  }catch(e){
-    // Best-effort only: a phone that can't build this still gets the game,
-    // just without a home-screen icon.
-  }
-})();
+// v4.35: the web-app manifest and the icons are static files now
+// (manifest.webmanifest, icons/) so the browser can offer installing the game.
 
 // A completely unique app identifier so this game's traffic doesn't mix with
 // other Trystero apps using the same free public relay network.
@@ -650,6 +587,55 @@ try{
     });
   }
   const askInfo = (text)=>askConfirm(text, { ok:'Rendben', cancel:null });
+
+  // v4.35: "Telepítés" tile on the home screen — installs the game as a web app.
+  // Chrome/Edge/Samsung give a real install prompt (caught early in watchdog.js);
+  // elsewhere (iPhone/iPad Safari, Firefox) the button explains the few taps needed.
+  (function setupInstallButton(){
+    const btn = document.getElementById('btn-install-app');
+    if(!btn) return;
+    const standalone = ()=> navigator.standalone === true || !!(window.matchMedia && (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: minimal-ui)').matches));
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(ua);
+    const isFirefox = /Firefox|FxiOS/i.test(ua);
+    const isMacSafari = !isIOS && /Macintosh/.test(ua) && /Safari/.test(ua) && !/Chrome|Chromium|Edg|OPR/.test(ua);
+    let installed = false;
+    try{ installed = sessionStorage.getItem('picasso-installed') === '1'; }catch(e){}
+    const refresh = ()=>{
+      // nothing to offer inside the installed app, or on a desktop browser that cannot install
+      const can = !!window.__pcInstallPrompt || isIOS || isAndroid || isMacSafari;
+      btn.classList.toggle('hidden', standalone() || installed || !can);
+    };
+    function manualHelp(){
+      if(typeof IS_IN_APP_BROWSER !== 'undefined' && IS_IN_APP_BROWSER)
+        return `Ebből a beépített böngészőből nem lehet telepíteni. Nyisd meg a játékot ${isIOS ? 'Safariban' : 'Chrome-ban'}, és ott koppints újra a „Telepítés” gombra.`;
+      if(isIOS){
+        if(/CriOS|FxiOS|EdgiOS/.test(ua)) return '📲 Telepítés iPhone-on / iPaden:\n\n1. Koppints a Megosztás ikonra (négyzet felfelé mutató nyíllal).\n2. Válaszd: „Főképernyőhöz adás”.\n3. Koppints a „Hozzáadás” gombra.\n\nHa nem találod ezt a menüpontot, nyisd meg a játékot Safariban.';
+        return '📲 Telepítés iPhone-on / iPaden:\n\n1. Koppints lent a Megosztás ikonra (négyzet felfelé mutató nyíllal).\n2. Görgess le, és válaszd: „Főképernyőhöz adás”.\n3. Koppints a „Hozzáadás” gombra.\n\nEzután a játék ikonja megjelenik a kezdőképernyőn.';
+      }
+      if(isMacSafari) return '💻 Telepítés Macen (Safari):\n\nFájl menü → „Hozzáadás a Dockhoz”.';
+      if(isAndroid && isFirefox) return '📲 Telepítés Firefoxban:\n\n1. Koppints a ⋮ menüre.\n2. Válaszd: „Hozzáadás a kezdőképernyőhöz”.';
+      if(isAndroid) return '📲 Telepítés Androidon:\n\n1. Koppints a böngésző ⋮ menüjére (jobb felső sarok).\n2. Válaszd: „Hozzáadás a kezdőképernyőhöz” vagy „Alkalmazás telepítése”.\n\nHa a játék már telepítve van, az alkalmazások között találod.';
+      return '💻 Ebben a böngészőben a címsor jobb szélén lévő telepítés ikonnal, vagy a böngésző menüjéből („Alkalmazás telepítése”) teheted fel a játékot. Chrome-ban és Edge-ben működik.';
+    }
+    btn.addEventListener('click', async ()=>{
+      try{ sndClick(); }catch(e){}
+      const ev = window.__pcInstallPrompt;
+      if(!ev){ await askInfo(manualHelp()); return; }
+      try{
+        ev.prompt();
+        const choice = await ev.userChoice;
+        window.__pcInstallPrompt = null;      // one prompt per event
+        if(choice && choice.outcome === 'accepted'){ installed = true; try{ sessionStorage.setItem('picasso-installed', '1'); }catch(e){} }
+      }catch(e){ window.__pcInstallPrompt = null; await askInfo(manualHelp()); }
+      refresh();
+    });
+    window.addEventListener('pc-install-ready', refresh);
+    window.addEventListener('appinstalled', ()=>{ installed = true; window.__pcInstallPrompt = null; try{ sessionStorage.setItem('picasso-installed', '1'); }catch(e){} refresh(); });
+    try{ matchMedia('(display-mode: standalone)').addEventListener('change', refresh); }catch(e){}
+    refresh();
+  })();
 
   // the sender's own friendly note when a limit is reached
   let lastSlowNoteAt = 0;
@@ -11183,8 +11169,9 @@ try{
     ov.addEventListener('click', e=>{ if(e.target === ov) close(); });
     document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && !ov.classList.contains('hidden')) close(); });
     document.getElementById('privacy-clear-btn').addEventListener('click', async ()=>{
-      if(!(await askConfirm('Törlöd a becenevedet, a beállításaidat, a statisztikádat és a kapcsolódási naplót erről az eszközről?', { ok:'Törlöm' }))) return;
+      if(!(await askConfirm('Törlöd a becenevedet, a beállításaidat, a statisztikádat, a saját szavaidat és a kapcsolódási naplót erről az eszközről?', { ok:'Törlöm' }))) return;
       try{ Object.keys(localStorage).filter(k=>k.startsWith('picasso-')).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+      try{ Object.keys(sessionStorage).filter(k=>k.startsWith('picasso-')).forEach(k=>sessionStorage.removeItem(k)); }catch(e){}
       connLog = [];
       renderHomeStats();
       document.getElementById('privacy-status').textContent = 'Kész. Újratöltés után tiszta lappal indul a játék.';

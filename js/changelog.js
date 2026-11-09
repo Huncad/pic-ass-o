@@ -2,6 +2,12 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.35', changes:[
+    'Új „Telepítés” gomb a főmenüben: a játék egy koppintással feltehető a kezdőképernyőre / az asztalra alkalmazásként (Chrome, Edge, Samsung böngésző). iPhone-on, iPaden és Firefoxban a gomb megmutatja a szükséges pár lépést.',
+    'Saját, rendes alkalmazásikon minden méretben (Androidon alkalmazkodó ikon).',
+    'Telefonon a játék végi szavazásnál a lebegő gombok már nem takarják ki a szöveget; gépen a díszítő csillag nem lóg bele a szlogenbe.',
+    'Az adatvédelmi tájékoztató pontosabban felsorolja, mi marad az eszközödön; a „Helyi adataim törlése” a munkamenet adatait is törli.'
+  ]},
   { version:'4.34', changes:[
     'Telefonon nagyobbra állított szövegméretnél a „Szoba létrehozása” gomb felirata már nem lóg ki: szükség esetén két sorba törik, és a gomb megnő.',
     'Az avatarok és a tipp-sáv bezáró gombja is alkalmazkodik a nagyobb szövegmérethez.'

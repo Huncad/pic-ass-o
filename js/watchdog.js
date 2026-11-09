@@ -30,3 +30,11 @@
 document.addEventListener('submit', function(e){
   if(e.target && e.target.hasAttribute && e.target.hasAttribute('data-nosubmit')) e.preventDefault();
 }, true);
+
+// v4.35: a böngésző telepítési ajánlatát már itt elkapjuk (a játék motorja
+// később tölt be, addigra az esemény elveszne); a főmenü „Telepítés" gombja használja.
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault();
+  window.__pcInstallPrompt = e;
+  try{ window.dispatchEvent(new Event('pc-install-ready')); }catch(err){}
+});

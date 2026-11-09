@@ -21,7 +21,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="PIC-ASS-O">
-<link rel="manifest" id="app-manifest-link">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PIC-ASS-O">
 <!-- v4.30: a stíluslap és a játék külön fájlban (gyorsítótárazható); a leggyakoribb betűk előre töltődnek -->
 <link rel="preload" href="fonts/nunito-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/nunito-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -184,6 +188,7 @@
       <button class="home-tile" id="btn-open-tutorial" type="button"><span class="tile-ico" style="background:var(--blue-fill);">?</span><span>Súgó</span><span class="tile-chev">›</span></button>
       <button class="home-tile" id="btn-open-feedback" type="button"><span class="tile-ico" style="background:var(--purple);">…</span><span>Visszajelzés</span><span class="tile-chev">›</span></button>
       <button class="home-tile" id="btn-open-privacy" type="button"><span class="tile-ico tile-emoji">🔒</span><span>Adatvédelem</span><span class="tile-chev">›</span></button>
+      <button class="home-tile hidden" id="btn-install-app" type="button"><span class="tile-ico tile-install" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v10M7.5 10.5 12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Telepítés</span><span class="tile-chev">›</span></button>
     </div>
     <div class="home-foot">
       <p class="home-stats hidden" id="home-stats"></p>
@@ -550,7 +555,7 @@
       <h2 id="privacy-title">🔒 Adatvédelem</h2>
       <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
     </div>
-    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. november 4-től · v4.33</p>
+    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. november 9-től · v4.35</p>
     <h3 class="pv-h">Ki kezeli az adatokat?</h3>
     <p><b>Adatkezelő:</b> Ádám, magánszemély, a PIC-ASS-O hobbiprojekt fejlesztője és üzemeltetője.<br>
     <b>Kapcsolat:</b> <a href="mailto:picasso.ertesito@gmail.com" style="color:var(--blue);">picasso.ertesito@gmail.com</a> — minden adatvédelmi kérdéssel és kéréssel ide írhatsz.</p>
@@ -568,7 +573,7 @@
       <li><b>Szabálytalan játék jelzése:</b> ha egy játékos eszközéről olyan üzenet érkezik, amit a játék módosítatlan változata nem küld (például üzenetáradat, más nevében küldött üzenet, a megfejtés a chatben), a többi eszköz ezt jelzi az üzemeltetőnek: a becenév, a véletlen eszközazonosító, a szoba, a gyanú fajtája és a jelző beceneve kerül a Netlify-on tárolt naplóba, <b>60 napig</b>. Az IP-címet nem tároljuk, csak egy lenyomatát. <i>Jogalap: jogos érdek a játék rendjének védelméhez (6. cikk (1) f).</i></li>
       <li><b>Visszajelzés-űrlap:</b> amit beírsz (a név és az elérhetőség önkéntes), a Netlify Forms tárolja; a válasz után, de legkésőbb 1 év múlva töröljük. <i>Jogalap: hozzájárulás (6. cikk (1) a).</i></li>
       <li><b>„Mi ez?” gomb:</b> ha megnyomod, a keresett szót a játék elküldi a magyar Wikipédiának (Wikimedia Foundation), hogy leírást és képet kérjen róla; ehhez a Wikipédia látja az IP-címedet. Csak a gomb megnyomásakor történik. <i>Jogalap: 6. cikk (1) b.</i></li>
-      <li><b>Az eszközödön marad:</b> a böngésződ helyi tárhelyén két fajta adat van. <b>A működéshez szükséges:</b> beceneved, beállításaid (például hang, téma) és egy kapcsolódási hibanapló (24 óra után törlődik). <b>Kényelmi funkció:</b> a saját statisztikád (játékok, győzelmek, pontok). Egyik sem kerül máshová, kivéve ha a naplót te magad kimásolod és elküldöd, és mindet bármikor törölheted az alábbi gombbal.</li>
+      <li><b>Az eszközödön marad:</b> a böngésződ helyi tárhelyén két fajta adat van. <b>A működéshez szükséges:</b> beceneved, avatarod, beállításaid (például hang, téma), egy véletlen eszközazonosító (a kitiltáshoz, lásd fent), az utolsó szobád kódja (hogy frissítés után visszaléphess), a saját szavaid és a nemrég használt szavak, valamint egy kapcsolódási hibanapló (24 óra után törlődik). <b>Kényelmi funkció:</b> a saját statisztikád (játékok, győzelmek, pontok). Egyik sem kerül máshová, kivéve ha a naplót te magad kimásolod és elküldöd, és mindet bármikor törölheted az alábbi gombbal.</li>
       <li><b>Mikrofon:</b> csak akkor kér hozzáférést, ha hangüzenetet veszel fel, vagy bekapcsolod a hangos tippelést. A hangos tippelésnél a beszédet a böngésződ saját beszédfelismerője alakítja szöveggé (Chrome-ban a Google, Safariban az Apple szolgáltatása); a játék csak a felismert szavakat kapja meg, hangot nem rögzít és nem tárol.</li>
     </ul>
 
@@ -589,7 +594,7 @@
 
     <h3 class="pv-h">A jogaid</h3>
     <p>Kérheted, hogy megmondjuk, milyen adatot tárolunk rólad (hozzáférés), kijavítsuk vagy töröljük, korlátozzuk a kezelését, és tiltakozhatsz a jogos érdeken alapuló kezelés ellen. A hozzájárulásodat bármikor visszavonhatod. Írj a fenti címre — legkésőbb 30 napon belül válaszolunk. Ha úgy érzed, megsértettük a jogaidat, panaszt tehetsz a <b>Nemzeti Adatvédelmi és Információszabadság Hatóságnál</b> (NAIH, <a href="https://naih.hu" target="_blank" rel="noopener" style="color:var(--blue);">naih.hu</a>), vagy bírósághoz fordulhatsz.</p>
-    <p>Automatizált döntéshozatal, profilalkotás nincs.</p>
+    <p>Automatizált döntéshozatal, profilalkotás nincs. A játék telepíthető webalkalmazásként (a főmenü „Telepítés” gombjával): ez csak egy ikont tesz a kezdőképernyődre, ugyanazt az oldalt nyitja meg, és nem jár további adatkezeléssel vagy engedéllyel.</p>
     <p>Mindent törölhetsz a böngésző „webhelyadatok törlése” funkciójával, vagy az alábbi gombbal.</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px;">
       <button class="secondary small" id="privacy-clear-btn">🧹 Helyi adataim törlése</button>

@@ -2563,3 +2563,14 @@ body.booting #screen-home .create-cta, body.booting #screen-home .home-tile, bod
 }
 /* az avatar-emoji a csempe méretéhez igazodik (nagy rendszer-betűméretnél se lógjon ki) */
 @media (max-width:640px){ .home-av{ font-size:clamp(1rem, 6.2vw, 1.5rem); line-height:1; overflow:hidden; } }
+/* ===== v4.35: „Telepítés" csempe a főmenüben ===== */
+.tile-install{ background:var(--green-fill, #2E9E5B); }
+.tile-install svg{ width:62%; height:62%; }
+@media (min-width:641px){
+  /* négy csempe: 2×2-es rács, hogy a feliratok kiférjenek */
+  .home-tiles:has(#btn-install-app:not(.hidden)){ grid-template-columns:repeat(2, minmax(0,1fr)); }
+}
+/* a díszítő csillag ne lógjon a szlogenbe */
+.deco-star{ left:1.2%; width:46px; }
+/* telefonon a játék végén maradjon hely a lebegő gombok (reakció, chat) alatt */
+@media (max-width:700px){ #screen-gameend{ padding-bottom:104px; } }

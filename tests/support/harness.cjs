@@ -9,7 +9,7 @@ const path = require('path');
 
 const ROOT = process.env.PICASSO_ROOT || path.join(__dirname, '..', '..');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.txt': 'text/plain; charset=utf-8',
-  '.woff2': 'font/woff2', '.png': 'image/png', '.json': 'application/json' };
+  '.woff2': 'font/woff2', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json' };
 
 // v4.33: a _headers fájl CSP-je a tesztekben is érvényes (a helyi játékszerver
 // címét hozzáadjuk), így egy tiltott forrás a tesztekben is kiderül
