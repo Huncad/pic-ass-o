@@ -2594,3 +2594,23 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
 .sub-or{ text-align:center; margin:12px 0 10px; font-size:.84rem; color:var(--chalk-dim); }
 /* a csapatpontszám a görgethető játékossor elején mindig látszik */
 .team-score{ position:sticky; left:0; z-index:2; background:var(--panel); flex-shrink:0; }
+/* ===== v4.38: az avatar mindig négyzet, az emoji a csempéhez igazodik =====
+   Szűk panelben (12 oszlop, ~33 px-es csempék) az emoji + keret nagyobb volt
+   a csempénél, és a gomb megnyúlt (Windowson a Segoe emoji miatt még jobban). */
+.home-avatars{ container-type:inline-size; }
+.home-av{ overflow:hidden; line-height:1; min-height:0; min-width:0; }
+@supports (width:1cqi){
+  /* csempeszélesség ≈ (konténer − hézagok) / oszlopszám; az emoji ennek ~58%-a */
+  .home-avatars .home-av{ font-size:min(1.7rem, calc((100cqi - 11 * 8px) / 12 * .58)); }
+  @media (max-width:640px){ .home-avatars .home-av{ font-size:min(1.5rem, calc((100cqi - 7 * 6px) / 8 * .58)); } }
+  @media (max-width:420px){ .home-avatars .home-av{ font-size:min(1.6rem, calc((100cqi - 5 * 8px) / 6 * .58)); } }
+}
+/* a csempék felirata szűk panelben se lógjon ki */
+.home-tiles{ container-type:inline-size; }
+.home-tile{ min-width:0; overflow:hidden; }
+.home-tile > span:nth-child(2){ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+@container (max-width:560px){
+  .home-tile{ padding:8px 10px; gap:8px; font-size:.86rem; }
+  .home-tile .tile-ico{ width:28px; height:28px; font-size:.95rem; }
+  .home-tile .tile-emoji{ font-size:1.1rem; }
+}

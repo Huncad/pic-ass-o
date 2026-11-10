@@ -2,6 +2,10 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.38', changes:[
+    'Bizonyos ablakméreteknél (főleg Windowson) az avatarok megnyúlva jelentek meg — most mindig négyzetesek, az emoji a csempe méretéhez igazodik.',
+    'A főmenü csempéinek felirata (pl. „Adatvédelem”) szűk panelben sem lóg ki.'
+  ]},
   { version:'4.37', changes:[
     'A játék közbeni menüből kikerült a „Kapcsolati napló másolása” gomb — már nincs rá szükség.'
   ]},
