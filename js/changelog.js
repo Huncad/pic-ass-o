@@ -2,6 +2,9 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.37', changes:[
+    'A játék közbeni menüből kikerült a „Kapcsolati napló másolása” gomb — már nincs rá szükség.'
+  ]},
   { version:'4.36', changes:[
     'Új: push értesítés új szobákról — a főmenü „Értesítés új szobákról” dobozában egy koppintással bekapcsolható, e-mail cím nélkül. Akkor is szól, ha a játék nincs megnyitva (iPhone-on a telepített alkalmazásban működik).',
     'Új: csapatmód — a szobanyitó bekapcsolhatja, a játék két csapatba (🔴 Piros / 🔵 Kék) osztja a játékosokat, a csapatok felváltva rajzolnak, és a jobb csapat nyer.',

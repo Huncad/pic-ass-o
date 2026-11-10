@@ -1,6 +1,6 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.36';
+const APP_VERSION = '4.37';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -4473,7 +4473,7 @@ try{
     typingPeers.delete(peerId);
     renderTypingIndicator();
     const name = meta.playerNames[peerId] || 'Valaki';
-    addSystemChatMessage(`🔌 ${name} kilépett a játékból, vagy megszakadt a kapcsolata. (K06 — a részletek: ☰ Menü → 📋 Kapcsolati napló)`);
+    addSystemChatMessage(`🔌 ${name} kilépett a játékból, vagy megszakadt a kapcsolata. (K06)`);
     renderRosters();
 
     // The game is already over (final scoreboard, or the rematch settings
@@ -6860,7 +6860,7 @@ try{
       if(o || roomCode || lastJoinKnockKey) diagnose(me, o && o.d, o && diagPeerName(o.id)).forEach(l=>lines.push('• ' + l));
       else diagnose(me, { v: me.v, mqtt:[1,1], nat:{ relay:1, srflx:1 } }, '').forEach(l=>lines.push('• ' + l));
     }catch(e){}
-    lines.push('— Kapcsolati napló (utolsó 25 esemény; a teljes: ☰ Menü → 📋 Kapcsolati napló) —');
+    lines.push('— Kapcsolati napló (utolsó 25 esemény) —');
     connLog.slice(-25).forEach(l=>lines.push(l));
     const report = lines.join('\n');
     // iPhone won't let you select text in an alert, so the report is also
@@ -11941,37 +11941,6 @@ try{
     if(e.target.id === 'ingame-menu-overlay') closeIngameMenu();
   });
   document.getElementById('btn-fd-giveup').addEventListener('click', closeIngameMenu);
-  // v3.03: the connection log, ready to paste into a message
-  function buildConnLogReport(){
-    let peers = {};
-    try{ peers = (room && room.getPeers && room.getPeers()) || {}; }catch(e){}
-    const who = id=>`${(meta && meta.playerNames[id]) || lobbyPlayers[id] || '?'} (${String(id).slice(0,5)})`;
-    const expected = meta ? [...activePlayerIds] : Object.keys(lobbyPlayers);
-    const lines = [
-      `PIC-ASS-O v${APP_VERSION} — KAPCSOLATI NAPLÓ`,
-      `Készült: ${new Date().toLocaleString('hu-HU')}`,
-      `Én: ${who(selfId)}${isHost ? ' · szobanyitó' : ''} · szoba: ${roomCode || '—'} · ${meta ? 'játék folyik' : 'nincs játék'}`,
-      `Eszköz: ${navigator.userAgent}`,
-      `Most: ${expected.filter(id=>id !== selfId).map(id=>`${who(id)} — közvetlen: ${id in peers ? 'VAN' : 'nincs'}, MQTT: ${peerAliveOnMqtt(id) ? 'él' : 'nem hallom'}`).join(' | ') || 'nincs más játékos'}`,
-      `MQTT-brókerek: ${dirqOpenCount()}/${dirqClients.length} · TURN: ${turnIceServers.length ? 'van' : 'nincs'}`,
-      '— Események (legújabb alul) —',
-      ...connLog.slice(-150)
-    ];
-    return lines.join('\n');
-  }
-  document.getElementById('menu-btn-connlog').addEventListener('click', async ()=>{
-    sndClick();
-    const report = buildConnLogReport();
-    let copied = false;
-    try{ if(navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(report); copied = true; } }catch(e){}
-    if(copied){
-      const b = document.getElementById('menu-btn-connlog');
-      const t0 = b.textContent; b.textContent = '✅ Kimásolva — illeszd be egy üzenetbe';
-      setTimeout(()=>{ b.textContent = t0; }, 2500);
-    } else {
-      alert(report);   // e.g. an iPhone without clipboard permission: select it from here
-    }
-  });
   document.getElementById('menu-btn-darkmode').addEventListener('click', ()=>{
     sndClick();
     toggleDarkMode();
