@@ -7295,7 +7295,7 @@ const SRV = (function(){
         !processedResultRounds.has(roundKey(currentRound)) && fdLastModAt !== null;   // v3.35: nothing drawn yet = no guessing
       if(!iAmReferee || !meta || !meta.playerNames[peerId]) return;
       if(!isPlainObject(data)) return;
-      if(tooOften(peerId, 'guess', 600)) return;           // no guess flooding (audit: 250 -> 600 ms)
+      if(tooOften(peerId, 'guess', 250)) return;           // no guess flooding
       let text = cleanText(data.text, 80);
       if(!text.trim()) return;
       const multi = settings.guessMode === 'all';
