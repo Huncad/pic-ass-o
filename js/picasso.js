@@ -285,7 +285,8 @@ const SRV = (function(){
           unacked.forEach(x=>{ if((srvV2 || !x._sent) && raw(x)) x._sent = true; });
           if(!srvV2){ const left = unacked.filter(x=>!x._sent); unacked.length = 0; unacked.push(...left); }   // an older server does not confirm
           return;
-        case 'joined':  if(cur && m.room === cur.rid) cur._sync(m.peers || []); return;
+        case 'joined':  if(cur && m.room === cur.rid){ cur.owner = typeof m.owner === 'string' ? m.owner : null; cur._sync(m.peers || []); } return;
+        case 'owner':   if(cur) cur.owner = typeof m.id === 'string' ? m.id : null; return;
         case 'pjoin':   if(cur) cur._join(m.id); return;
         case 'pleave':  if(cur) cur._leave(m.id); return;
         case 'msg':     if(cur) cur._msg(m.a, m.d, m.f); return;
@@ -420,6 +421,13 @@ try{
   let banToken = '', banHostKey = '';
   const peerDev = {};                       // host: peerId -> device id the guest sent
   const verifiedPeers = new Set(), pendingVerify = new Set(), noTokenSince = new Map();
+  // audit: akit a szobanyitó kirúgott / kiszavaztak / ki van tiltva, annak a további üzeneteit nem fogadjuk,
+  // és ha a szoba a saját szerveren fut, a szerver is kiteszi (a "kick" üzenet önmagában csak kérés)
+  const kickedPeers = new Set();
+  function enforceKick(peerId){
+    kickedPeers.add(peerId);
+    try{ if(room && typeof room.serverKick === 'function') room.serverKick(peerId); }catch(e){}
+  }
   // guest: no pass yet (the check failed while joining) — fetch one now and say hello again with it
   let banRetryBusy = false;
   function ensureBanToken(){
@@ -467,6 +475,7 @@ try{
       }
       if(res && res.ok === false){
         try{ kickAction.send({ reason: res.reason === 'banned' ? 'banned' : 'update' }, { target: peerId }); }catch(e){}
+        if(res.reason === 'banned') enforceKick(peerId);
         clog('K19', `belépés megtagadva (${res.reason}): ${String(peerId).slice(0,5)}`);
         return;
       }
@@ -3939,6 +3948,7 @@ try{
     };
     helloAction.onMessage = (data, {peerId})=>{
       if(!isPlainObject(data)) data = {};
+      if(isHost && kickedPeers.has(peerId)) return;        // audit: a kirúgott nem jöhet vissza egy újabb hello-val
       if(isHost && peerId !== selfId && !verifiedPeers.has(peerId)){ gateHello(data, peerId); return; }   // v3.85: ban check first
       if(data.spectator === true && !data.isHost){ handleSpectatorHello(data, peerId); return; }
       if(spectators[peerId]){ delete spectators[peerId]; }
@@ -3987,7 +3997,9 @@ try{
       // can no longer take those rights over.
       // (v2.55: also from a new owner once the previous one is really gone)
       const hostClaimAccepted = !!data.isHost && !isHost &&
-        (hostPeerId === null || hostPeerId === peerId || (!lobbyPlayers[hostPeerId] && !activePlayerIds.has(hostPeerId)));
+        (hostPeerId === null || hostPeerId === peerId || (!lobbyPlayers[hostPeerId] && !activePlayerIds.has(hostPeerId))) &&
+        // audit: a saját szerveren futó szobában a szerver tudja, ki nyitotta a szobát — más hiába állítja magáról
+        (!room || typeof room.serverOwner !== 'function' || !room.serverOwner() || room.serverOwner() === peerId);
       if(hostClaimAccepted){
         hostPeerId = peerId;
         setTimeout(sendMyWords, 400);   // v3.25: my own words to the (new) host
@@ -4195,7 +4207,7 @@ try{
       // v4.10: a spoken guess comes with the speech recogniser's other
       // readings of the same word ("alts"); if one of them is right, it counts
       if(verdict !== 'correct' && Array.isArray(data.alts)){
-        for(const a of data.alts.slice(0, 4)){
+        for(const a of data.alts.slice(0, 2)){   // audit: 4 helyett legfeljebb 2 másik olvasat
           const at = cleanText(a, 80);
           if(at.trim() && guessVerdict(at, currentRound.word) === 'correct'){ text = at; verdict = 'correct'; break; }
         }
@@ -4315,6 +4327,7 @@ try{
       if(type === 'correct'){
         const pid = cleanPeerId(data.correctPlayerId);
         if(!meta || !meta.playerNames[pid]) return;        // a winner nobody knows
+        if(pid === peerId) return;                         // audit: a rajzoló nem lehet a saját körének kitalálója
         clean.correctPlayerId = pid;
         clean.correctPlayerName = displayNameFor(pid, cleanText(data.correctPlayerName, 16));
         // v2.72: the points are NOT taken from the message — every device
@@ -4432,6 +4445,7 @@ try{
     if(isHost && votes >= need && target !== selfId){
       votedOutIds.add(target);
       try{ kickAction.send({ reason:'voted' }, { target }); }catch(e){}
+      enforceKick(target);
       reportKick(target);
       const name = roomNameOf(target);
       delete voteKicks[target];
@@ -5993,6 +6007,9 @@ try{
       getPeers(){ const o = {}; r.members.forEach(id=>{ o[id] = { server:true }; }); return o; },
       fallbackPeerCount(){ return 0; },
       viaServer: true,
+      // audit: a szerver szerinti szobanyitó (null, ha nem ismert vagy már nincs a szobában)
+      serverOwner(){ return r.owner && (r.owner === selfId || r.members.has(r.owner)) ? r.owner : null; },
+      serverKick(id){ if(r.rid && typeof id === 'string') SRV.send({ t:'kick', id }); },
       // v4.12: resolves once the server has been asked to put us in the room —
       // the room list announcement must come AFTER that (the server checks it)
       whenJoined(){ return r.ready.then(()=>{}, ()=>{}); },
@@ -8276,6 +8293,7 @@ try{
         if(!(await askConfirm(`Biztosan kirúgod ${name} játékost a szobából?`, { ok:'Kirúgom' }))) return;
         sndClick();
         kickAction.send({ reason:'kicked' }, { target:peerId });
+        enforceKick(peerId);
         reportKick(peerId);
         delete lobbyPlayers[peerId];
         renderLobbyPlayers();
@@ -8290,6 +8308,7 @@ try{
         if(!(await askConfirm(`Biztosan eltávolítod ${nm} nézőt a szobából?`, { ok:'Eltávolítom' }))) return;
         sndClick();
         kickAction.send({ reason:'kicked' }, { target:pid });
+        enforceKick(pid);
         reportKick(pid);
         delete spectators[pid];
         renderLobbyPlayers();
@@ -11675,7 +11694,7 @@ try{
     // invalidated in one go (delayed handoffs, a pending game-end screen, a
     // recorder that is still finishing, re-sends).
     roomGeneration++;
-    verifiedPeers.clear(); pendingVerify.clear(); noTokenSince.clear(); banHostKey = ''; banToken = ''; localKickedDevs.clear();
+    verifiedPeers.clear(); pendingVerify.clear(); noTokenSince.clear(); kickedPeers.clear(); banHostKey = ''; banToken = ''; localKickedDevs.clear();
     for(const k of Object.keys(peerDev)) delete peerDev[k];
     // Tell the others we're leaving on purpose so they update right away
     // (otherwise they'd only notice after the disconnect grace period).
