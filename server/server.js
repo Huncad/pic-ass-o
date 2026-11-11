@@ -56,6 +56,8 @@ const FANOUT_BURST = 24 * 1024 * 1024;
 const MAX_WS_BUFFER = 8 * 1024 * 1024;           // ha egy lassú kliens kimenő puffere ennél nagyobb, várunk
 const MAX_CONN_PER_IP = 40;                      // egyszerre ennyi kapcsolat egy IP-ről (egy család bőven elfér)
 const MAX_RING_BYTES = 16 * 1024 * 1024; // játékosonként ennyi megőrzött üzenet fér el
+const MAX_RING_TOTAL = 96 * 1024 * 1024; // audit: az összes megőrzött üzenet együtt (a konténer 512 MB)
+const KICK_IP_BLOCK_MS = 10 * 60_000;    // audit: kirúgás után ennyi ideig az IP sem léphet vissza abba a szobába
 const HEARTBEAT_MS = 5_000;          // ilyen sűrűn nézzük, él-e a kapcsolat (régen 20 mp volt)
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -115,17 +117,23 @@ function sendRaw(peer, obj){
     if(peer.ws && peer.ws.readyState === 1 && peer.ws.bufferedAmount < MAX_WS_BUFFER){ peer.ws.send(str); rec.sent = true; }
     if(rec.sent && !peer.v2) return;        // régi böngésző: nem nyugtáz, nem tartjuk meg
     rec.bytes = Buffer.byteLength(str, 'utf8');
-    peer.ring.push(rec); peer.ringBytes = (peer.ringBytes || 0) + rec.bytes;
+    peer.ring.push(rec); peer.ringBytes = (peer.ringBytes || 0) + rec.bytes; ringTotal += rec.bytes;
     while(peer.ring.length > MAX_BUFFERED || (peer.ringBytes > MAX_RING_BYTES && peer.ring.length > 1)){
-      peer.ringBytes -= peer.ring.shift().bytes || 0;
+      ringDrop(peer);
     }
+    // audit: közös plafon — ha betelt, ennek a játékosnak a már kiküldött, de nem nyugtázott üzeneteit engedjük el
+    while(ringTotal > MAX_RING_TOTAL && peer.ring.length && peer.ring[0].sent) ringDrop(peer);
+    if(ringTotal > MAX_RING_TOTAL) ringClear(peer);
   } else if(peer.ws && peer.ws.readyState === 1 && peer.ws.bufferedAmount < MAX_WS_BUFFER){
     peer.ws.send(JSON.stringify(obj));
   }
 }
+let ringTotal = 0;
+function ringDrop(peer){ const b = peer.ring.shift().bytes || 0; peer.ringBytes -= b; ringTotal -= b; }
+function ringClear(peer){ ringTotal -= peer.ringBytes || 0; peer.ring = []; peer.ringBytes = 0; }
 function ackRing(peer, r){
   if(typeof r !== 'number' || !Number.isFinite(r)) return;
-  while(peer.ring.length && peer.ring[0].q <= r) peer.ringBytes -= peer.ring.shift().bytes || 0;
+  while(peer.ring.length && peer.ring[0].q <= r) ringDrop(peer);
 }
 
 function roomMembers(roomId){ return rooms.get(roomId) || new Set(); }
@@ -134,7 +142,7 @@ function leaveRoom(peer, why){
   const roomId = peer.room;
   if(!roomId) return;
   peer.room = null;
-  peer.ring = []; peer.ringBytes = 0;
+  ringClear(peer);
   directory.forEach((e, k) => { if(e.room === roomId && e.from === peer.id){ directory.delete(k); broadcastDir({ code: e.d.code, id: e.d.id, removed: true, srv: 1 }, peer.id); } });
   const set = rooms.get(roomId);
   if(set){
@@ -195,6 +203,7 @@ async function handleDir(peer, d){
   if(info.owner !== peer.id){
     if(roomMembers(roomId).has(info.owner)) return;
     info.owner = peer.id;
+    roomMembers(roomId).forEach(id => { const p = peers.get(id); if(p) sendRaw(p, { t:'owner', id: peer.id }); });
   }
   if(code){
     const rid = await ridForCode(code);
@@ -549,6 +558,11 @@ wss.on('connection', (ws, req) => {
         if(!isStr(m.room, 128)) return;
         if(peer.room === m.room) return;
         if(peer.room) leaveRoom(peer, 'új szoba');
+        {
+          // audit: akit a szobanyitó kirúgott, az (és rövid ideig az IP-je) nem léphet vissza
+          const inf = roomInfo.get(m.room);
+          if(inf && inf.banned && (inf.banned.has(peer.id) || (inf.ipBlock.get(peer.ip) || 0) > Date.now())){ ws.send(JSON.stringify({ t:'error', e:'kicked' })); return; }
+        }
         let set = rooms.get(m.room);
         if(!set){
           if(rooms.size >= MAX_ROOMS){ ws.send(JSON.stringify({ t:'error', e:'full' })); return; }
@@ -559,9 +573,9 @@ wss.on('connection', (ws, req) => {
         set.add(peer.id);
         peer.room = m.room;
         let info = roomInfo.get(m.room);
-        if(!info){ info = { createdAt: Date.now(), ever: new Set(), ips: new Set(), owner: peer.id }; roomInfo.set(m.room, info); }
+        if(!info){ info = { createdAt: Date.now(), ever: new Set(), ips: new Set(), owner: peer.id, banned: new Set(), ipBlock: new Map() }; roomInfo.set(m.room, info); }
         info.ever.add(peer.id); if(info.ips.size < 50) info.ips.add(peer.ip);
-        ws.send(JSON.stringify({ t:'joined', room: m.room, peers: others }));
+        ws.send(JSON.stringify({ t:'joined', room: m.room, peers: others, owner: info.owner }));
         others.forEach(id => { const p = peers.get(id); if(p) sendRaw(p, { t:'pjoin', id: peer.id }); });
         log('belépés', peer.id.slice(0,6), 'szoba', m.room.slice(0,8), 'létszám', set.size);
         return;
@@ -569,6 +583,18 @@ wss.on('connection', (ws, req) => {
       case 'leave':
         leaveRoom(peer, 'kilépett');
         return;
+      case 'kick': {
+        // audit: csak a szoba megnyitója tehet ki valakit; a szerver tényleg kiteszi és nem engedi vissza
+        const info = peer.room && roomInfo.get(peer.room);
+        if(!info || info.owner !== peer.id || !isStr(m.id, 64) || m.id === peer.id) return;
+        const target = peers.get(m.id);
+        if(!target || target.room !== peer.room) return;
+        if(info.banned.size < 500) info.banned.add(target.id);
+        if(target.ip !== peer.ip && info.ipBlock.size < 500) info.ipBlock.set(target.ip, Date.now() + KICK_IP_BLOCK_MS);   // közös wifin (ugyanaz az IP) nem tiltunk IP-t
+        try{ if(target.ws && target.ws.readyState === 1) target.ws.send(JSON.stringify({ t:'error', e:'kicked' })); }catch(e){}
+        leaveRoom(target, 'kirúgva');
+        return;
+      }
       case 'send': {
         if(!peer.room || !isStr(m.a, 32)) return;
         if(typeof m.s === 'number'){            // újraküldött példány, amit már továbbítottunk
@@ -646,5 +672,5 @@ setInterval(() => {
   recordsByIpSet.forEach((arr, k) => { const a = arr.filter(t => now - t < 86400_000); if(a.length) recordsByIpSet.set(k, a); else recordsByIpSet.delete(k); });
 }, 20_000);
 
-server.listen(PORT, () => log(`PIC-ASS-O szerver fut: http://0.0.0.0:${PORT}  (engedélyezett oldalak: ${ALLOWED_ORIGINS.join(', ')})`));
+server.listen(PORT, process.env.BIND || '0.0.0.0', () => log(`PIC-ASS-O szerver fut: http://0.0.0.0:${PORT}  (engedélyezett oldalak: ${ALLOWED_ORIGINS.join(', ')})`));
 process.on('SIGTERM', () => { saveGames(); setTimeout(() => process.exit(0), 700); });
