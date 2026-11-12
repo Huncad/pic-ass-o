@@ -2344,8 +2344,11 @@
      (és a keret sem kicsinyedik le miatta) */
   body.fit-frame #screen-home{ overflow:visible; }
   body.fit-frame #screen-home > #subscribe-box{ position:relative; overflow:visible; z-index:6; }
-  body.fit-frame #subscribe-box .sub-body{ position:absolute; left:0; right:0; top:calc(100% + 6px); margin:0; z-index:40;
-    background:var(--bg); border:1.5px solid rgba(var(--line-rgb),.18); border-radius:14px; box-shadow:0 22px 44px -14px rgba(0,0,0,.7); }
+  /* v4.39: a legördülő FELFELÉ nyílik — a doboz a kártya alján van, lefelé kilógott a keretből,
+     rácsúszott a lábléc szövegére, és az alja a képernyőn kívülre került */
+  body.fit-frame #subscribe-box .sub-body{ position:absolute; left:0; right:0; top:auto; bottom:calc(100% + 6px); margin:0; z-index:40;
+    max-height:min(62vh, 460px); overflow-y:auto; overscroll-behavior:contain;
+    background:var(--bg); border:1.5px solid rgba(var(--line-rgb),.18); border-radius:14px; box-shadow:0 -22px 44px -14px rgba(0,0,0,.7); }
   body.fit-frame #screen-home .home-card-h{ font-size:1.08rem; }
   body.fit-frame #screen-home .home-hero h2{ font-size:1.7rem; }
 

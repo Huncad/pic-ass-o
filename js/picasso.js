@@ -1662,9 +1662,15 @@ try{
   (function(){
     const box = document.getElementById('subscribe-box'), tg = document.getElementById('sub-toggle');
     const set = open => { box.classList.toggle('collapsed', !open); tg.setAttribute('aria-expanded', open ? 'true' : 'false'); };
-    let open = false; try{ open = localStorage.getItem('picasso-sub-open') === '1'; }catch(e){}
+    // nagy képernyőn (fit-frame) a rész legördülőként a többi elem FÖLÉ nyílik, ezért ott mindig csukva indul,
+    // és a mellé kattintás vagy az Esc becsukja — különben eltakarná a „Szoba létrehozása” gombot
+    const floating = ()=> document.body.classList.contains('fit-frame') || (window.innerWidth >= 1200 && window.innerHeight >= 680);
+    let open = false; try{ open = localStorage.getItem('picasso-sub-open') === '1' && !floating(); }catch(e){}
     set(open);
     tg.addEventListener('click', ()=>{ open = !open; set(open); try{ localStorage.setItem('picasso-sub-open', open ? '1' : '0'); }catch(e){} try{ fitMainBoard(); }catch(e){} });
+    const shut = ()=>{ if(open && floating()){ open = false; set(false); } };
+    document.addEventListener('pointerdown', e=>{ if(!box.contains(e.target)) shut(); });
+    document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && open && floating()){ shut(); try{ tg.focus(); }catch(err){} } });
   })();
   document.getElementById('btn-subscribe').addEventListener('click', doSubscribe);
   document.getElementById('sub-privacy-link').addEventListener('click', e=>{ e.preventDefault(); const b = document.getElementById('btn-open-privacy'); if(b) b.click(); });
