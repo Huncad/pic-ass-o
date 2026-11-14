@@ -2682,3 +2682,6 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   .kickreq-toast p{ margin:0 0 10px; font-weight:700; line-height:1.4; }
   .kickreq-row{ display:flex; gap:8px; justify-content:flex-end; }
   .rchip.kickable{ cursor:pointer; }
+  .pulse-cta{ animation:pulseCta 1.2s ease-in-out 4; border-color:var(--yellow) !important; }
+  @keyframes pulseCta{ 50%{ box-shadow:0 0 0 6px color-mix(in srgb, var(--yellow) 35%, transparent); } }
+  .acct-pk-btns{ display:flex; gap:6px; flex-wrap:wrap; }

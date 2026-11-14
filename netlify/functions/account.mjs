@@ -1,26 +1,22 @@
-// PIC-ASS-O — fiókok (v4.40)
-// Regisztráció e-mail megerősítéssel, belépés jelszóval és választható
-// kétfaktoros kóddal, névvédelem, eszközök közti statisztika és beállítások.
+// PIC-ASS-O — fiókok (v4.40; v4.45: JELSZÓ NÉLKÜL)
+// Regisztráció e-mail megerősítéssel, belépés jelkulccsal (passkey) vagy e-mailben
+// küldött, egyszer használható belépőlinkkel. Jelszót a rendszer sehol nem kér és
+// nem tárol (a v4.45 előtti jelszó-lenyomatokat és 2FA-kulcsokat az első induláskor töröljük).
 //
 //   GET                    -> { user | null }   (a bejelentkezett fiók adatai)
 //   GET  ?name=NÉV         -> { taken }         (regisztrált-e ez a név)
 //   GET  ?pubkey=1         -> { key }           (a névigazoló jegyek nyilvános kulcsa)
-//   GET  ?confirm=KULCS    -> HTML oldal egy gombbal (a levélszűrők előre megnyitják a linkeket,
-//   POST ?confirm=KULCS    -> ezért csak a gomb hozza létre a fiókot)
-//   POST { action, ... }   -> register | login | logout | logout-all | ticket | stats-get | stats-put |
-//                             settings-put | notify | totp-begin | totp-enable | totp-disable |
-//                             password | forgot | reset | delete
+//   GET  ?confirm=KULCS / ?login=KULCS  -> HTML oldal egy gombbal (a levélszűrők előre megnyitják a linkeket,
+//   POST ?confirm=KULCS / ?login=KULCS  -> ezért csak a gomb hoz létre fiókot / léptet be)
+//   POST { action, ... }   -> register | magic | pk-login-begin | pk-login-finish | logout | logout-all | ticket |
+//                             stats-get | stats-put | settings-put | notify | pk-reg-begin | pk-reg-finish | pk-delete | delete
 //
-// Környezeti változók: a levélküldéshez ugyanaz kell, mint az értesítőhöz
-// (GMAIL_USER, GMAIL_APP_PASSWORD). Nem kötelező: ACCOUNT_PEPPER (legalább 16
-// karakteres titok, ami a jelszó-lenyomatokba keveredik — ha egyszer beállítod,
-// ne változtasd meg, mert a vele készült lenyomatok érvénytelenné válnak).
+// Környezeti változók: a levélküldéshez ugyanaz kell, mint az értesítőhöz (GMAIL_USER, GMAIL_APP_PASSWORD).
 import { json, updateJSON, makeLimiter } from '../lib/util.mjs';
 import { esc, cleanEmail, page as basePage, sendMail as baseSendMail, mailWrap, btn, cleanPalette } from '../lib/mail.mjs';
 import {
-  accountStore, sha, newToken, asObj, safeEqual, hashPassword, verifyPassword, needsRehash, passwordProblem,
-  newTotpSecret, totpCheck, totpUri, newBackupCodes, backupHash, publicKey, makeTicket, signPayload, overLimit,
-  lockState, lockFail, lockClear, sessionCookie, clearCookie, getUser, createSession, sessionUser,
+  accountStore, sha, newToken, asObj, publicKey, makeTicket, signPayload, overLimit,
+  sessionCookie, clearCookie, getUser, createSession, sessionUser,
   revokeSessions, sameOrigin, ipOf, SESSION_RENEW_MS, SESSION_MS
 } from '../lib/account.mjs';
 import { setAccountSub, accountSubOn, claimLegacySub, removeSubsOf, setSubPalette } from '../lib/subs.mjs';
@@ -29,7 +25,6 @@ import { cleanName, nameKey, isPlainObject } from '../../js/rules.js';
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
 
 const PENDING_MS = 24 * 3600_000;
-const RESET_MS = 3600_000;
 const MAX_STATS_BYTES = 60_000;
 const MAIL_DAY_CAP = Math.max(1, Number(process.env.ACCOUNT_MAIL_DAILY_CAP) || 200);
 const RESERVED = new Set(['valaki', 'vendeg', 'admin', 'adminisztrator', 'moderator', 'picasso', 'pic-ass-o', 'pic ass o', 'rendszer', 'szerver', 'huncraft', 'teged', 'te', 'en']);
@@ -40,7 +35,6 @@ const softLimit = makeLimiter();
 const palOf = u => cleanPalette(u && u.settings && u.settings['mail-colors']) || cleanPalette(u && u.regPal);
 
 const nameBlob = key => 'n/' + Buffer.from(key).toString('hex');
-const GENERIC_LOGIN = 'Hibás e-mail cím vagy jelszó.';
 const err = (msg, status = 400, extra = {}) => json(Object.assign({ error: msg }, extra), status);
 
 /** A regisztrálható név: pontosan úgy, ahogy a játék megjelenítené. */
@@ -58,7 +52,7 @@ async function nameTaken(store, key) {
   return !!(n && (n.uid || Number(n.until) > Date.now()));
 }
 const publicUser = async (u) => ({
-  name: u.name, email: u.email, twofa: !!(u.totp && u.totp.on), backupLeft: Array.isArray(u.backup) ? u.backup.length : 0,
+  name: u.name, email: u.email,
   createdAt: u.createdAt, notifyEmail: await accountSubOn(u).catch(() => false), settings: asObj(u.settings),
   passkeys: (Array.isArray(u.pk) ? u.pk : []).map(k => ({ id: k.id, name: k.name, at: k.at, used: k.used || 0 }))
 });
@@ -94,11 +88,40 @@ function cleanSettings(v) {
   return out;
 }
 
+const MAGIC_MS = 15 * 60_000;     // a belépőlink 15 percig él, egyszer használható
+let migrated = false;
+/** v4.45: a régi jelszó-lenyomatok, 2FA-kulcsok és jelszó-visszaállító kulcsok végleges törlése (egyszer). */
+async function dropPasswords(store) {
+  if (migrated) return;
+  if (await store.get('mig/nopw').catch(() => null)) { migrated = true; return; }
+  try {
+    const { blobs } = await store.list({ prefix: 'u/' });
+    for (const b of blobs || []) {
+      await updateJSON(store, b.key, raw => {
+        if (!raw || !('pw' in raw || 'totp' in raw || 'backup' in raw || 'reset' in raw)) return { write: false };
+        delete raw.pw; delete raw.totp; delete raw.backup; delete raw.reset;
+        return { value: raw };
+      }).catch(() => {});
+    }
+    for (const pre of ['r/', 'p/', 'lock/']) {
+      const { blobs: bl } = await store.list({ prefix: pre }).catch(() => ({ blobs: [] }));
+      for (const b of bl || []) {
+        if (pre === 'p/') {   // függő regisztrációk: csak a bennük lévő jelszó-lenyomat megy
+          await updateJSON(store, b.key, raw => raw && raw.pw ? (delete raw.pw, { value: raw }) : { write: false }).catch(() => {});
+        } else await store.delete(b.key).catch(() => {});
+      }
+    }
+    await store.setJSON('mig/nopw', { at: Date.now() });
+    migrated = true;
+  } catch (e) { console.error('jelszó-törlés: ', e && e.message); }
+}
+
 export default async (req) => {
   const url = new URL(req.url);
   const self = url.origin + url.pathname;
   const site = url.origin;
   const store = accountStore();
+  await dropPasswords(store);
   const ip = ipOf(req);
   let reqPal = null;   // v4.43: a levél / oldal színei
   const sendMail = (to, subject, html, unsub) => baseSendMail(to, subject, html, unsub, reqPal);
@@ -142,13 +165,36 @@ export default async (req) => {
       await store.delete(pk).catch(() => {});
       return page('A név közben elkelt', `<p>Sajnos ezt a nevet időközben más regisztrálta. Kérlek, regisztrálj újra egy másik névvel.</p><a class="b" href="${esc(site)}/?fiok=1">Vissza a játékhoz</a>`, 409);
     }
-    const user = { uid, name: p.name, key: p.key, email: p.email, eh: p.eh, pw: p.pw, createdAt: Date.now(), sess: [], settings: {}, regPal: reqPal || undefined,
+    const user = { uid, name: p.name, key: p.key, email: p.email, eh: p.eh, createdAt: Date.now(), sess: [], settings: {}, regPal: reqPal || undefined,
       consent: 'v4.40: elmúlt 16 éves, és elfogadta az adatkezelési tájékoztatót (' + new Date(p.at).toISOString() + ')' };
     await store.setJSON('u/' + uid, user);
     await store.setJSON(nameBlob(p.key), { uid });
     await store.delete(pk).catch(() => {});
     await claimLegacySub(user);
-    return page('Kész a fiókod! 🎉', `<p>Szia, <b>${esc(user.name)}</b>! Az e-mail címed megerősítve. Mostantól ez a név csak a tiéd — lépj be a játékban az e-mail címeddel és a jelszavaddal.</p><a class="b" href="${esc(site)}/?fiok=1">Belépés</a>`);
+    // a megerősítés egyben belépés is (ezen az eszközön), utána a játék felajánlja a jelkulcsot
+    const tok = await createSession(store, uid, req);
+    return page('Kész a fiókod! 🎉', `<p>Szia, <b>${esc(user.name)}</b>! Az e-mail címed megerősítve, és be is léptél. Mostantól ez a név csak a tiéd.</p><p>A játékban adj hozzá egy <b>jelkulcsot</b> — utána ujjlenyomattal vagy arccal lépsz be, jelszó nélkül.</p><a class="b" href="${esc(site)}/?fiok=1&uj=1">Irány a játék</a>`, 200, { 'set-cookie': sessionCookie(tok) });
+  }
+
+  // ---------- v4.45: belépés e-mailes belépőlinkkel ----------
+  const loginT = url.searchParams.get('login');
+  if (loginT) {
+    if (!/^[A-Za-z0-9_-]{20,80}$/.test(loginT)) return page('A link hibás', '<p>Ez a belépőlink nem érvényes.</p>', 404);
+    const mk = 'm/' + sha(loginT);
+    const m = await store.get(mk, { type: 'json' }).catch(() => null);
+    const owner = m && Number(m.exp) > Date.now() ? await getUser(store, m.uid) : null;
+    reqPal = palOf(owner);
+    if (!owner) return page('A link lejárt', `<p>Ez a belépőlink már nem érvényes (15 percig él, és csak egyszer használható). Kérj újat a játékban.</p><a class="b" href="${esc(site)}/?fiok=1">Irány a játék</a>`, 404);
+    if (req.method !== 'POST') {
+      return page('Belépés', `<p>Szia, <b>${esc(owner.name)}</b>! Egy kattintás, és ezen az eszközön beléptél a PIC-ASS-O-ba.</p>
+<form method="post" action="${esc(self)}?login=${encodeURIComponent(loginT)}"><button>✅ Belépek</button></form>
+<p style="font-size:.85rem">Ha nem te kérted, zárd be ezt az oldalt — senki nem lép be a fiókodba.</p>`);
+    }
+    await store.delete(mk).catch(() => {});      // egyszer használható
+    if (await store.get('banned/' + owner.uid).catch(() => null)) return page('Kitiltva', '<p>Ez a fiók végleg ki van tiltva a játékból.</p>', 403);
+    const tok = await createSession(store, owner.uid, req);
+    const hasPk = (owner.pk || []).length > 0;
+    return page('Beléptél! 🎉', `<p>Szia, <b>${esc(owner.name)}</b>! Ezen az eszközön beléptél.</p>${hasPk ? '' : '<p>Tipp: a játékban adj hozzá egy <b>jelkulcsot</b>, és legközelebb ujjlenyomattal vagy arccal lépsz be.</p>'}<a class="b" href="${esc(site)}/?fiok=1${hasPk ? '' : '&uj=1'}">Irány a játék</a>`, 200, { 'set-cookie': sessionCookie(tok) });
   }
 
   // ---------- a bejelentkezett fiók ----------
@@ -179,8 +225,6 @@ export default async (req) => {
     if (vn.error) return err(vn.error, 400, { field: 'name' });
     const email = cleanEmail(body.email);
     if (!email) return err('Ez nem tűnik érvényes e-mail címnek.', 400, { field: 'email' });
-    const pwErr = passwordProblem(body.password, { name: vn.name, email });
-    if (pwErr) return err(pwErr, 400, { field: 'password' });
     const eh = sha('em|' + email);
     const nk = nameBlob(vn.key);
     const nb = await store.get(nk, { type: 'json' }).catch(() => null);
@@ -191,14 +235,13 @@ export default async (req) => {
       // a címmel már van fiók: a válaszból ez nem derül ki, a tulajdonos levelet kap róla
       if (!(await overLimit(store, 'regdup|' + eh, 1, 3600_000)) && await mailAllowed(store)) {
         await sendMail(email, 'Már van fiókod — PIC-ASS-O', mailWrap(`<p>Valaki (talán te) regisztrálni próbált ezzel az e-mail címmel, de ehhez a címhez már tartozik PIC-ASS-O fiók.</p>
-<p>Ha elfelejtetted a jelszavad, a belépésnél kérhetsz újat. Ha nem te voltál, nincs teendőd.</p>${btn(site + '/?fiok=1', 'Belépés')}`)).catch(e => console.error(e));
+<p>Belépni a játékban tudsz: jelkulccsal, vagy kérj egy belépőlinket e-mailben. Ha nem te voltál, nincs teendőd.</p>${btn(site + '/?fiok=1', 'Belépés')}`)).catch(e => console.error(e));
       }
       return done;
     }
     if (await overLimit(store, 'regmail|' + eh, 3, 3600_000)) return done;
     if (!(await mailAllowed(store))) return err('Ma már túl sok levelet küldtünk ki, próbáld újra holnap.', 503);
     const token = newToken(32);
-    const pw = await hashPassword(body.password);
     // a név lefoglalása a megerősítésig (24 óra) — ütközésbiztosan
     const reserved = await updateJSON(store, nk, raw => {
       const cur = asObj(raw);
@@ -206,7 +249,7 @@ export default async (req) => {
       return { value: { eh, until: Date.now() + PENDING_MS }, result: true };
     }).catch(() => false);
     if (!reserved) return err('Ez a név már foglalt, válassz másikat.', 409, { field: 'name' });
-    await store.setJSON('p/' + sha(token), { name: vn.name, key: vn.key, email, eh, pw, at: Date.now(), pal: reqPal });
+    await store.setJSON('p/' + sha(token), { name: vn.name, key: vn.key, email, eh, at: Date.now(), pal: reqPal });
     try {
       await sendMail(email, 'Erősítsd meg a regisztrációt — PIC-ASS-O', mailWrap(`<p>Szia! Valaki (remélhetőleg te) fiókot kért a PIC-ASS-O rajzjátékban <b>${esc(vn.name)}</b> néven, ezzel az e-mail címmel.</p>
 ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
@@ -218,44 +261,24 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     return done;
   }
 
-  // ---------- belépés ----------
-  if (action === 'login') {
-    if (await overLimit(store, 'login|' + ip, 30, 900_000)) return err('Túl sok próbálkozás erről a hálózatról, próbáld újra negyed óra múlva.', 429);
+  // ---------- v4.45: belépőlink kérése e-mailben ----------
+  if (action === 'magic') {
+    if (await overLimit(store, 'magic|' + ip, 10, 3600_000)) return err('Túl sok próbálkozás, próbáld újra később.', 429);
     const email = cleanEmail(body.email);
-    const password = String(body.password || '');
-    if (!email || !password || password.length > 200) return err(GENERIC_LOGIN, 401);
+    if (!email) return err('Ez nem tűnik érvényes e-mail címnek.', 400, { field: 'email' });
     const eh = sha('em|' + email);
-    const lock = await lockState(store, eh);
-    if (lock.until > Date.now()) return err(`Túl sok hibás próbálkozás. Próbáld újra ${Math.ceil((lock.until - Date.now()) / 60000)} perc múlva.`, 429);
+    const done = json({ ok: true });   // a válaszból nem derül ki, van-e ilyen fiók
     const idx = await store.get('e/' + eh, { type: 'json' }).catch(() => null);
-    const user = idx && idx.uid ? await getUser(store, idx.uid) : null;
-    const okPw = await verifyPassword(password, user && user.pw);
-    if (!user || !okPw) { await lockFail(store, eh); return err(GENERIC_LOGIN, 401); }
-    if (user.totp && user.totp.on) {
-      const code = String(body.code || '').trim();
-      if (!code) return json({ need2fa: true });
-      const step = totpCheck(user.totp.secret, code, Number(user.totp.last) || 0);
-      const bh = backupHash(code);
-      const viaBackup = !step && Array.isArray(user.backup) && user.backup.some(h => safeEqual(h, bh));
-      if (!step && !viaBackup) { await lockFail(store, eh); return err('Hibás ellenőrző kód.', 401, { need2fa: true }); }
-      // a kód (vagy tartalék kód) csak egyszer használható
-      const fresh = await updateJSON(store, 'u/' + user.uid, raw => {
-        if (!raw || !raw.totp) return { write: false, result: false };
-        if (step) { if (Number(raw.totp.last) >= step) return { write: false, result: false }; raw.totp.last = step; }
-        else { const before = (raw.backup || []).length; raw.backup = (raw.backup || []).filter(h => !safeEqual(h, bh)); if (raw.backup.length === before) return { write: false, result: false }; }
-        return { value: raw, result: true };
-      });
-      if (!fresh) return err('Ezt a kódot már felhasználtad, várd meg a következőt.', 401, { need2fa: true });
-    }
-    if (await store.get('banned/' + user.uid).catch(() => null)) return err('Ez a fiók végleg ki van tiltva a játékból.', 403);
-    await lockClear(store, eh);
-    if (needsRehash(user.pw)) {
-      const pw = await hashPassword(password);
-      await updateJSON(store, 'u/' + user.uid, raw => raw ? { value: Object.assign(raw, { pw }) } : { write: false }).catch(() => {});
-    }
-    const token = await createSession(store, user.uid, req);
-    const u2 = await getUser(store, user.uid);
-    return json({ ok: true, user: await publicUser(u2) }, 200, { 'set-cookie': sessionCookie(token) });
+    if (!idx || !idx.uid) return done;
+    if (await overLimit(store, 'magicmail|' + eh, 4, 3600_000) || !(await mailAllowed(store))) return done;
+    const owner = await getUser(store, idx.uid);
+    if (!owner) return done;
+    const token = newToken(32);
+    await store.setJSON('m/' + sha(token), { uid: owner.uid, exp: Date.now() + MAGIC_MS });
+    reqPal = palOf(owner) || reqPal;
+    await sendMail(email, 'Belépés a PIC-ASS-O-ba', mailWrap(`<p>Szia, <b>${esc(owner.name)}</b>! Belépőlinket kértél a PIC-ASS-O-hoz.</p>${btn(`${self}?login=${token}`, '🔓 Belépés')}
+<p style="font-size:13px;color:#BFD3C4">A link 15 percig érvényes, és csak egyszer használható — azon az eszközön léptet be, ahol megnyitod. Ha nem te kérted, hagyd figyelmen kívül: senki nem lép be a fiókodba.</p>`)).catch(e => console.error(e));
+    return done;
   }
 
   // ---------- v4.43: belépés jelkulccsal (passkey, WebAuthn) ----------
@@ -295,52 +318,8 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
       return { value: raw };
     });
     if (await store.get('banned/' + owner.uid).catch(() => null)) return err('Ez a fiók végleg ki van tiltva a játékból.', 403);
-    await lockClear(store, owner.eh);
     const token = await createSession(store, owner.uid, req);
     return json({ ok: true, user: await publicUser(await getUser(store, owner.uid)) }, 200, { 'set-cookie': sessionCookie(token) });
-  }
-
-  // ---------- elfelejtett jelszó ----------
-  if (action === 'forgot') {
-    if (await overLimit(store, 'forgot|' + ip, 6, 3600_000)) return err('Túl sok próbálkozás, próbáld újra később.', 429);
-    const email = cleanEmail(body.email);
-    if (!email) return err('Ez nem tűnik érvényes e-mail címnek.', 400, { field: 'email' });
-    const eh = sha('em|' + email);
-    const done = json({ ok: true });   // a válaszból nem derül ki, van-e ilyen fiók
-    const idx = await store.get('e/' + eh, { type: 'json' }).catch(() => null);
-    if (!idx || !idx.uid) return done;
-    if (await overLimit(store, 'forgotmail|' + eh, 3, 3600_000) || !(await mailAllowed(store))) return done;
-    { const owner = await getUser(store, idx.uid); if (palOf(owner)) reqPal = palOf(owner); }
-    const token = newToken(32), rh = sha(token);
-    const old = await updateJSON(store, 'u/' + idx.uid, raw => {
-      if (!raw) return { write: false, result: null };
-      const prev = raw.reset || ''; raw.reset = rh;
-      return { value: raw, result: prev };
-    }).catch(() => null);
-    if (old) await store.delete('r/' + old).catch(() => {});
-    await store.setJSON('r/' + rh, { uid: idx.uid, exp: Date.now() + RESET_MS });
-    await sendMail(email, 'Új jelszó beállítása — PIC-ASS-O', mailWrap(`<p>Új jelszót kértél a PIC-ASS-O fiókodhoz.</p>${btn(`${site}/?reset=${token}`, '🔑 Új jelszó beállítása')}
-<p style="font-size:13px;color:#BFD3C4">A link 1 óráig érvényes, és csak egyszer használható. Ha nem te kérted, hagyd figyelmen kívül — a jelszavad nem változik.</p>`)).catch(e => console.error(e));
-    return done;
-  }
-  if (action === 'reset') {
-    if (await overLimit(store, 'reset|' + ip, 10, 3600_000)) return err('Túl sok próbálkozás, próbáld újra később.', 429);
-    const token = String(body.token || '');
-    if (!/^[A-Za-z0-9_-]{20,80}$/.test(token)) return err('Ez a link nem érvényes.', 400);
-    const rh = sha(token);
-    const r = await store.get('r/' + rh, { type: 'json' }).catch(() => null);
-    const user = r && Number(r.exp) > Date.now() ? await getUser(store, r.uid) : null;
-    if (!user || user.reset !== rh) return err('Ez a link lejárt vagy már felhasználták. Kérj újat a belépésnél.', 400);
-    const pwErr = passwordProblem(body.password, { name: user.name, email: user.email });
-    if (pwErr) return err(pwErr, 400, { field: 'password' });
-    const pw = await hashPassword(body.password);
-    await store.delete('r/' + rh).catch(() => {});
-    await updateJSON(store, 'u/' + user.uid, raw => raw ? { value: Object.assign(raw, { pw, reset: '' }) } : { write: false });
-    if (palOf(user)) reqPal = palOf(user);
-    await revokeSessions(store, user.uid);          // minden eszközről kiléptetjük
-    await lockClear(store, user.eh);
-    if (await mailAllowed(store)) await sendMail(user.email, 'Megváltozott a jelszavad — PIC-ASS-O', mailWrap(`<p>A PIC-ASS-O fiókod jelszava most megváltozott, és minden eszközről kiléptettünk.</p><p>Ha nem te voltál, azonnal kérj új jelszót a belépésnél, és nézd meg az e-mail fiókod biztonságát.</p>`)).catch(e => console.error(e));
-    return json({ ok: true });
   }
 
   // ---------- innen minden bejelentkezést kér ----------
@@ -356,15 +335,6 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
   const user = s.user;
   if (palOf(user)) reqPal = palOf(user);
   const uk = 'u/' + user.uid;
-  /** érzékeny műveletekhez újra kell a jelszó (és a hibás próbálkozás ugyanúgy számít, mint belépésnél) */
-  const confirmPassword = async () => {
-    const lock = await lockState(store, user.eh);
-    if (lock.until > Date.now()) return 'Túl sok hibás próbálkozás, próbáld újra később.';
-    if (await verifyPassword(String(body.password || ''), user.pw)) return '';
-    await lockFail(store, user.eh);
-    return 'Hibás jelszó.';
-  };
-
   if (action === 'logout-all') {
     await revokeSessions(store, user.uid, s.sh);
     return json({ ok: true });
@@ -411,39 +381,6 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     return json({ ok: true, notifyEmail: !!(r && r.on) });
   }
 
-  // ---------- kétfaktoros belépés ----------
-  if (action === 'totp-begin') {
-    const bad = await confirmPassword();
-    if (bad) return err(bad, 401, { field: 'password' });
-    if (user.totp && user.totp.on) return err('A kétfaktoros belépés már be van kapcsolva.', 409);
-    const secret = newTotpSecret();
-    await updateJSON(store, uk, raw => raw ? { value: Object.assign(raw, { totp: { secret, on: false, last: 0, at: Date.now() } }) } : { write: false });
-    return json({ ok: true, secret, uri: totpUri(secret, user.email) });
-  }
-  if (action === 'totp-enable') {
-    if (softLimit('te|' + user.uid, 10, 600_000)) return err('Túl sok próbálkozás, várj pár percet.', 429);
-    if (!user.totp || !user.totp.secret || user.totp.on) return err('Előbb kezdd el a beállítást.', 409);
-    const step = totpCheck(user.totp.secret, body.code, 0);
-    if (!step) return err('Hibás kód. Ellenőrizd, hogy a telefonod órája pontos-e, és próbáld újra.', 401, { field: 'code' });
-    const codes = newBackupCodes();
-    await updateJSON(store, uk, raw => raw && raw.totp ? { value: Object.assign(raw, { totp: Object.assign(raw.totp, { on: true, last: step }), backup: codes.hashed }) } : { write: false });
-    await revokeSessions(store, user.uid, s.sh);
-    if (await mailAllowed(store)) await sendMail(user.email, 'Bekapcsoltad a kétfaktoros belépést — PIC-ASS-O', mailWrap(`<p>A PIC-ASS-O fiókodon mostantól belépéskor a jelszó mellé a hitelesítő alkalmazásod kódja is kell.</p><p>Ha nem te kapcsoltad be, azonnal kérj új jelszót a belépésnél.</p>`)).catch(e => console.error(e));
-    return json({ ok: true, backup: codes.plain });
-  }
-  if (action === 'totp-disable') {
-    const bad = await confirmPassword();
-    if (bad) return err(bad, 401, { field: 'password' });
-    if (!user.totp || !user.totp.on) return json({ ok: true });
-    const code = String(body.code || '').trim();
-    const step = totpCheck(user.totp.secret, code, Number(user.totp.last) || 0);
-    const bh = backupHash(code);
-    if (!step && !(Array.isArray(user.backup) && user.backup.some(h => safeEqual(h, bh)))) { await lockFail(store, user.eh); return err('Hibás ellenőrző kód.', 401, { field: 'code' }); }
-    await updateJSON(store, uk, raw => { if (!raw) return { write: false }; delete raw.totp; delete raw.backup; return { value: raw }; });
-    if (await mailAllowed(store)) await sendMail(user.email, 'Kikapcsoltad a kétfaktoros belépést — PIC-ASS-O', mailWrap(`<p>A PIC-ASS-O fiókodon kikapcsolták a kétfaktoros belépést.</p><p>Ha nem te voltál, azonnal kérj új jelszót a belépésnél.</p>`)).catch(e => console.error(e));
-    return json({ ok: true });
-  }
-
   // ---------- v4.43: jelkulcs hozzáadása / törlése ----------
   if (action === 'pk-reg-begin') {
     if (softLimit('pkr|' + user.uid, 20, 600_000)) return err('Lassabban!', 429);
@@ -452,9 +389,11 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
       rpName: 'PIC-ASS-O', rpID, userName: user.email, userDisplayName: user.name,
       userID: new TextEncoder().encode(user.uid), attestationType: 'none', timeout: 120_000,
       excludeCredentials: (user.pk || []).map(k => ({ id: k.id, transports: k.transports })),
-      authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' }
+      authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
+      // v4.45: gépen „telefonra” kérve a böngésző QR-kódot mutat, a jelkulcs a telefonon jön létre
+      ...(body.phone === true ? { preferredAuthenticatorType: 'remoteDevice' } : {})
     });
-    await updateJSON(store, uk, raw => raw ? { value: Object.assign(raw, { pkChal: { c: options.challenge, exp: Date.now() + PK_CHALLENGE_MS } }) } : { write: false });
+    await updateJSON(store, uk, raw => raw ? { value: Object.assign(raw, { pkChal: { c: options.challenge, exp: Date.now() + PK_CHALLENGE_MS, phone: body.phone === true } }) } : { write: false });
     return json({ ok: true, options });
   }
   if (action === 'pk-reg-finish') {
@@ -467,7 +406,8 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     if (!v.verified || !v.registrationInfo) return err('A jelkulcsot nem sikerült ellenőrizni.', 400);
     const c = v.registrationInfo.credential;
     const rec = { id: c.id, pub: Buffer.from(c.publicKey).toString('base64url'), counter: c.counter || 0,
-      transports: Array.isArray(c.transports) ? c.transports.slice(0, 6) : undefined, at: Date.now(), name: deviceLabel(req) };
+      transports: Array.isArray(c.transports) ? c.transports.slice(0, 6) : undefined, at: Date.now(),
+      name: (chal.phone || (Array.isArray(c.transports) && c.transports.includes('hybrid'))) ? '📱 telefon (QR-kóddal)' : deviceLabel(req) };
     const w = await store.setJSON(pkBlob(c.id), { uid: user.uid }, { onlyIfNew: true }).catch(() => null);
     if (!w || w.modified === false) return err('Ez a jelkulcs már egy fiókhoz tartozik.', 409);
     await updateJSON(store, uk, raw => raw ? { value: Object.assign(raw, { pk: (raw.pk || []).concat(rec).slice(-MAX_PASSKEYS) }) } : { write: false });
@@ -482,34 +422,19 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     return json({ ok: true, user: await publicUser(await getUser(store, user.uid)) });
   }
 
-  // ---------- jelszócsere ----------
-  if (action === 'password') {
-    const bad = await confirmPassword();
-    if (bad) return err(bad, 401, { field: 'password' });
-    const pwErr = passwordProblem(body.newPassword, { name: user.name, email: user.email });
-    if (pwErr) return err(pwErr, 400, { field: 'newPassword' });
-    const pw = await hashPassword(body.newPassword);
-    await updateJSON(store, uk, raw => raw ? { value: Object.assign(raw, { pw }) } : { write: false });
-    await revokeSessions(store, user.uid, s.sh);    // a többi eszközről kiléptetjük
-    if (await mailAllowed(store)) await sendMail(user.email, 'Megváltozott a jelszavad — PIC-ASS-O', mailWrap(`<p>A PIC-ASS-O fiókod jelszava most megváltozott, a többi eszközödről kiléptettünk.</p><p>Ha nem te voltál, azonnal kérj új jelszót a belépésnél.</p>`)).catch(e => console.error(e));
-    return json({ ok: true });
-  }
-
   // ---------- fiók törlése (minden adattal együtt) ----------
   if (action === 'delete') {
-    const bad = await confirmPassword();
-    if (bad) return err(bad, 401, { field: 'password' });
+    // jelszó nincs: a törlést a fiók nevének pontos begépelése erősíti meg
+    if (String(body.confirmName || '').trim() !== user.name) return err('A megerősítéshez írd be pontosan a játékosneved.', 400, { field: 'confirmName' });
     const all = Array.isArray(user.sess) ? user.sess : [];
     await Promise.all(all.map(x => store.delete('s/' + x).catch(() => {})));
     await removeSubsOf(user.uid);
     await removePushOf(user.uid).catch(() => {});
-    if (user.reset) await store.delete('r/' + user.reset).catch(() => {});
     await store.delete('st/' + user.uid).catch(() => {});
     await Promise.all((user.pk || []).map(k => store.delete(pkBlob(k.id)).catch(() => {})));
     await store.delete(uk).catch(() => {});
     await store.delete('e/' + user.eh).catch(() => {});
     await store.delete(nameBlob(user.key)).catch(() => {});
-    await lockClear(store, user.eh);
     // a közös ranglistáról is lekerül (a játékszerver az aláírt kérést ellenőrzi)
     try {
       const proof = await signPayload({ del: user.uid, e: Date.now() + 10 * 60_000 }, store);

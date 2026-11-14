@@ -2,6 +2,12 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.45', changes:[
+    'Nincs többé jelszó: a regisztráció csak név és e-mail cím, a belépés jelkulccsal (ujjlenyomat, arc vagy a képernyőzár kódja) vagy egy e-mailben küldött, egyszer használható belépőlinkkel történik. A korábbi jelszavakat és a kétfaktoros kulcsokat véglegesen töröltük.',
+    'A regisztráció megerősítése egyben belépés is, utána a játék felajánlja a jelkulcs hozzáadását.',
+    'Gépen is létrehozhatsz jelkulcsot a telefonodra: a „📱 A telefonomra (QR-kóddal)” gomb után olvasd be a QR-kódot a telefonoddal. Belépéskor a gépen ugyanígy QR-kóddal, a telefonoddal igazolsz.',
+    'A fiók törlését a játékosneved begépelése erősíti meg.'
+  ]},
   { version:'4.44', changes:[
     'A szobanyitó játék közben is azonnal kirúghat bárkit: a játékosra koppintva, megerősítés után. A kirúgott 24 óráig nem jöhet vissza abba a szobába.',
     'A többi játékos a 🚩 gombbal (vagy a játékosra koppintva) választhat: szavazás a kizárásról, vagy jelzés a szobanyitónak. A jelzést csak a szobanyitó látja, és ő dönt; ugyanazt a játékost egy játékos csak egyszer jelezheti.',

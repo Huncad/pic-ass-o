@@ -15,13 +15,6 @@ trystero@0.25.4, @trystero-p2p/torrent@0.25.4, @trystero-p2p/mqtt@0.25.4, mqtt@5
 
 Utána a `js/picasso.js`-ben (v4.30 előtt az index.html-ben) a VENDOR_V értéket is át kell írni.
 
-## qrcode.js (v4.40)
-
-A kétfaktoros belépés beállításakor a hitelesítő alkalmazásnak szóló QR-kódot
-rajzolja ki — helyben, a böngészőben, hogy a titkos kulcs soha ne kerüljön külső
-szolgáltatáshoz. Változatlan másolat: `qrcode-generator@1.4.4` (Kazuhiko Arase, MIT licenc),
-az npm-csomag `qrcode.js` fájlja. Csak akkor töltődik be, amikor valaki a 2FA beállítását megnyitja.
-
 ## simplewebauthn-browser.js (v4.43)
 
 A jelkulcsos (passkey) belépés böngészős fele: `@simplewebauthn/browser@13.3.0` (Matthew Miller, MIT licenc),

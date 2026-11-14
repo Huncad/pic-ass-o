@@ -4,7 +4,6 @@ const { chromium } = require('playwright');
 const H = require('../support/harness.cjs');
 const results = [];
 const check = (name, ok, info = '') => { results.push(ok); console.log(`  ${ok ? '✅' : '❌'} ${name}${info ? ' — ' + info : ''}`); };
-const PW = 'Nagyon-Titkos-42';
 const ready = p => p.waitForFunction(() => !document.body.classList.contains('booting'), null, { timeout: 30000 });
 
 (async () => {
@@ -22,20 +21,24 @@ const ready = p => p.waitForFunction(() => !document.body.classList.contains('bo
     await cdp.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
     // fiók (API-n át, a böngésző színeivel)
     await p.goto(base); await ready(p);
-    console.log('   reg:', await p.evaluate(async pw => { const r = await fetch('/.netlify/functions/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'register', name: 'Jelkulcsos', email: 'pk@pelda.hu', password: pw, consent: true, pal: { bg: '#121314', panel: '#1e1f22', text: '#e9e9e6', dim: '#9a9da0', accent: '#d9d9de', link: '#8ab4f8', btn: '#d9d9de', btnText: '#121314' } }) }); return r.status + ' ' + await r.text(); }, PW));
+    console.log('   reg:', await p.evaluate(async () => { const r = await fetch('/.netlify/functions/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'register', name: 'Jelkulcsos', email: 'pk@pelda.hu', consent: true, pal: { bg: '#121314', panel: '#1e1f22', text: '#e9e9e6', dim: '#9a9da0', accent: '#d9d9de', link: '#8ab4f8', btn: '#d9d9de', btnText: '#121314' } }) }); return r.status + ' ' + await r.text(); }));
     const mails = await (await fetch(servers.base + '__test/mails')).json();
     const m = mails.find(x => x.to === 'pk@pelda.hu');
     console.log('E-mail színek:');
     check('a megerősítő levél a játékos színeivel megy (nem zöld)', !!m && m.html.includes('#1e1f22') && !m.html.includes('#20452F'));
-    await p.evaluate(u => fetch(u, { method: 'POST' }).then(r => r.status), new URL(/href="([^"]+\?confirm=[^"]+)"/.exec(m.html)[1]).pathname + new URL(/href="([^"]+\?confirm=[^"]+)"/.exec(m.html)[1]).search);
+    // a megerősítés egyben belépés (a levél linkje ezen a böngészőn)
+    const link = new URL(/href="([^"]+\?confirm=[^"]+)"/.exec(m.html)[1]);
+    await p.goto(base.replace(/\/$/, '') + link.pathname + link.search); await p.click('button'); await p.waitForSelector('text=Kész a fiókod');
+    check('a megerősítő oldal is a játékos színeivel jelenik meg', await p.evaluate(() => getComputedStyle(document.body).backgroundColor) === 'rgb(18, 19, 20)');
+    await Promise.all([p.waitForNavigation(), p.click('a.b')]);
     console.log('Jelkulcs:');
-    await p.click('#btn-account');
-    await p.fill('#acct-login-email', 'pk@pelda.hu'); await p.fill('#acct-login-pw', PW);
-    await p.click('#acct-f-login button[type=submit]');
-    // belépéskor a fiók beállításai (színek) átkerülnek az eszközre, ehhez a lap egyszer újratöltődhet
+    // belépéskor a fiók beállításai átkerülnek az eszközre, ehhez a lap egyszer újratöltődhet
     await p.waitForTimeout(2500); await ready(p);
     if (!(await p.isVisible('#acct-v-profile'))) { await p.waitForFunction(() => /Fiókom/.test(document.getElementById('btn-account').textContent)); await p.click('#btn-account'); }
     await p.waitForSelector('#acct-v-profile:not(.hidden)');
+    check('gépen ott a „📱 A telefonomra (QR-kóddal)” gomb', await p.isVisible('#acct-pk-add-phone'));
+    const hints = await p.evaluate(async () => (await (await fetch('/.netlify/functions/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'pk-reg-begin', phone: true }) })).json()).options.hints);
+    check('a telefonos gomb a QR-kódos (hybrid) utat kéri a böngészőtől', Array.isArray(hints) && hints.includes('hybrid'), JSON.stringify(hints));
     check('a profilban látszik a jelkulcs rész', await p.isVisible('#acct-pk-box'));
     await p.click('#acct-pk-add');
     await p.waitForFunction(() => /Jelkulcs hozzáadva/.test(document.getElementById('acct-m-profile').textContent), null, { timeout: 15000 }).catch(() => {});

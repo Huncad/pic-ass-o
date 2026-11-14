@@ -580,7 +580,7 @@
       <h2 id="privacy-title">🔒 Adatvédelem</h2>
       <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
     </div>
-    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. november 14-től · v4.44</p>
+    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. november 14-től · v4.45</p>
     <h3 class="pv-h">Ki kezeli az adatokat?</h3>
     <p><b>Adatkezelő:</b> Ádám, magánszemély, a PIC-ASS-O hobbiprojekt fejlesztője és üzemeltetője.<br>
     <b>Kapcsolat:</b> <a href="mailto:picasso.ertesito@gmail.com" style="color:var(--blue);">picasso.ertesito@gmail.com</a> — minden adatvédelmi kérdéssel és kéréssel ide írhatsz.</p>
@@ -591,14 +591,13 @@
       <li><b>Játék közben (becenév, rajz, tippek, chat, hangüzenet):</b> két úton mehetnek. <b>(1) Saját játékszerveren át</b> (ha elérhető, ez az alapértelmezett): a kapcsolat titkosított (HTTPS/WSS), de ez a titkosítás csak az útvonalat védi — <b>a játékszerver maga technikailag látja az üzenetek tartalmát</b>, mert ő adja tovább őket a szobában; nincs végpontok közötti titkosítás. A szerver a tartalmat nem menti el, nem naplózza és nem nézi; csak egy megszakadt kapcsolatnál tartja meg legfeljebb 1 percig, hogy a visszatérő játékos megkapja. <b>(2) Közvetlenül a játékosok között</b> (WebRTC), vagy tartalék úton nyilvános MQTT-szervereken át: itt a tartalom a szobakódból képzett kulccsal titkosítva megy, ezek a szerverek nem látják. <b>Közvetlen kapcsolatnál a többi játékos eszköze technikailag látja az IP-címedet</b> (így jön létre a kapcsolat). Ez az út csak akkor indul, ha a saját játékszerver nem érhető el. Egyik esetben sem tároljuk a játékot, a játék végével eltűnik. <i>Jogalap: a játék nyújtása, amit te kértél (GDPR 6. cikk (1) b).</i></li>
       <li><b>Nyilvános MQTT-szerverek (EMQX, HiveMQ, Eclipse Mosquitto):</b> csak akkor kapcsolódik hozzájuk a játék, ha a saját játékszerver nem érhető el (tartalék szobalista és csatlakozás). Ilyenkor egy véletlen, oldalbetöltésenként új azonosítót, a nyilvános szobák adatait és — sikertelen csatlakozásnál — technikai hálózati adatokat (eszköztípus, kapcsolattípusok; becenevet, naplót, IP-címet NEM) küld. <i>Jogalap: 6. cikk (1) b.</i></li>
       <li><b>IP-cím a kapcsolódáshoz:</b> a jelzőszerverek (Nostr / BitTorrent tracker / MQTT), a hálózati címet felderítő STUN-szerverek (Google, Cloudflare), a közvetítő (TURN) és a saját játékszerver látja, mert e nélkül nem jön létre a kapcsolat. Mi nem mentjük el. <i>Jogalap: jogos érdek a játék működtetéséhez (6. cikk (1) f).</i></li>
-      <li><b>Fiók (csak ha regisztrálsz):</b> a választott játékosneved, az e-mail címed, a jelszavad <b>visszafejthetetlen lenyomata</b> (sózott scrypt — magát a jelszót nem tároljuk, és mi sem tudjuk elolvasni), a regisztráció időpontja és a nyilatkozatod, hogy elmúltál 16 éves. Ezeket a Netlify-on tároljuk, amíg a fiókod él. A leveleket a játékban beállított színvilágodban küldjük (ehhez a téma színeit a fiókodban tároljuk). Az e-mail címet a megerősítéshez, a jelszó-visszaállításhoz és a fiók biztonságát érintő értesítésekhez (jelszócsere, kétfaktoros belépés be- és kikapcsolása) használjuk; másnak nem adjuk ki, és más játékos nem látja. Meg nem erősített regisztráció 24 óra után magától törlődik. Csak 16 éven felüliek regisztrálhatnak. <i>Jogalap: a fiók létrehozása és működtetése a kérésedre (6. cikk (1) b).</i>
+      <li><b>Fiók (csak ha regisztrálsz):</b> a választott játékosneved, az e-mail címed, a regisztráció időpontja és a nyilatkozatod, hogy elmúltál 16 éves. <b>Jelszó nincs</b>: a játék nem kér és nem tárol jelszót — jelkulccsal vagy e-mailben küldött belépőlinkkel lépsz be (a v4.45 előtti jelszó-lenyomatokat és kétfaktoros kulcsokat véglegesen töröltük). Ezeket a Netlify-on tároljuk, amíg a fiókod él. Az e-mail címet a megerősítéshez, a belépőlinkekhez és a fiók biztonságát érintő értesítésekhez (pl. új jelkulcs) használjuk; másnak nem adjuk ki, és más játékos nem látja. A leveleket a játékban beállított színvilágodban küldjük (ehhez a téma színeit a fiókodban tároljuk). Meg nem erősített regisztráció 24 óra után magától törlődik. Csak 16 éven felüliek regisztrálhatnak. <i>Jogalap: a fiók létrehozása és működtetése a kérésedre (6. cikk (1) b).</i>
         <ul>
-          <li><b>Belépés:</b> belépéskor a böngésződ egy munkamenet-sütit kap (<code>__Host-picasso_s</code>), ami 30 napig érvényes. Ez a működéshez szükséges, nem követő süti: csak a játék saját oldala kapja meg, a böngészőben futó programok nem tudják kiolvasni (HttpOnly), és nálunk csak a lenyomata tárolódik. A hibás belépési kísérletek számát címenként és hálózatonként rövid ideig (legfeljebb 1 óráig) nyilvántartjuk a jelszó-próbálgatás ellen. <i>Jogalap: 6. cikk (1) b, illetve jogos érdek a fiókok védelméhez (6. cikk (1) f).</i></li>
-          <li><b>Kétfaktoros belépés (csak ha bekapcsolod):</b> a hitelesítő alkalmazásod titkos kulcsát és a tartalék kódok lenyomatát tároljuk. A QR-kódot a böngésződ rajzolja ki helyben, a kulcs nem kerül külső szolgáltatáshoz. Kikapcsoláskor töröljük.</li>
+          <li><b>Belépés:</b> belépéskor a böngésződ egy munkamenet-sütit kap (<code>__Host-picasso_s</code>), ami 30 napig érvényes. Ez a működéshez szükséges, nem követő süti: csak a játék saját oldala kapja meg, a böngészőben futó programok nem tudják kiolvasni (HttpOnly), és nálunk csak a lenyomata tárolódik. A belépőlink 15 percig érvényes és egyszer használható; nálunk csak a lenyomata tárolódik, a felhasználás után törlődik. A túl sok kérést címenként és hálózatonként rövid ideig (legfeljebb 1 óráig) nyilvántartjuk a visszaélések ellen. <i>Jogalap: 6. cikk (1) b, illetve jogos érdek a fiókok védelméhez (6. cikk (1) f).</i></li>
           <li><b>Jelkulcs (csak ha hozzáadod):</b> a jelkulcs a telefonodon vagy gépeden jön létre, és ott is marad; az ujjlenyomatod, az arcod vagy a képernyőzár-kódod soha nem kerül hozzánk, azt csak az eszközöd ellenőrzi. Mi a jelkulcs nyilvános felét, az azonosítóját, egy számlálót, a létrehozás és az utolsó használat idejét, valamint az eszköz típusát (pl. „Android · Chrome”) tároljuk. A fiókodban bármikor törölheted.</li>
           <li><b>Névvédelem:</b> hogy a regisztrált neveddel más ne játszhasson, játék közben a böngésződ egy rövid életű, aláírt „névigazoló jegyet” mutat be a játékszervernek és a szobában lévő többi játékosnak. A jegyben a neved, egy belső fiókazonosító és a pillanatnyi kapcsolat-azonosítód van — az e-mail címed nincs benne. Azt, hogy egy név regisztrált-e, bárki lekérdezheti (e nélkül a védelem nem működne).</li>
           <li><b>Statisztika és beállítások a fiókban:</b> belépve a saját statisztikád (játékok, győzelmek, pontok, a leggyakoribb játékostársaid beceneve) és az összes beállításod (avatar, téma és a hozzá tartozó színek, hangok, a chat helye stb.) a fiókodban, a Netlify-on is tárolódnak, hogy a többi eszközödön is ugyanazok legyenek. Az első belépéskor az eszközön addig gyűjtött statisztika hozzáadódik a fiókéhoz; kilépéskor a fiók statisztikája lekerül az eszközről.</li>
-          <li><b>Fiók törlése:</b> a fiókodban („Fiók törlése…”) bármikor, azonnal törölheted. Ekkor töröljük a nevedet, az e-mail címedet, a jelszó-lenyomatot, a kétfaktoros kulcsot, a fiókban tárolt statisztikát és beállításokat, az értesítő feliratkozásaidat, és a közös ranglistáról is lekerülsz. A neved felszabadul.</li>
+          <li><b>Fiók törlése:</b> a fiókodban („Fiók törlése…”) bármikor, azonnal törölheted. Ekkor töröljük a nevedet, az e-mail címedet, a jelkulcsaidat, a fiókban tárolt statisztikát és beállításokat, az értesítő feliratkozásaidat, és a közös ranglistáról is lekerülsz. A neved felszabadul.</li>
         </ul>
       </li>
       <li><b>Nyilvános szobák listája:</b> a szoba neve, a szobanyitó beceneve és a létszám, amíg a szoba nyitva van. Zárt szoba nem jelenik meg névvel. <i>Jogalap: 6. cikk (1) b.</i></li>
@@ -616,7 +615,7 @@
     <h3 class="pv-h">Kik férhetnek hozzá (adatfeldolgozók)?</h3>
     <ul>
       <li><b>Netlify Inc.</b> (USA) — a weboldal tárhelye, a fiókok, a feliratkozók, a kitiltások és a visszajelzések tárolása.</li>
-      <li><b>Google LLC</b> (USA) — a Gmail küldi ki a fiókkal kapcsolatos leveleket (megerősítés, jelszó-visszaállítás, biztonsági értesítés) és az értesítő leveleket a picasso.ertesito@gmail.com fiókból.</li>
+      <li><b>Google LLC</b> (USA) — a Gmail küldi ki a fiókkal kapcsolatos leveleket (megerősítés, belépőlink, biztonsági értesítés) és az értesítő leveleket a picasso.ertesito@gmail.com fiókból.</li>
       <li><b>GitHub Inc.</b> (USA) és a <b>jsDelivr</b> CDN — a szólista és a zenék betöltése; ezek a letöltéskor látják az IP-címedet. A játék programkönyvtárai a játék saját tárhelyéről töltődnek be (az esm.run CDN csak akkor, ha onnan nem sikerül).</li>
       <li><b>Tailscale Inc.</b> (USA) — a saját játékszerver internetes elérése.</li>
       <li><b>Metered / Cloudflare</b> — közvetítő (TURN) szerver, ha a közvetlen kapcsolat nem jön létre.</li>
@@ -640,7 +639,7 @@
   </div>
 </div>
 
-<!-- v4.40: fiók (belépés, regisztráció, kétfaktoros belépés) -->
+<!-- v4.40: fiók (v4.45: jelszó nélkül — jelkulcs vagy e-mailes belépőlink) -->
 <div id="account-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="account-title">
   <div class="admin-box acct-box">
     <div class="admin-panel-header">
@@ -649,76 +648,47 @@
     </div>
 
     <section id="acct-v-login">
-      <form id="acct-f-login" autocomplete="on">
-        <label class="field-label" for="acct-login-email">E-mail cím</label>
-        <input type="email" id="acct-login-email" name="email" autocomplete="username" maxlength="120" required>
-        <label class="field-label" for="acct-login-pw">Jelszó</label>
-        <span class="acct-pw"><input type="password" id="acct-login-pw" name="password" autocomplete="current-password" maxlength="200" required><button type="button" class="acct-eye" aria-label="Jelszó megjelenítése">👁</button></span>
-        <div id="acct-login-code-row" class="hidden">
-          <label class="field-label" for="acct-login-code">Ellenőrző kód (hitelesítő alkalmazás vagy tartalék kód)</label>
-          <input type="text" id="acct-login-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="123456">
-        </div>
-        <p class="acct-msg" id="acct-m-login" role="status"></p>
-        <button type="submit" class="big">Belépés</button>
-      </form>
-      <div class="acct-or hidden" id="acct-pk-login-wrap"><span>vagy</span>
-        <button type="button" class="secondary big" id="acct-pk-login">🔑 Belépés jelkulccsal</button>
-        <p class="acct-why">Ujjlenyomattal, arcfelismeréssel vagy a telefonod képernyőzár-kódjával — jelszó nélkül. Előbb a fiókodban kell hozzáadnod.</p>
+      <div id="acct-pk-login-wrap" class="hidden">
+        <button type="button" class="big" id="acct-pk-login">🔑 Belépés jelkulccsal</button>
+        <p class="acct-why">Ujjlenyomattal, arcfelismeréssel vagy a telefonod képernyőzár-kódjával.</p>
+        <div class="acct-or"><span>vagy</span></div>
       </div>
-      <p class="acct-links"><a href="#" data-acct-go="register">Nincs még fiókom — regisztrálok</a> · <a href="#" data-acct-go="forgot">Elfelejtettem a jelszavam</a></p>
-      <p class="acct-why">Fiók nélkül is játszhatsz. Fiókkal a neved csak a tiéd, a statisztikád minden eszközödön látszik, felkerülsz a közös ranglistára, és kérhetsz értesítést az új szobákról.</p>
+      <form id="acct-f-login" autocomplete="on">
+        <label class="field-label" for="acct-login-email">Belépőlink e-mailben (új eszközön, vagy ha még nincs jelkulcsod)</label>
+        <input type="email" id="acct-login-email" name="email" autocomplete="username email" maxlength="120" required placeholder="e-mail címed">
+        <p class="acct-msg" id="acct-m-login" role="status"></p>
+        <button type="submit" class="secondary big">📧 Belépőlink küldése</button>
+      </form>
+      <p class="acct-links"><a href="#" data-acct-go="register">Nincs még fiókom — regisztrálok</a></p>
+      <p class="acct-why">🔒 A PIC-ASS-O-ban nincs jelszó: nem kérünk és nem tárolunk egyet sem. Fiók nélkül is játszhatsz; fiókkal a neved csak a tiéd, a statisztikád és a beállításaid minden eszközödön ugyanazok, felkerülsz a közös ranglistára, és kérhetsz értesítést az új szobákról.</p>
     </section>
 
     <section id="acct-v-register" class="hidden">
       <form id="acct-f-register" autocomplete="on">
         <label class="field-label" for="acct-reg-name">Játékosnév (3–16 karakter) — ezt látják a többiek</label>
         <input type="text" id="acct-reg-name" name="name" autocomplete="nickname" minlength="3" maxlength="16" required>
-        <label class="field-label" for="acct-reg-email">E-mail cím (megerősítő levelet küldünk rá)</label>
+        <label class="field-label" for="acct-reg-email">E-mail cím (ide küldjük a megerősítést és a belépőlinkeket)</label>
         <input type="email" id="acct-reg-email" name="email" autocomplete="email" maxlength="120" required>
-        <label class="field-label" for="acct-reg-pw">Jelszó (legalább 10 karakter)</label>
-        <span class="acct-pw"><input type="password" id="acct-reg-pw" name="password" autocomplete="new-password" minlength="10" maxlength="200" required><button type="button" class="acct-eye" aria-label="Jelszó megjelenítése">👁</button></span>
-        <label class="field-label" for="acct-reg-pw2">Jelszó még egyszer</label>
-        <input type="password" id="acct-reg-pw2" name="password2" autocomplete="new-password" maxlength="200" required>
         <label class="sub-consent"><input type="checkbox" name="consent" value="1"><span>Elmúltam 16 éves, és elolvastam az <a href="#" data-acct-privacy>adatvédelmi tájékoztatót</a>.</span></label>
         <p class="acct-msg" id="acct-m-register" role="status"></p>
         <button type="submit" class="big">Regisztrálok</button>
       </form>
+      <p class="acct-why">Jelszó nincs: a megerősítés után a játék felajánlja, hogy adj hozzá egy jelkulcsot, és onnan ujjlenyomattal vagy arccal lépsz be.</p>
       <p class="acct-links"><a href="#" data-acct-go="login">Már van fiókom — belépek</a></p>
     </section>
 
     <section id="acct-v-registered" class="hidden">
       <p class="acct-big">📬</p>
-      <p>Küldtünk egy megerősítő levelet erre a címre: <b id="acct-registered-email"></b>. Kattints benne a gombra (24 óráig érvényes), utána be tudsz lépni.</p>
+      <p>Küldtünk egy megerősítő levelet erre a címre: <b id="acct-registered-email"></b>. Kattints benne a gombra (24 óráig érvényes) — ezzel be is lépsz.</p>
       <p class="acct-why">Nem jött meg pár perc alatt? Nézd meg a Spam mappát. Ha ezzel a címmel már volt fiókod, arról kaptál levelet.</p>
-      <button type="button" class="big" data-acct-go="login">Rendben</button>
+      <button type="button" class="big" data-acct-close>Rendben</button>
     </section>
 
-    <section id="acct-v-forgot" class="hidden">
-      <form id="acct-f-forgot">
-        <p>Add meg a fiókod e-mail címét, és küldünk egy linket, amivel új jelszót állíthatsz be.</p>
-        <label class="field-label" for="acct-forgot-email">E-mail cím</label>
-        <input type="email" id="acct-forgot-email" name="email" autocomplete="email" maxlength="120" required>
-        <p class="acct-msg" id="acct-m-forgot" role="status"></p>
-        <button type="submit" class="big">Linket kérek</button>
-      </form>
-      <p class="acct-links"><a href="#" data-acct-go="login">Vissza a belépéshez</a></p>
-    </section>
-    <section id="acct-v-forgot-sent" class="hidden">
+    <section id="acct-v-link-sent" class="hidden">
       <p class="acct-big">📬</p>
-      <p>Ha ehhez a címhez tartozik fiók, elküldtük rá a linket (1 óráig érvényes). Nézd meg a postafiókodat — a Spam mappát is.</p>
-      <button type="button" class="big" data-acct-go="login">Rendben</button>
-    </section>
-
-    <section id="acct-v-reset" class="hidden">
-      <form id="acct-f-reset">
-        <p>Adj meg egy új jelszót a fiókodhoz. Utána minden eszközön újra be kell lépned.</p>
-        <label class="field-label" for="acct-reset-pw">Új jelszó (legalább 10 karakter)</label>
-        <span class="acct-pw"><input type="password" id="acct-reset-pw" name="password" autocomplete="new-password" minlength="10" maxlength="200" required><button type="button" class="acct-eye" aria-label="Jelszó megjelenítése">👁</button></span>
-        <label class="field-label" for="acct-reset-pw2">Új jelszó még egyszer</label>
-        <input type="password" id="acct-reset-pw2" name="password2" autocomplete="new-password" maxlength="200" required>
-        <p class="acct-msg" id="acct-m-reset" role="status"></p>
-        <button type="submit" class="big">Jelszó mentése</button>
-      </form>
+      <p>Ha ehhez a címhez tartozik fiók, elküldtük rá a belépőlinket (15 percig érvényes, egyszer használható). Azon az eszközön nyisd meg, ahol be szeretnél lépni.</p>
+      <p class="acct-why">Nem jött meg? Nézd meg a Spam mappát.</p>
+      <button type="button" class="big" data-acct-close>Rendben</button>
     </section>
 
     <section id="acct-v-profile" class="hidden">
@@ -727,87 +697,27 @@
         <dt>Játékosnév</dt><dd><span class="acct-badge">✔</span> <b id="acct-p-name"></b></dd>
         <dt>E-mail cím</dt><dd id="acct-p-email"></dd>
         <dt>Regisztráció</dt><dd id="acct-p-since"></dd>
-        <dt>Kétfaktoros belépés</dt><dd><span id="acct-p-2fa"></span> <button type="button" class="ghost small" id="acct-btn-2fa">Bekapcsolás</button></dd>
       </dl>
       <div class="acct-pk hidden" id="acct-pk-box">
-        <div class="acct-pk-h"><b>🔑 Jelkulcsok</b><button type="button" class="ghost small" id="acct-pk-add">+ Hozzáadás ezen az eszközön</button></div>
+        <div class="acct-pk-h"><b>🔑 Jelkulcsok</b><span class="acct-pk-btns"><button type="button" class="ghost small" id="acct-pk-add">+ Ezen az eszközön</button><button type="button" class="ghost small hidden" id="acct-pk-add-phone">📱 A telefonomra (QR-kóddal)</button></span></div>
+        <p class="acct-why hidden" id="acct-pk-phone-hint" style="margin-top:4px">Gépen: a „📱 A telefonomra” gomb után a böngésző egy QR-kódot mutat. Olvasd be a telefonod kamerájával, erősítsd meg a telefonon (ujjlenyomat / arc), és kész — utána a gépen is a telefonoddal lépsz be (a belépésnél ugyanígy QR-kódot kapsz).</p>
         <p class="acct-why" style="margin-top:4px">Jelkulccsal jelszó nélkül léphetsz be: a telefonod vagy géped ujjlenyomattal, arccal vagy a képernyőzár kódjával igazol. A kulcs az eszközödön marad, mi csak a nyilvános felét tároljuk.</p>
         <ul id="acct-pk-list" class="acct-pk-list"></ul>
       </div>
       <label class="sub-consent"><input type="checkbox" id="acct-p-notify"><span>E-mail értesítés, ha valaki nyilvános szobát nyit</span></label>
       <p class="acct-why">A statisztikád és a beállításaid (avatar, téma, hang) a fiókoddal együtt minden eszközödön ugyanazok.</p>
       <div class="acct-actions">
-        <button type="button" class="secondary" data-acct-go="password">🔑 Jelszócsere</button>
         <button type="button" class="secondary" id="acct-btn-logout-all">📵 Kiléptetés a többi eszközről</button>
         <button type="button" class="secondary" id="acct-btn-logout">🚪 Kilépés</button>
         <button type="button" class="ghost small acct-danger" data-acct-go="delete">Fiók törlése…</button>
       </div>
     </section>
 
-    <section id="acct-v-password" class="hidden">
-      <form id="acct-f-password">
-        <label class="field-label" for="acct-pw-old">Mostani jelszó</label>
-        <input type="password" id="acct-pw-old" name="password" autocomplete="current-password" maxlength="200" required>
-        <label class="field-label" for="acct-pw-new">Új jelszó (legalább 10 karakter)</label>
-        <span class="acct-pw"><input type="password" id="acct-pw-new" name="newPassword" autocomplete="new-password" minlength="10" maxlength="200" required><button type="button" class="acct-eye" aria-label="Jelszó megjelenítése">👁</button></span>
-        <label class="field-label" for="acct-pw-new2">Új jelszó még egyszer</label>
-        <input type="password" id="acct-pw-new2" name="password2" autocomplete="new-password" maxlength="200" required>
-        <p class="acct-msg" id="acct-m-password" role="status"></p>
-        <button type="submit" class="big">Jelszó mentése</button>
-      </form>
-      <p class="acct-links"><a href="#" data-acct-go="profile">Mégsem</a></p>
-    </section>
-
-    <section id="acct-v-totp-pw" class="hidden">
-      <form id="acct-f-totp-pw">
-        <p><b>Kétfaktoros belépés:</b> belépéskor a jelszó mellé egy 6 jegyű kódot is kérünk, amit a telefonod hitelesítő alkalmazása mutat (pl. Google Authenticator, Microsoft Authenticator, Aegis, 2FAS). Így a fiókod akkor is védve van, ha valaki megtudja a jelszavad.</p>
-        <label class="field-label" for="acct-totp-pw">A folytatáshoz add meg a jelszavad</label>
-        <input type="password" id="acct-totp-pw" name="password" autocomplete="current-password" maxlength="200" required>
-        <p class="acct-msg" id="acct-m-totp-pw" role="status"></p>
-        <button type="submit" class="big">Tovább</button>
-      </form>
-      <p class="acct-links"><a href="#" data-acct-go="profile">Mégsem</a></p>
-    </section>
-    <section id="acct-v-totp-scan" class="hidden">
-      <form id="acct-f-totp-scan">
-        <p><b>1.</b> Olvasd be ezt a QR-kódot a hitelesítő alkalmazással (vagy <a id="acct-totp-link" href="#">nyisd meg ezen a telefonon</a>):</p>
-        <div id="acct-totp-qr" class="acct-qr"></div>
-        <p class="acct-why">Ha nem tudod beolvasni, írd be kézzel ezt a kulcsot: <code id="acct-totp-secret"></code></p>
-        <label class="field-label" for="acct-totp-code"><b>2.</b> Írd be az alkalmazásban megjelenő 6 jegyű kódot</label>
-        <input type="text" id="acct-totp-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456" required>
-        <p class="acct-msg" id="acct-m-totp-scan" role="status"></p>
-        <button type="submit" class="big">Bekapcsolom</button>
-      </form>
-      <p class="acct-links"><a href="#" data-acct-go="profile">Mégsem</a></p>
-    </section>
-    <section id="acct-v-totp-codes" class="hidden">
-      <p><b>✅ A kétfaktoros belépés bekapcsolva.</b></p>
-      <p>Ezek a <b>tartalék kódok</b>: ha elveszik a telefonod, egy-egy ilyen kóddal is be tudsz lépni (mindegyik egyszer használható). <b>Most látod őket utoljára</b> — írd le vagy mentsd el biztos helyre!</p>
-      <ul id="acct-backup-list" class="acct-codes"></ul>
-      <p class="acct-msg" id="acct-m-totp-codes" role="status"></p>
-      <div class="acct-actions">
-        <button type="button" class="secondary" id="acct-backup-copy">📋 Kódok másolása</button>
-        <button type="button" class="big" data-acct-go="profile">Elmentettem, kész</button>
-      </div>
-    </section>
-    <section id="acct-v-totp-off" class="hidden">
-      <form id="acct-f-totp-off">
-        <p>A kétfaktoros belépés kikapcsolásához add meg a jelszavad és egy aktuális kódot (vagy egy tartalék kódot).</p>
-        <label class="field-label" for="acct-off-pw">Jelszó</label>
-        <input type="password" id="acct-off-pw" name="password" autocomplete="current-password" maxlength="200" required>
-        <label class="field-label" for="acct-off-code">Ellenőrző kód</label>
-        <input type="text" id="acct-off-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required>
-        <p class="acct-msg" id="acct-m-totp-off" role="status"></p>
-        <button type="submit" class="big">Kikapcsolom</button>
-      </form>
-      <p class="acct-links"><a href="#" data-acct-go="profile">Mégsem</a></p>
-    </section>
-
     <section id="acct-v-delete" class="hidden">
       <form id="acct-f-delete">
-        <p><b>Fiók törlése.</b> Véglegesen töröljük a fiókodat, az e-mail címedet, a fiókban tárolt statisztikádat és beállításaidat, az értesítő feliratkozásaidat, és lekerülsz a közös ranglistáról. A neved felszabadul, bárki regisztrálhatja. Ez nem vonható vissza.</p>
-        <label class="field-label" for="acct-del-pw">Jelszó</label>
-        <input type="password" id="acct-del-pw" name="password" autocomplete="current-password" maxlength="200" required>
+        <p><b>Fiók törlése.</b> Véglegesen töröljük a fiókodat, az e-mail címedet, a jelkulcsaidat, a fiókban tárolt statisztikádat és beállításaidat, az értesítő feliratkozásaidat, és lekerülsz a közös ranglistáról. A neved felszabadul, bárki regisztrálhatja. Ez nem vonható vissza.</p>
+        <label class="field-label" for="acct-del-name">A megerősítéshez írd be a játékosneved: <b id="acct-del-name-hint"></b></label>
+        <input type="text" id="acct-del-name" name="confirmName" autocomplete="off" maxlength="16" required>
         <label class="sub-consent"><input type="checkbox" name="sure" value="1"><span>Értem, véglegesen törölni szeretném a fiókomat.</span></label>
         <p class="acct-msg" id="acct-m-delete" role="status"></p>
         <button type="submit" class="big acct-danger-btn">Fiók végleges törlése</button>

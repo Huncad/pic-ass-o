@@ -9,15 +9,6 @@ const H = require('../support/harness.cjs');
 
 const results = [];
 const check = (name, ok, info = '') => { results.push(ok); console.log(`  ${ok ? '✅' : '❌'} ${name}${info ? ' — ' + info : ''}`); };
-const PW = 'Nagyon-Titkos-42';
-const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-function totp(secret, t = Date.now()) {
-  let bits = 0, val = 0; const out = [];
-  for (const ch of secret) { val = (val << 5) | B32.indexOf(ch); bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8; } }
-  const msg = Buffer.alloc(8); msg.writeBigUInt64BE(BigInt(Math.floor(t / 30000)));
-  const h = crypto.createHmac('sha1', Buffer.from(out)).update(msg).digest(); const o = h[h.length - 1] & 15;
-  return String((h.readUInt32BE(o) & 0x7fffffff) % 1e6).padStart(6, '0');
-}
 const ready = p => p.waitForFunction(() => !document.body.classList.contains('booting'), null, { timeout: 30000 });
 
 (async () => {
@@ -26,43 +17,30 @@ const ready = p => p.waitForFunction(() => !document.body.classList.contains('bo
   const mails = async () => (await fetch(servers.base + '__test/mails')).json();
   const view = { viewport: { width: 1280, height: 900 } };
   try {
-    console.log('Regisztráció és belépés:');
+    console.log('Regisztráció (jelszó nélkül) és belépés:');
     const a = await H.newPlayer(browser, servers, 'Péter', view);
     await a.goto(servers.base); await ready(a);
     await a.click('#btn-account');
+    check('a belépés ablakban nincs jelszómező', await a.evaluate(() => !document.querySelector('#account-overlay input[type=password]')));
     await a.click('[data-acct-go="register"]');
     await a.fill('#acct-reg-name', 'Péter'); await a.fill('#acct-reg-email', 'peter@pelda.hu');
-    await a.fill('#acct-reg-pw', 'rovid'); await a.fill('#acct-reg-pw2', 'rovid');
     await a.check('#acct-f-register input[name=consent]');
-    await a.evaluate(() => { document.getElementById('acct-reg-pw').removeAttribute('minlength'); });
-    await a.click('#acct-f-register button[type=submit]');
-    await a.waitForFunction(() => /10 karakter/.test(document.getElementById('acct-m-register').textContent));
-    check('gyenge jelszót a szerver elutasít', true);
-    await a.fill('#acct-reg-pw', PW); await a.fill('#acct-reg-pw2', PW);
     await a.click('#acct-f-register button[type=submit]');
     await a.waitForSelector('#acct-v-registered:not(.hidden)');
     const m = (await mails()).find(x => x.to === 'peter@pelda.hu');
     check('megerősítő levél ment ki', !!m && /Erősítsd meg a regisztrációt/.test(m.subject));
-    // megerősítés előtt nem lehet belépni
-    await a.click('#acct-v-registered [data-acct-go="login"]');
-    await a.fill('#acct-login-email', 'peter@pelda.hu'); await a.fill('#acct-login-pw', PW);
-    await a.click('#acct-f-login button[type=submit]');
-    await a.waitForFunction(() => /Hibás/.test(document.getElementById('acct-m-login').textContent));
-    check('megerősítés előtt nincs belépés', true);
-    // a levél linkje: gomb, majd kész
+    // a levél linkje: gomb, majd kész — és ezzel be is lépett ezen a böngészőn
     const link = /href="([^"]+\?confirm=[^"]+)"/.exec(m.html)[1];
-    const c = await a.context().newPage();
-    await c.goto(link); await c.click('button'); await c.waitForSelector('text=Kész a fiókod');
-    await c.close();
-    await a.fill('#acct-login-pw', PW);
-    await a.click('#acct-f-login button[type=submit]');
-    await a.waitForSelector('#acct-v-profile:not(.hidden)');
-    check('belépés után a profil látszik', (await a.textContent('#acct-p-name')) === 'Péter');
+    await a.goto(link); await a.click('button'); await a.waitForSelector('text=Kész a fiókod');
+    check('a megerősítő oldal felajánlja a jelkulcsot', /jelkulcsot/.test(await a.textContent('body')));
+    await Promise.all([a.waitForNavigation(), a.click('a.b')]);
+    await ready(a);
+    await a.waitForSelector('#acct-v-profile:not(.hidden)', { timeout: 10000 });
+    check('a játékba visszatérve belépve van, és a fiók ablak nyitva', (await a.textContent('#acct-p-name')) === 'Péter');
     const cookies = await a.context().cookies();
     const sc = cookies.find(x => x.name === '__Host-picasso_s');
     check('a munkamenet-süti HttpOnly, Secure, SameSite=Strict', !!sc && sc.httpOnly && sc.secure && sc.sameSite === 'Strict');
     check('a JavaScript nem látja a munkamenet-kulcsot', !(await a.evaluate(() => document.cookie)).includes('picasso_s'));
-    check('a böngésző tárhelyén nincs jelszó', !(await a.evaluate(() => JSON.stringify(Object.entries(localStorage)))).includes(PW));
     await a.click('#account-close-btn');
     check('a névmező zárolva, a fiók nevével', (await a.inputValue('#home-name')) === 'Péter' && await a.evaluate(() => document.getElementById('home-name').readOnly));
     check('a gomb a fiókot mutatja', /Péter — Fiókom/.test(await a.textContent('#btn-account')));
@@ -102,36 +80,27 @@ const ready = p => p.waitForFunction(() => !document.body.classList.contains('bo
     check('jegy nélkül a szerver nem engedi be Péter nevével', names.length === 2, names.join(' | '));
     await h.context().close();
 
-    console.log('Kétfaktoros belépés:');
+    console.log('Újratöltés:');
     await a.goto(servers.base); await ready(a);
     await a.waitForFunction(() => /Fiókom/.test(document.getElementById('btn-account').textContent));
     check('újratöltés után is belépve marad', true);
-    await a.click('#btn-account');
-    await a.click('#acct-btn-2fa');
-    await a.fill('#acct-totp-pw', PW); await a.click('#acct-f-totp-pw button[type=submit]');
-    await a.waitForSelector('#acct-totp-qr canvas');
-    const secret = (await a.textContent('#acct-totp-secret')).replace(/\s/g, '');
-    check('QR-kód és kézi kulcs látszik', /^[A-Z2-7]{32}$/.test(secret));
-    await a.fill('#acct-totp-code', totp(secret)); await a.click('#acct-f-totp-scan button[type=submit]');
-    await a.waitForSelector('#acct-v-totp-codes:not(.hidden)');
-    const codes = await a.$$eval('#acct-backup-list li', l => l.map(x => x.textContent));
-    check('8 tartalék kódot kap', codes.length === 8);
-    await a.click('#acct-v-totp-codes [data-acct-go="profile"]');
-    check('a profil mutatja, hogy be van kapcsolva', /Bekapcsolva/.test(await a.textContent('#acct-p-2fa')));
-    // kilépés, majd belépés: jelszó után kódot kér
-    await Promise.all([a.waitForNavigation(), a.click('#acct-btn-logout')]);
+    console.log('Belépőlink:');
+    await Promise.all([a.waitForNavigation(), (async () => { await a.click('#btn-account'); await a.click('#acct-btn-logout'); })()]);
     await ready(a);
     check('kilépés után vendég, a név szerkeszthető', /Belépés/.test(await a.textContent('#btn-account')) && !(await a.evaluate(() => document.getElementById('home-name').readOnly)));
     await a.click('#btn-account');
-    await a.fill('#acct-login-email', 'peter@pelda.hu'); await a.fill('#acct-login-pw', PW);
+    await a.fill('#acct-login-email', 'peter@pelda.hu');
     await a.click('#acct-f-login button[type=submit]');
-    await a.waitForSelector('#acct-login-code-row:not(.hidden)');
-    await a.fill('#acct-login-code', '000000'); await a.click('#acct-f-login button[type=submit]');
-    await a.waitForFunction(() => /Hibás/.test(document.getElementById('acct-m-login').textContent));
-    check('hibás kóddal nem enged be', await a.isVisible('#acct-v-login'));
-    await a.fill('#acct-login-code', codes[0]); await a.click('#acct-f-login button[type=submit]');
-    await a.waitForSelector('#acct-v-profile:not(.hidden)');
-    check('tartalék kóddal belép, és eggyel kevesebb marad', /7 tartalék/.test(await a.textContent('#acct-p-2fa')));
+    await a.waitForSelector('#acct-v-link-sent:not(.hidden)');
+    const ml = (await mails()).filter(x => x.to === 'peter@pelda.hu' && /Belépés/.test(x.subject)).at(-1);
+    check('belépőlink ment ki e-mailben', !!ml);
+    await a.goto(/href="([^"]+\?login=[^"]+)"/.exec(ml.html)[1]); await a.click('button'); await a.waitForSelector('text=Beléptél');
+    await Promise.all([a.waitForNavigation(), a.click('a.b')]);
+    await ready(a);
+    await a.waitForFunction(() => /Fiókom/.test(document.getElementById('btn-account').textContent), null, { timeout: 10000 });
+    check('a belépőlinkkel belépett', true);
+    check('a jelkulcs hozzáadását felajánlja', /jelkulcsot/.test(await a.textContent('#acct-m-profile').catch(() => '')) || !(await a.isVisible('#acct-pk-box')));
+    await a.click('#account-close-btn').catch(() => {});
 
     console.log('Statisztika és értesítő:');
     // egy másik eszközön szerzett eredmény megjelenik itt is
@@ -139,7 +108,7 @@ const ready = p => p.waitForFunction(() => !document.body.classList.contains('bo
       const g1 = await (await fetch('/.netlify/functions/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stats-get' }) })).json();
       await fetch('/.netlify/functions/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stats-put', rev: g1.rev, stats: { games: 7, wins: 3, points: 900, best: 250 } }) });
     });
-    await a.click('#account-close-btn');
+    if (await a.isVisible('#account-close-btn')) await a.click('#account-close-btn');
     await a.click('#btn-open-stats');
     await a.waitForFunction(() => /A fiókodban eddig 7 játék, 3 győzelem/.test(document.getElementById('home-stats').textContent), null, { timeout: 8000 });
     check('a fiók statisztikája megjelenik ezen az eszközön', true);

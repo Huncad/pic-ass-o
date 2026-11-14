@@ -27,6 +27,7 @@ function fakeStore(name) {
     async getWithMetadata(key, o = {}) { const c = m.get(key); return !c ? null : { data: o.type === 'json' ? JSON.parse(c.text) : c.text, etag: c.etag, metadata: {} }; },
     set: (k, v, o) => write(k, String(v), o), setJSON: (k, v, o) => write(k, JSON.stringify(v), o),
     async delete(k) { m.delete(k); },
+    async list({ prefix = '' } = {}) { return { blobs: [...m.keys()].filter(k => k.startsWith(prefix)).map(key => ({ key })) }; },
   };
 }
 mock.module('@netlify/blobs', { namedExports: { getStore: ({ name }) => fakeStore(name) } });

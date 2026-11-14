@@ -79,8 +79,7 @@ node tests/tools/css-imp-trial.mjs elotte-menu elotte-jatek munka   # !important
 | `GITHUB_TOKEN` | ajánlott | Gist írása az adminból, és a Gist-proxy 60 helyett 5000 kérés/óra keretet kap |
 | `NETLIFY_API_TOKEN` | nem | Visszajelzések olvasása az adminban |
 | `PICASSO_SERVER_SECRET` | nem | A játékszerver szójelzései (ugyanaz, mint a szerver `WORDS_SECRET`-je) |
-| `GMAIL_USER`, `GMAIL_APP_PASSWORD` | a regisztrációhoz és az e-mail értesítőhöz | Levélküldés (megerősítő, jelszó-visszaállító és értesítő levelek) |
-| `ACCOUNT_PEPPER` | nem | Legalább 16 karakteres titok, ami a jelszó-lenyomatokba keveredik (plusz védelem, ha a tároló kiszivárogna). **Ha egyszer beállítottad, ne változtasd és ne töröld**, különben a vele készült jelszavak érvénytelenné válnak |
+| `GMAIL_USER`, `GMAIL_APP_PASSWORD` | a regisztrációhoz és az e-mail értesítőhöz | Levélküldés (megerősítő, belépőlink- és értesítő levelek) |
 | `ACCOUNT_MAIL_DAILY_CAP` | nem | A fiókkal kapcsolatos levelek napi plafonja (alapból 200) |
 | `MAIL_DAILY_CAP` | nem | Napi levélplafon (alapból 450; a Gmail kb. 500-at enged) |
 | `MUSIC_REPO` | nem | A zenés tároló (`felhasznalo/tarolo`); nélküle az admin nem írhat tárolóba |
@@ -91,10 +90,12 @@ node tests/tools/css-imp-trial.mjs elotte-menu elotte-jatek munka   # !important
 
 A regisztráció önkéntes; fiók nélkül ugyanúgy lehet játszani. Felépítés:
 
-- **`netlify/functions/account.mjs`** kezeli a fiókokat (Netlify Blobs, `picasso-accounts` tároló). A jelszóból csak sózott
-  scrypt-lenyomat tárolódik; a munkamenet-kulcs `HttpOnly; Secure; SameSite=Strict` sütiben él, a tárolóban csak a SHA-256
-  lenyomata van meg; a megerősítő és jelszó-visszaállító linkek kulcsából szintén csak lenyomat. A belépés próbálgatását
-  címenkénti zárolás és hálózatonkénti korlát fékezi. A kétfaktoros belépés szabványos TOTP (RFC 6238), tartalék kódokkal.
+- **`netlify/functions/account.mjs`** kezeli a fiókokat (Netlify Blobs, `picasso-accounts` tároló). **Jelszó nincs (v4.45):**
+  belépés jelkulccsal (passkey / WebAuthn, `@simplewebauthn/server`) vagy e-mailben küldött, 15 percig élő, egyszer
+  használható belépőlinkkel. Gépen a „📱 A telefonomra” gomb a böngésző QR-kódos (hybrid) útját kéri, így a jelkulcs a
+  telefonon jön létre. A munkamenet-kulcs `HttpOnly; Secure; SameSite=Strict` sütiben él, a tárolóban csak a SHA-256
+  lenyomata; a megerősítő és belépőlinkek kulcsából szintén csak lenyomat. A v4.45 előtti jelszó-lenyomatokat és
+  2FA-kulcsokat a függvény az első induláskor törli (`mig/nopw` jelző).
 - **Névvédelem:** a böngésző egy 15 percig élő, ECDSA P-256 aláírású *névigazoló jegyet* kér, ami a játékos pillanatnyi
   kapcsolat-azonosítójához és (a saját szervernél) a kapcsolat titkos kulcsához kötött. A játékszerver a nyilvános kulccsal
   ellenőrzi, és regisztrált névvel jegy nélkül nem enged bemutatkozni; a szobanyitó és a többi böngésző ugyanezt ellenőrzi

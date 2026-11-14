@@ -3,8 +3,7 @@
 // valamint a statisztika és a beállítások szinkronja az eszközök között.
 //
 // Biztonság: a munkamenet-kulcs HttpOnly sütiben van, ez a kód soha nem látja.
-// A jelszó csak a belépés / regisztráció kérésében utazik (HTTPS-en), a
-// böngésző tárhelyére nem kerül. Minden szerverválasz szövegként (textContent)
+// v4.45: jelszó nincs — belépés jelkulccsal vagy e-mailes belépőlinkkel. Minden szerverválasz szövegként (textContent)
 // kerül a lapra, soha nem HTML-ként.
 import { nameKey, isPlainObject } from './rules.js';
 
@@ -355,15 +354,15 @@ async function toggleEmailNotify(on){
 }
 
 // ---------- a fiók ablak ----------
-let view = 'login', resetToken = '', totpSecret = '';
-const VIEWS = ['login','register','registered','forgot','forgot-sent','reset','profile','password','totp-pw','totp-scan','totp-codes','totp-off','delete'];
+let view = 'login';
+const VIEWS = ['login','register','registered','link-sent','profile','delete'];
 function show(v){
   view = v;
   VIEWS.forEach(x=>{ const el = $('acct-v-' + x); if(el) el.classList.toggle('hidden', x !== v); });
   document.querySelectorAll('#account-overlay .acct-msg').forEach(el=>{ el.textContent = ''; el.className = 'acct-msg'; });
-  document.querySelectorAll('#account-overlay input[type=password], #account-overlay input[inputmode=numeric]').forEach(el=>{ el.value = ''; });
+  { const d = $('acct-del-name'); if(d) d.value = ''; const h = $('acct-del-name-hint'); if(h) h.textContent = user ? user.name : ''; }
   if(v === 'profile') paintProfile();
-  if(v === 'login'){ const c = $('acct-login-code-row'); if(c) c.classList.add('hidden'); const w = $('acct-pk-login-wrap'); if(w) w.classList.toggle('hidden', !pkSupported()); }
+  if(v === 'login'){ const w = $('acct-pk-login-wrap'); if(w) w.classList.toggle('hidden', !pkSupported()); const hint = w && w.querySelector('.acct-why'); if(hint && !isPhone()) hint.textContent = 'A gépeden, vagy a telefonoddal: a böngésző QR-kódot mutat, azt olvasd be a telefonnal.'; }
   const first = $('acct-v-' + v) && $('acct-v-' + v).querySelector('input:not([type=checkbox]),button');
   if(first){ try{ first.focus(); }catch(e){} }
 }
@@ -373,15 +372,13 @@ function open(v){
   ov.classList.remove('hidden');
   show(v || (user ? 'profile' : 'login'));
 }
-function close(){ const ov = $('account-overlay'); if(ov) ov.classList.add('hidden'); totpSecret = ''; const q = $('acct-totp-qr'); if(q) q.textContent = ''; const s = $('acct-totp-secret'); if(s) s.textContent = ''; const b = $('acct-backup-list'); if(b) b.textContent = ''; }
+function close(){ const ov = $('account-overlay'); if(ov) ov.classList.add('hidden'); }
 function msg(id, text, kind){ const el = $(id); if(el){ el.textContent = text || ''; el.className = 'acct-msg' + (kind ? ' ' + kind : ''); } }
 function paintProfile(){
   if(!user){ show('login'); return; }
   $('acct-p-name').textContent = user.name;
   $('acct-p-email').textContent = user.email;
   $('acct-p-since').textContent = user.createdAt ? new Date(user.createdAt).toLocaleDateString('hu-HU', { year:'numeric', month:'long', day:'numeric' }) : '';
-  $('acct-p-2fa').textContent = user.twofa ? `✅ Bekapcsolva (${N(user.backupLeft)} tartalék kód maradt)` : 'Nincs bekapcsolva';
-  $('acct-btn-2fa').textContent = user.twofa ? 'Kikapcsolás' : 'Bekapcsolás';
   const n = $('acct-p-notify'); if(n) n.checked = !!user.notifyEmail;
   paintPasskeys();
 }
@@ -424,6 +421,7 @@ function paintPasskeys(){
   const box = $('acct-pk-box'), list = $('acct-pk-list');
   if(!box || !list) return;
   box.classList.toggle('hidden', !pkSupported());
+  { const ph = $('acct-pk-add-phone'), hint = $('acct-pk-phone-hint'); const show = pkSupported() && !isPhone(); if(ph) ph.classList.toggle('hidden', !show); if(hint) hint.classList.toggle('hidden', !show); }
   list.textContent = '';
   const keys = (user && Array.isArray(user.passkeys)) ? user.passkeys : [];
   if(!keys.length){ const li = document.createElement('li'); li.className = 'acct-why'; li.textContent = 'Még nincs jelkulcsod.'; list.appendChild(li); return; }
@@ -441,13 +439,14 @@ function paintPasskeys(){
     li.append(t, b); list.appendChild(li);
   });
 }
-async function addPasskey(){
-  const btn = $('acct-pk-add');
+const isPhone = ()=> /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+async function addPasskey(phone){
+  const btn = $(phone === true ? 'acct-pk-add-phone' : 'acct-pk-add');
   btn.disabled = true;
-  msg('acct-m-profile', 'Kövesd a telefonod / géped utasításait…');
+  msg('acct-m-profile', phone === true ? '📱 Olvasd be a megjelenő QR-kódot a telefonoddal, és erősítsd meg ott…' : 'Kövesd a telefonod / géped utasításait…');
   try{
     const W = await loadWebAuthn();
-    const b = await call({ action:'pk-reg-begin' });
+    const b = await call({ action:'pk-reg-begin', phone: phone === true });
     if(!b.ok){ msg('acct-m-profile', b.j.error || 'Nem sikerült.', 'bad'); return; }
     let resp;
     try{ resp = await W.startRegistration({ optionsJSON: b.j.options }); }
@@ -480,38 +479,13 @@ async function loginWithPasskey(){
   finally{ btn.disabled = false; }
 }
 
-function loadQr(){
-  return new Promise((res, rej)=>{
-    if(window.qrcode) return res(window.qrcode);
-    const s = document.createElement('script');
-    s.src = 'vendor/qrcode.js'; s.onload = ()=>window.qrcode ? res(window.qrcode) : rej(new Error('qr')); s.onerror = ()=>rej(new Error('qr'));
-    document.head.appendChild(s);
-  });
-}
-async function drawQr(text){
-  const box = $('acct-totp-qr');
-  box.textContent = '';
-  try{
-    const qrcode = await loadQr();
-    const qr = qrcode(0, 'M'); qr.addData(text); qr.make();
-    const n = qr.getModuleCount(), scale = 5, pad = 4;
-    const cv = document.createElement('canvas'); cv.width = cv.height = (n + pad * 2) * scale;
-    const ctx = cv.getContext('2d');
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
-    ctx.fillStyle = '#000';
-    for(let r = 0; r < n; r++) for(let c = 0; c < n; c++) if(qr.isDark(r, c)) ctx.fillRect((c + pad) * scale, (r + pad) * scale, scale, scale);
-    cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', 'QR-kód a hitelesítő alkalmazáshoz');
-    box.appendChild(cv);
-  }catch(e){ box.textContent = 'A QR-kódot nem sikerült kirajzolni — írd be kézzel az alábbi kulcsot.'; }
-}
-
 function wire(){
   const ov = $('account-overlay');
   if(!ov) return;
   $('btn-account') && $('btn-account').addEventListener('click', ()=>{ try{ hooks.click && hooks.click(); }catch(e){} open(); });
   $('account-close-btn').addEventListener('click', close);
-  ov.addEventListener('click', e=>{ if(e.target === ov && !['totp-codes','registered'].includes(view)) close(); });
-  document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && !ov.classList.contains('hidden') && view !== 'totp-codes') close(); });
+  ov.addEventListener('click', e=>{ if(e.target === ov && view !== 'registered') close(); });
+  document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && !ov.classList.contains('hidden')) close(); });
   ov.querySelectorAll('[data-acct-go]').forEach(b=>b.addEventListener('click', e=>{ e.preventDefault(); show(b.dataset.acctGo); }));
   ov.querySelectorAll('[data-acct-close]').forEach(b=>b.addEventListener('click', close));
   ov.querySelectorAll('[data-acct-privacy]').forEach(b=>b.addEventListener('click', e=>{ e.preventDefault(); const p = $('btn-open-privacy'); if(p) p.click(); }));
@@ -523,86 +497,24 @@ function wire(){
   const pChk = $('acct-p-notify'); if(pChk) pChk.addEventListener('change', async ()=>{ await toggleEmailNotify(pChk.checked); paintProfile(); });
 
   form('acct-f-login', 'acct-m-login', async fd=>{
-    const body = { action:'login', email: String(fd.get('email') || '').trim(), password: String(fd.get('password') || '') };
-    const code = String(fd.get('code') || '').trim();
-    if(code) body.code = code;
-    const r = await call(body);
-    if(r.j.need2fa){
-      $('acct-login-code-row').classList.remove('hidden');
-      msg('acct-m-login', r.ok ? 'Írd be a hitelesítő alkalmazásod 6 jegyű kódját (vagy egy tartalék kódot).' : (r.j.error || 'Hibás kód.'), r.ok ? '' : 'bad');
-      $('acct-login-code').value = ''; $('acct-login-code').focus();
-      return;
-    }
-    if(!r.ok){ msg('acct-m-login', r.j.error || 'Nem sikerült belépni.', 'bad'); return; }
-    await afterLogin(r.j.user);
-    show('profile');
-    msg('acct-m-profile', `Szia, ${user.name}! Beléptél.`, 'ok');
+    const r = await call({ action:'magic', email: String(fd.get('email') || '').trim() });
+    if(!r.ok){ msg('acct-m-login', r.j.error || 'Nem sikerült.', 'bad'); return; }
+    show('link-sent');
   });
   form('acct-f-register', 'acct-m-register', async fd=>{
-    const password = String(fd.get('password') || '');
-    if(password !== String(fd.get('password2') || '')){ msg('acct-m-register', 'A két jelszó nem egyezik.', 'bad'); return; }
     if(!fd.get('consent')){ msg('acct-m-register', 'A regisztrációhoz pipáld be a nyilatkozatot.', 'bad'); return; }
     const email = String(fd.get('email') || '').trim();
-    const r = await call({ action:'register', name: String(fd.get('name') || '').trim(), email, password, consent:true });
+    const r = await call({ action:'register', name: String(fd.get('name') || '').trim(), email, consent:true });
     if(!r.ok){ msg('acct-m-register', r.j.error || 'Nem sikerült a regisztráció.', 'bad'); return; }
     $('acct-registered-email').textContent = email;
     show('registered');
   });
-  form('acct-f-forgot', 'acct-m-forgot', async fd=>{
-    const r = await call({ action:'forgot', email: String(fd.get('email') || '').trim() });
-    if(!r.ok){ msg('acct-m-forgot', r.j.error || 'Nem sikerült.', 'bad'); return; }
-    show('forgot-sent');
-  });
-  form('acct-f-reset', 'acct-m-reset', async fd=>{
-    const password = String(fd.get('password') || '');
-    if(password !== String(fd.get('password2') || '')){ msg('acct-m-reset', 'A két jelszó nem egyezik.', 'bad'); return; }
-    const r = await call({ action:'reset', token: resetToken, password });
-    if(!r.ok){ msg('acct-m-reset', r.j.error || 'Nem sikerült.', 'bad'); return; }
-    resetToken = '';
-    show('login');
-    msg('acct-m-login', '✅ Az új jelszavad beállítva. Most lépj be vele.', 'ok');
-  });
-  form('acct-f-password', 'acct-m-password', async fd=>{
-    const np = String(fd.get('newPassword') || '');
-    if(np !== String(fd.get('password2') || '')){ msg('acct-m-password', 'A két új jelszó nem egyezik.', 'bad'); return; }
-    const r = await call({ action:'password', password: String(fd.get('password') || ''), newPassword: np });
-    if(!r.ok){ msg('acct-m-password', r.j.error || 'Nem sikerült.', 'bad'); return; }
-    show('profile'); msg('acct-m-profile', '✅ A jelszavad megváltozott. A többi eszközödről kiléptettünk.', 'ok');
-  });
-  $('acct-pk-add') && $('acct-pk-add').addEventListener('click', addPasskey);
+  $('acct-pk-add') && $('acct-pk-add').addEventListener('click', ()=>addPasskey(false));
+  $('acct-pk-add-phone') && $('acct-pk-add-phone').addEventListener('click', ()=>addPasskey(true));
   $('acct-pk-login') && $('acct-pk-login').addEventListener('click', loginWithPasskey);
-  $('acct-btn-2fa').addEventListener('click', ()=>show(user && user.twofa ? 'totp-off' : 'totp-pw'));
-  form('acct-f-totp-pw', 'acct-m-totp-pw', async fd=>{
-    const r = await call({ action:'totp-begin', password: String(fd.get('password') || '') });
-    if(!r.ok){ msg('acct-m-totp-pw', r.j.error || 'Nem sikerült.', 'bad'); return; }
-    totpSecret = r.j.secret;
-    show('totp-scan');
-    $('acct-totp-secret').textContent = String(totpSecret).replace(/(.{4})/g, '$1 ').trim();
-    const link = $('acct-totp-link'); if(link) link.href = r.j.uri;
-    drawQr(r.j.uri);
-  });
-  form('acct-f-totp-scan', 'acct-m-totp-scan', async fd=>{
-    const r = await call({ action:'totp-enable', code: String(fd.get('code') || '').trim() });
-    if(!r.ok){ msg('acct-m-totp-scan', r.j.error || 'Nem sikerült.', 'bad'); return; }
-    if(user){ user.twofa = true; user.backupLeft = (r.j.backup || []).length; }
-    show('totp-codes');
-    const list = $('acct-backup-list'); list.textContent = '';
-    (r.j.backup || []).forEach(c=>{ const li = document.createElement('li'); li.textContent = c; list.appendChild(li); });
-  });
-  $('acct-backup-copy').addEventListener('click', async ()=>{
-    const text = [...$('acct-backup-list').children].map(li=>li.textContent).join('\n');
-    try{ await navigator.clipboard.writeText(text); msg('acct-m-totp-codes', '📋 Kimásolva. Tedd biztos helyre (pl. jelszókezelőbe)!', 'ok'); }
-    catch(e){ msg('acct-m-totp-codes', 'Nem sikerült a másolás — írd le kézzel a kódokat.', 'bad'); }
-  });
-  form('acct-f-totp-off', 'acct-m-totp-off', async fd=>{
-    const r = await call({ action:'totp-disable', password: String(fd.get('password') || ''), code: String(fd.get('code') || '').trim() });
-    if(!r.ok){ msg('acct-m-totp-off', r.j.error || 'Nem sikerült.', 'bad'); return; }
-    if(user){ user.twofa = false; user.backupLeft = 0; }
-    show('profile'); msg('acct-m-profile', 'A kétfaktoros belépés kikapcsolva.', 'ok');
-  });
   form('acct-f-delete', 'acct-m-delete', async fd=>{
     if(!fd.get('sure')){ msg('acct-m-delete', 'Pipáld be, hogy biztosan törölni szeretnéd.', 'bad'); return; }
-    const r = await call({ action:'delete', password: String(fd.get('password') || '') });
+    const r = await call({ action:'delete', confirmName: String(fd.get('confirmName') || '').trim() });
     if(!r.ok){ msg('acct-m-delete', r.j.error || 'Nem sikerült.', 'bad'); return; }
     [STATS_KEY, BASE_KEY, REV_KEY, OWNER_KEY, SETTINGS_MARK, 'picasso-name', 'picasso-push-sync'].forEach(ls.del);
     location.reload();
@@ -620,15 +532,18 @@ function wire(){
   });
 }
 
-/** A levélből érkező linkek: ?reset=KULCS (új jelszó) és ?fiok=1 (belépés ablak). A kulcs azonnal kikerül a címsorból. */
+/** A levélből érkező linkek: ?fiok=1 (fiók ablak), ?uj=1 (épp most lépett be először ezen az eszközön: jelkulcs ajánlása). */
 function handleUrl(){
   let u; try{ u = new URL(location.href); }catch(e){ return; }
-  const t = u.searchParams.get('reset'), f = u.searchParams.has('fiok');
-  if(!t && !f) return;
-  u.searchParams.delete('reset'); u.searchParams.delete('fiok');
+  const f = u.searchParams.has('fiok'), fresh = u.searchParams.has('uj');
+  ['fiok', 'uj', 'reset'].forEach(k=>u.searchParams.delete(k));
+  if(!f && !fresh) return;
   try{ history.replaceState(null, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams : '') + u.hash); }catch(e){}
-  if(t && /^[A-Za-z0-9_-]{20,80}$/.test(t)){ resetToken = t; open('reset'); }
-  else if(f) open();
+  open();
+  if(user && fresh && !(user.passkeys || []).length && pkSupported()){
+    msg('acct-m-profile', `Szia, ${user.name}! 👇 Adj hozzá egy jelkulcsot ezen az eszközön, és legközelebb ujjlenyomattal vagy arccal lépsz be.`, 'ok');
+    const b = $('acct-pk-add'); if(b){ b.classList.add('pulse-cta'); try{ b.scrollIntoView({ block:'center' }); }catch(e){} }
+  }
 }
 
 let accountsOn = false;   // v4.42: van-e fiókszolgáltatás (helyi próbánál nincs: ilyenkor senki sincs vendégnek jelölve)
