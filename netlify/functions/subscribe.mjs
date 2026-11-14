@@ -1,17 +1,18 @@
 // PIC-ASS-O — e-mail értesítés új szobáról (v4.10, v4.30)
-// Kettős megerősítés (double opt-in): feliratkozáskor csak egy megerősítő
-// levél megy ki, értesítést csak az kap, aki a levélben a gombra kattintott.
+// v4.40: értesítést csak regisztrált, bejelentkezett játékos kérhet; a cím a
+// fiók megerősített e-mail címe. A korábbi (fiók nélküli) feliratkozók egy
+// tájékoztató levelet kapnak, és 30 nap után törlődnek, ha nem regisztrálnak.
 // Minden levél alján egyedi leiratkozó link van.
 //
-//   GET                         -> { count }  (megerősített feliratkozók száma)
-//   POST { action:"subscribe", email }
+//   GET                         -> { count, loggedIn, subscribed }
+//   POST { action:"subscribe", consent:true } / { action:"unsubscribe" }  (belépve)
 //   POST { action:"notify", code }   (nyilvános szoba nyílt — a játékszerver
 //        szobalistájából ellenőrizve, v4.11; v4.36: push értesítés is megy)
 //   POST { action:"drain" } + x-picasso-internal -> a levélsor folytatása (v4.30)
-//   GET  ?confirm=TOKEN / ?unsub=TOKEN  -> HTML oldal egy gombbal
-//   POST ?confirm=TOKEN / ?unsub=TOKEN  -> elvégzi (a gomb, ill. a levelezők
-//        "egykattintásos leiratkozás" funkciója) — a GET szándékosan nem
-//        módosít, mert a levélszűrők előre megnyitják a linkeket.
+//   GET  ?unsub=TOKEN  -> HTML oldal egy gombbal
+//   POST ?unsub=TOKEN  -> elvégzi (a gomb, ill. a levelezők "egykattintásos
+//        leiratkozás" funkciója) — a GET szándékosan nem módosít, mert a
+//        levélszűrők előre megnyitják a linkeket.
 //
 // v4.30: az értesítő levelek egy tartós sorba (Netlify Blobs) kerülnek. Egy
 // hívás legfeljebb ~7 mp-ig küld, a maradékot egy láncolt "drain" hívás viszi
@@ -26,60 +27,24 @@
 //   MAIL_FROM_NAME (nem kötelező, alapból "PIC-ASS-O")
 //   MAIL_DAILY_CAP (nem kötelező, alapból 450 levél / nap)
 //   GAME_SERVER_URL (nem kötelező, alapból a saját játékszerver címe)
-import { getStore } from '@netlify/blobs';
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import nodemailer from 'nodemailer';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { esc, page, sendMail, mailWrap, btn, mailConfigured } from '../lib/mail.mjs';
 import { json, ipOf, makeLimiter, updateJSON } from '../lib/util.mjs';
 import { sendPushToAll, subId } from '../lib/push.mjs';
+import { sessionUser, sameOrigin } from '../lib/account.mjs';
+import { subsStore, tidySubs, countSubs, setAccountSub, accountSubOn, LEGACY_GRACE_MS, MAX_SUBS } from '../lib/subs.mjs';
 
 const KEY = 'subs';
 const QUEUE_KEY = 'mailq';
 const GAME_SERVER_URL = String(process.env.GAME_SERVER_URL || 'https://picasso.taile8c93.ts.net').replace(/\/+$/, '');
 const NOTIFY_COOLDOWN_MS = 15 * 60 * 1000;   // legfeljebb 1 értesítés / 15 perc
-const PENDING_TTL_MS = 24 * 3600 * 1000;      // a megerősítő link 24 óráig él
-const RESEND_MS = 10 * 60 * 1000;             // ugyanarra a címre 10 percenként 1 megerősítő levél
-const MAX_SUBS = 5000;
 const DAILY_CAP = Math.max(1, Number(process.env.MAIL_DAILY_CAP) || 450);
 const BATCH = 8;                              // egyszerre ennyi levél megy
 const SEND_BUDGET_MS = 7000;                  // egy hívás legfeljebb eddig küld
 const QUEUE_TTL_MS = 6 * 3600 * 1000;         // ennél régebbi értesítés már nem megy ki
 
 const limited = makeLimiter();
-const hashOf = s => createHash('sha256').update(s).digest('hex').slice(0, 32);
-const token = () => randomBytes(24).toString('base64url');
-const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const cleanEmail = e => {
-  const s = String(e || '').trim().toLowerCase();
-  return s.length <= 120 && /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[a-z]{2,}$/.test(s) ? s : '';
-};
 const asObj = v => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
-
-function page(title, inner, status = 200) {
-  return new Response(`<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)} · PIC-ASS-O</title><meta name="robots" content="noindex">
-<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#16302A;color:#F4F1E6;font-family:system-ui,sans-serif;padding:20px}
-.c{max-width:440px;background:#20452F;border:3px dashed rgba(244,241,230,.25);border-radius:18px;padding:28px;text-align:center}
-h1{color:#FFD166;font-size:1.5rem;margin:0 0 12px}p{line-height:1.5;color:#BFD3C4}
-button,a.b{display:inline-block;font:800 1rem system-ui;border:0;border-radius:12px;padding:12px 22px;background:#7BD389;color:#16302A;cursor:pointer;text-decoration:none;margin-top:8px}
-button.r{background:#FF6B5B}</style></head><body><div class="c"><h1>${esc(title)}</h1>${inner}</div></body></html>`,
-    { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex' } });
-}
-
-let transport = null;
-async function sendMail(to, subject, html, unsubUrl) {
-  const user = process.env.GMAIL_USER, pass = process.env.GMAIL_APP_PASSWORD;
-  if (!user || !pass) throw new Error('nincs beállítva a Gmail');
-  if (!transport) transport = nodemailer.createTransport({ service: 'gmail', pool: true, maxConnections: 3, auth: { user, pass: pass.replace(/\s+/g, '') } });
-  const msg = { from: { name: process.env.MAIL_FROM_NAME || 'PIC-ASS-O', address: user }, to, subject, html };
-  if (unsubUrl) msg.list = { unsubscribe: { url: unsubUrl, comment: 'Leiratkozás' } };
-  if (unsubUrl) msg.headers = { 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' };
-  await transport.sendMail(msg);
-}
-
-const mailWrap = (inner, unsubUrl) => `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:auto;background:#20452F;color:#F4F1E6;border-radius:16px;padding:24px">
-<h2 style="color:#FFD166;margin:0 0 12px">PIC-ASS-O ✏️</h2>${inner}
-${unsubUrl ? `<p style="font-size:12px;color:#BFD3C4;margin-top:24px">Azért kaptad, mert feliratkoztál az új szobák értesítőjére. <a href="${unsubUrl}" style="color:#5FB6DE">Leiratkozás</a></p>` : ''}</div>`;
-const btn = (url, text) => `<p><a href="${url}" style="display:inline-block;background:#7BD389;color:#16302A;font-weight:800;padding:12px 22px;border-radius:12px;text-decoration:none">${text}</a></p>`;
 
 // a láncolt "drain" hívás belső kulcsa (magától jön létre, csak a szerver látja)
 let internalCache = null;
@@ -107,7 +72,7 @@ async function drainQueue(store, self, budgetMs) {
     // egy adag kivétele a sorból (ütközésbiztosan, így két hívás nem küldi ki kétszer)
     const take = await updateJSON(store, QUEUE_KEY, raw => {
       const q = asObj(raw);
-      q.items = Array.isArray(q.items) ? q.items.filter(x => x && Date.now() - (x.at || 0) < QUEUE_TTL_MS) : [];
+      q.items = Array.isArray(q.items) ? q.items.filter(x => x && Date.now() - (x.at || 0) < (x.kind === 'legacy' ? 3 * 86400_000 : QUEUE_TTL_MS)) : [];
       if (q.day !== today) { q.day = today; q.sentToday = 0; }
       const room = Math.max(0, DAILY_CAP - (q.sentToday || 0));
       if (!q.items.length || !room) return { value: q, result: { batch: [], left: q.items.length, capped: !room && q.items.length > 0 } };
@@ -119,6 +84,13 @@ async function drainQueue(store, self, budgetMs) {
     if (!take.batch.length) return false;
     const res = await Promise.allSettled(take.batch.map(it => {
       const unsub = `${self}?unsub=${it.ut}`;
+      if (it.kind === 'legacy') {
+        // v4.40: egyszeri tájékoztató a korábbi (fiók nélküli) feliratkozóknak
+        return sendMail(it.to, 'Az értesítőd mostantól fiókhoz kötött — PIC-ASS-O',
+          mailWrap(`<p>Szia! A PIC-ASS-O-ban mostantól lehet regisztrálni, és az új szobákról szóló értesítést ezentúl csak regisztrált játékosok kaphatnak.</p>
+<p><b>Ha szeretnéd megtartani az értesítőt:</b> regisztrálj <b>${esc(it.until)}</b>-ig ugyanezzel az e-mail címmel — a feliratkozásod magától megmarad. Ha nem regisztrálsz, a határidő után töröljük a címedet, és nem kapsz több levelet.</p>
+${btn(it.joinUrl, '✏️ Regisztrálok')}`, unsub), unsub);
+      }
       return sendMail(it.to, `🎨 Új szoba nyílt: ${it.name}`,
         mailWrap(`<p><b>${esc(it.host)}</b> most nyitotta meg a(z) <b>„${esc(it.name)}”</b> szobát. Gyere rajzolni!</p>${btn(it.joinUrl, '🚀 Csatlakozás')}`, unsub), unsub);
     }));
@@ -140,48 +112,47 @@ async function kickDrain(store, self) {
   } catch (e) { /* időtúllépés várható: a másik hívás közben fut */ }
 }
 
+/**
+ * v4.40: a fiók nélküli feliratkozók egyszeri tájékoztatása és a türelmi idő indítása.
+ * A határidő után a tidySubs törli azokat, akik nem regisztráltak ugyanazzal a címmel.
+ */
+async function startLegacyGrace(store, self, site) {
+  const until = Date.now() + LEGACY_GRACE_MS;
+  const list = await updateJSON(store, KEY, raw => {
+    const d = tidySubs(raw);
+    if (d.legacyUntil) return { write: false, result: null };
+    d.legacyUntil = until; d.legacyNoticeAt = Date.now();
+    return { value: d, result: Object.values(d.subs).filter(s => s.status === 'ok' && !s.uid).map(s => ({ to: s.email, ut: s.ut })) };
+  });
+  if (!list) return;
+  const untilText = new Date(until).toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Budapest' });
+  try {
+    await sendPushToAll({ title: 'PIC-ASS-O: az értesítő fiókhoz kötött', body: `Regisztrálj ${untilText}-ig és lépj be ezen az eszközön, különben az értesítések megszűnnek.`, url: site + '/?fiok=1' }, { budgetMs: 4000, onlyLegacy: true });
+  } catch (e) { /* nem baj */ }
+  if (!list.length) return;
+  const at = Date.now();
+  await updateJSON(store, QUEUE_KEY, raw => {
+    const q = asObj(raw);
+    q.items = (Array.isArray(q.items) ? q.items : []).concat(list.map(x => ({ ...x, kind: 'legacy', until: untilText, joinUrl: site + '/?fiok=1', at })));
+    return { value: q };
+  });
+  await kickDrain(store, self);
+}
+
 export default async (req) => {
   const url = new URL(req.url);
   const self = url.origin + url.pathname;
   const site = url.origin;
-  const store = getStore({ name: 'picasso-subscribers', consistency: 'strong' });
-  /** a nyers tartalom rendbetétele: lejárt, meg nem erősített címek törlése */
-  const tidy = raw => {
-    const d = asObj(raw);
-    d.subs = asObj(d.subs);
-    const now = Date.now();
-    for (const [h, s] of Object.entries(d.subs)) if (!s || (s.status !== 'ok' && now - (s.at || 0) > PENDING_TTL_MS)) delete d.subs[h];
-    return d;
-  };
+  const store = subsStore();
+  const tidy = tidySubs, count = countSubs;
   const read = async () => tidy(await store.get(KEY, { type: 'json' }).catch(() => null));
   const findBy = (d, field, t) => t && Object.entries(d.subs).find(([, s]) => s[field] === t);
-  const count = d => Object.values(d.subs).filter(s => s.status === 'ok').length;
 
-  const confirmT = url.searchParams.get('confirm');
   const unsubT = url.searchParams.get('unsub');
 
-  // ---- megerősítés ----
-  if (confirmT) {
-    if (req.method === 'POST') {
-      const hit = await updateJSON(store, KEY, raw => {
-        const d = tidy(raw);
-        const h = findBy(d, 'ct', confirmT);
-        if (!h) return { write: false, result: null };
-        h[1].status = 'ok'; h[1].ct = null; h[1].okAt = Date.now();
-        return { value: d, result: { email: h[1].email, ut: h[1].ut } };
-      });
-      if (!hit) return page('A link lejárt', '<p>Ez a megerősítő link már nem érvényes (24 óráig él). Iratkozz fel újra a játék kezdőoldalán.</p>', 404);
-      const unsubUrl = `${self}?unsub=${hit.ut}`;
-      try {
-        await sendMail(hit.email, 'Feliratkoztál — PIC-ASS-O',
-          mailWrap(`<p>Kész! Mostantól szólunk, ha valaki új nyilvános szobát nyit a PIC-ASS-O-ban (legfeljebb 15 percenként egy levél).</p><p>Ezt a levelet érdemes megtartani: az alján lévő linkkel bármikor leiratkozhatsz.</p>`, unsubUrl), unsubUrl);
-      } catch (e) { console.error(e); }
-      return page('Kész! 🎉', `<p>Mostantól szólunk e-mailben, ha valaki új nyilvános szobát nyit. Küldtünk egy visszaigazoló levelet is, aminek az alján bármikor leiratkozhatsz.</p><a class="b" href="${esc(site)}">Irány a játék</a>
-<p style="font-size:.85rem;margin-top:18px"><a href="${esc(unsubUrl)}" style="color:#BFD3C4">Mégsem kérem — leiratkozás</a></p>`);
-    }
-    return page('Feliratkozás megerősítése', `<p>Egy kattintás, és szólunk, ha valaki új szobát nyit a PIC-ASS-O-ban.</p>
-<form method="post" action="${esc(self)}?confirm=${encodeURIComponent(confirmT)}"><button>✅ Igen, kérem az értesítéseket</button></form>
-<p style="font-size:.85rem">Ha nem te iratkoztál fel, egyszerűen zárd be ezt az oldalt — nem fogsz levelet kapni.</p>`);
+  // v4.40: a régi (fiók nélküli) megerősítő linkek már nem élnek
+  if (url.searchParams.get('confirm')) {
+    return page('Az értesítő fiókhoz kötött', `<p>Az új szobákról szóló értesítést mostantól csak regisztrált játékosok kérhetik. Regisztrálj vagy lépj be, és a fiókodban egy kattintással bekapcsolhatod.</p><a class="b" href="${esc(site)}/?fiok=1">Irány a játék</a>`, 410);
   }
 
   // ---- leiratkozás ----
@@ -209,7 +180,10 @@ export default async (req) => {
 
   if (req.method === 'GET') {
     const d = await read();
-    return json({ count: count(d) });
+    // v4.40: egyszeri tájékoztató a korábbi feliratkozóknak + a 30 napos türelmi idő indítása
+    if (!d.legacyUntil && mailConfigured()) await startLegacyGrace(store, self, site).catch(e => console.error(e));
+    const s = await sessionUser(req).catch(() => null);
+    return json({ count: count(d), loggedIn: !!s, subscribed: s ? await accountSubOn(s.user, store) : false });
   }
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
 
@@ -222,64 +196,22 @@ export default async (req) => {
     return json({ ok: true, more });
   }
 
-  if (req.headers.get('sec-fetch-site') === 'cross-site') return json({ error: 'forbidden' }, 403);
+  if (!sameOrigin(req)) return json({ error: 'forbidden' }, 403);
   let body = {};
   try { body = await req.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
   const ip = ipOf(req);
 
-  // ---- feliratkozás ----
-  if (body.action === 'subscribe') {
-    if (limited('s|' + ip, 5, 3600000)) return json({ error: 'Túl sok próbálkozás, próbáld újra később.' }, 429);
-    if (body.consent !== true) return json({ error: 'A feliratkozáshoz hozzájárulás kell.' }, 400);
-    const email = cleanEmail(body.email);
-    if (!email) return json({ error: 'Ez nem tűnik érvényes e-mail címnek.' }, 400);
-    const d = await read();
-    const h = hashOf(email);
-    const cur = d.subs[h];
-    if (cur && cur.status === 'ok') {
-      // már feliratkozott: újra elküldjük neki a leiratkozó linket (10 percenként egyszer)
-      let mailed = false;
-      if (Date.now() - (cur.sentAt || 0) >= RESEND_MS) {
-        const unsubUrl = `${self}?unsub=${cur.ut}`;
-        try {
-          await sendMail(email, 'Az értesítőd — PIC-ASS-O',
-            mailWrap(`<p>Ez a cím már fel van iratkozva az új szobák értesítőjére. Ha le szeretnél iratkozni, kattints az alábbi gombra.</p>${btn(unsubUrl, 'Leiratkozás')}`, unsubUrl), unsubUrl);
-          mailed = true;
-          await updateJSON(store, KEY, raw => {
-            const d2 = tidy(raw);
-            if (!d2.subs[h]) return { write: false };
-            d2.subs[h].sentAt = Date.now();
-            return { value: d2 };
-          });
-        } catch (e) { console.error(e); }
-      }
-      // v4.33: ugyanaz a válasz, mint egy új feliratkozásnál — a válaszból ne
-      // derüljön ki, hogy egy cím fel van-e iratkozva (a levél a címre megy, ott látszik)
-      void mailed;
-      return json({ ok: true, pending: true, count: count(d) });
-    }
-    if (cur && Date.now() - (cur.sentAt || 0) < RESEND_MS) return json({ ok: true, pending: true, count: count(d) });
-    if (!cur && Object.keys(d.subs).length >= MAX_SUBS) return json({ error: 'Megtelt a lista.' }, 503);
-    const s = Object.assign({}, cur || { email, status: 'pending', ut: token() });
-    s.ct = token(); s.at = Date.now(); s.sentAt = Date.now();
-    s.consent = 'v4.10: 16+ és hozzájárulás az új szobák e-mail értesítőjéhez';
-    try {
-      await sendMail(email, 'Erősítsd meg a feliratkozást — PIC-ASS-O',
-        mailWrap(`<p>Valaki (remélhetőleg te) feliratkoztatta ezt a címet, hogy értesítést kapjon, ha új szoba nyílik a PIC-ASS-O rajzjátékban.</p>
-${btn(`${self}?confirm=${s.ct}`, '✅ Feliratkozás megerősítése')}
-<p style="font-size:13px;color:#BFD3C4">A link 24 óráig érvényes. Ha nem te voltál, hagyd figyelmen kívül ezt a levelet — megerősítés nélkül egyetlen további levelet sem kapsz.</p>`));
-    } catch (e) {
-      console.error(e);
-      return json({ error: 'Nem sikerült elküldeni a megerősítő levelet.' }, 502);
-    }
-    // csak ezt az egy bejegyzést írjuk (közben más is feliratkozhatott)
-    const total = await updateJSON(store, KEY, raw => {
-      const d2 = tidy(raw);
-      if (d2.subs[h] && d2.subs[h].status === 'ok') return { write: false, result: count(d2) };
-      d2.subs[h] = s;
-      return { value: d2, result: count(d2) };
-    });
-    return json({ ok: true, pending: true, count: total });
+  // ---- feliratkozás (v4.40: csak bejelentkezett, regisztrált játékosnak) ----
+  // A cím a fiók megerősített e-mail címe, ezért nem kell külön megerősítő levél.
+  if (body.action === 'subscribe' || body.action === 'unsubscribe') {
+    if (limited('s|' + ip, 20, 3600000)) return json({ error: 'Túl sok próbálkozás, próbáld újra később.' }, 429);
+    const s = await sessionUser(req);
+    if (!s) return json({ error: 'Az értesítéshez be kell lépned.', login: true }, 401);
+    const on = body.action === 'subscribe';
+    if (on && body.consent !== true) return json({ error: 'A feliratkozáshoz hozzájárulás kell.' }, 400);
+    const r = await setAccountSub(s.user, on, store);
+    if (r && r.error) return json({ error: 'Megtelt a lista.' }, 503);
+    return json({ ok: true, subscribed: !!(r && r.on), count: count(await read()) });
   }
 
   // ---- értesítés új szobáról ----
@@ -311,7 +243,7 @@ ${btn(`${self}?confirm=${s.ct}`, '✅ Feliratkozás megerősítése')}
       if (d.notified[code]) return { write: false, result: { skipped: 'already' } };
       d.notified[code] = Date.now();
       d.lastNotifyAt = Date.now();
-      return { value: d, result: { list: Object.values(d.subs).filter(s => s.status === 'ok').map(s => ({ to: s.email, ut: s.ut })) } };
+      return { value: d, result: { legacyOver: Number(d.legacyUntil) > 0 && Date.now() > Number(d.legacyUntil), list: Object.values(d.subs).filter(s => s.status === 'ok').map(s => ({ to: s.email, ut: s.ut })) } };
     });
     if (res.skipped) return json({ ok: true, skipped: res.skipped });
     const joinUrl = `${site}/?join=${encodeURIComponent(code)}`;
@@ -320,7 +252,7 @@ ${btn(`${self}?confirm=${s.ct}`, '✅ Feliratkozás megerősítése')}
     try {
       const skip = String(body.skipPush || '').slice(0, 1000);
       push = await sendPushToAll({ title: '🎨 Új szoba nyílt!', body: `${host} megnyitotta: ${name}. Koppints a csatlakozáshoz!`, url: joinUrl },
-        { skipId: skip ? subId(skip) : '', budgetMs: 5000 });
+        { skipId: skip ? subId(skip) : '', budgetMs: 5000, legacyOk: !res.legacyOver });
     } catch (e) { push = { sent: 0, error: true }; }
     if (!res.list.length) return json({ ok: true, queued: 0, push: push.sent });
     const at = Date.now();

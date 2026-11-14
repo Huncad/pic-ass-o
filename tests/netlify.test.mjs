@@ -59,7 +59,7 @@ mock.module('nodemailer', {
 
 // ---- hamis hálózat (GitHub, játékszerver, saját függvényhívás) ----
 const GIST_ID = 'fe34dbe63eefd11f324555359ec4cf53';
-const net = { gist: null, patches: [], rooms: [], selfCalls: [] };
+const net = { gist: null, patches: [], rooms: [], selfCalls: [], forget: [] };
 function gistBody() {
   return { id: GIST_ID, updated_at: 'x', files: Object.fromEntries(Object.entries(net.gist).map(([k, v]) => [k, { content: v, truncated: false }])) };
 }
@@ -71,6 +71,7 @@ globalThis.fetch = async (url, opts = {}) => {
     return res(200, gistBody());
   }
   if (u.endsWith('/api/szobak')) return res(200, { rooms: net.rooms });
+  if (u.endsWith('/api/forget')) { net.forget.push(JSON.parse(opts.body)); return res(200, { ok: true }); }
   if (u.startsWith('https://example.test/.netlify/functions/subscribe')) {
     net.selfCalls.push(opts);
     const { default: sub } = await import('../netlify/functions/subscribe.mjs');
@@ -189,30 +190,220 @@ test('wordused / wordblock: csak a játékszerver jelezhet, és párhuzamosan se
   assert.deepEqual(Object.keys(held).sort(), ['alma', 'korte']);
 });
 
-test('subscribe: feliratkozás, megerősítés, értesítés sorból, leiratkozás', async () => {
+// ---- fiókok (v4.40) ----
+const ACC = '/.netlify/functions/account';
+let ipSeq = 0;
+const accPost = async (body, cookie = '', headers = {}) => {
+  const { default: acc } = await import('../netlify/functions/account.mjs');
+  const r = await acc(post(ACC, body, Object.assign({ 'x-nf-client-connection-ip': '20.0.' + (++ipSeq >> 8) + '.' + (ipSeq & 255) }, cookie ? { cookie } : {}, headers)));
+  return { status: r.status, body: await r.json(), cookie: (r.headers.get('set-cookie') || '').split(';')[0] };
+};
+const accGet = async (qs = '', cookie = '') => {
+  const { default: acc } = await import('../netlify/functions/account.mjs');
+  const r = await acc(new Request('https://example.test' + ACC + qs, { headers: cookie ? { cookie } : {} }));
+  return r.json();
+};
+/** regisztráció + megerősítés + belépés; visszaadja a munkamenet-sütit */
+async function makeAccount(name, email, password = 'Nagyon-Titkos-42') {
+  const { default: acc } = await import('../netlify/functions/account.mjs');
+  const before = sentMails.length;
+  const r = await accPost({ action: 'register', name, email, password, consent: true });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const mail = sentMails.slice(before).find(m => m.to === email && /Erősítsd meg a regisztrációt/.test(m.subject));
+  assert.ok(mail, 'megerősítő levél ment');
+  const link = /href="([^"]+\?confirm=[^"]+)"/.exec(mail.html)[1];
+  assert.equal((await acc(new Request(link))).status, 200, 'a GET csak egy gombot mutat');
+  assert.equal((await accGet('?name=' + encodeURIComponent(name))).taken, true, 'a név a megerősítésig is foglalt');
+  assert.equal((await acc(new Request(link, { method: 'POST' }))).status, 200);
+  const l = await accPost({ action: 'login', email, password });
+  assert.equal(l.status, 200, JSON.stringify(l.body));
+  assert.match(l.cookie, /^__Host-picasso_s=[A-Za-z0-9_-]{40,}$/);
+  return l.cookie;
+}
+
+test('fiók: regisztráció, megerősítés, belépés, névvédelem', async () => {
   process.env.GMAIL_USER = 'jatek@gmail.com';
   process.env.GMAIL_APP_PASSWORD = 'xxxx xxxx xxxx xxxx';
+  const { default: acc } = await import('../netlify/functions/account.mjs');
+  // hibás adatok
+  assert.equal((await accPost({ action: 'register', name: 'Ab', email: 'a@b.hu', password: 'Nagyon-Titkos-42', consent: true })).status, 400);
+  assert.equal((await accPost({ action: 'register', name: 'Admin', email: 'a@b.hu', password: 'Nagyon-Titkos-42', consent: true })).status, 400);
+  assert.equal((await accPost({ action: 'register', name: 'Péter', email: 'a@b.hu', password: 'rovid', consent: true })).status, 400);
+  assert.equal((await accPost({ action: 'register', name: 'Péter', email: 'a@b.hu', password: 'password123', consent: true })).status, 400);
+  assert.equal((await accPost({ action: 'register', name: 'Péter', email: 'a@b.hu', password: 'Nagyon-Titkos-42' })).status, 400, 'hozzájárulás nélkül nem megy');
+  // megerősítés nélkül nincs fiók és nem lehet belépni
+  const before = sentMails.length;
+  await accPost({ action: 'register', name: 'Kata', email: 'kata@pelda.hu', password: 'Nagyon-Titkos-42', consent: true });
+  assert.equal((await accPost({ action: 'login', email: 'kata@pelda.hu', password: 'Nagyon-Titkos-42' })).status, 401);
+  assert.equal(sentMails.length, before + 1);
+  // a lefoglalt nevet más nem viheti el, ékezet és kis-nagybetű nélkül sem
+  assert.equal((await accPost({ action: 'register', name: 'KATA', email: 'mas@pelda.hu', password: 'Nagyon-Titkos-42', consent: true })).status, 409);
+  const cookie = await makeAccount('Péter', 'peter@pelda.hu');
+  assert.equal((await accGet('?name=peter')).taken, true);
+  assert.equal((await accGet('?name=PÉTER ')).taken, true);
+  assert.equal((await accGet('?name=Szabad')).taken, false);
+  assert.equal((await accPost({ action: 'register', name: 'peter', email: 'x@pelda.hu', password: 'Nagyon-Titkos-42', consent: true })).status, 409);
+  // ugyanazzal a címmel újra: a válasz ugyanaz, de fiók nem jön létre — a tulajdonos kap levelet
+  const n0 = sentMails.length;
+  const dup = await accPost({ action: 'register', name: 'Masik', email: 'peter@pelda.hu', password: 'Nagyon-Titkos-42', consent: true });
+  assert.deepEqual(dup.body, { ok: true, pending: true });
+  assert.ok(/Már van fiókod/.test(sentMails[n0].subject));
+  assert.equal((await accGet('?name=Masik')).taken, false);
+  // a saját adatok csak sütivel látszanak
+  assert.equal((await accGet('')).user, null);
+  const me = await accGet('', cookie);
+  assert.equal(me.user.name, 'Péter');
+  assert.equal(me.user.twofa, false);
+  // a tárolóban nincs nyers jelszó és nincs nyers munkamenet-kulcs
+  const dump = JSON.stringify([...stores.get('picasso-accounts').entries()]);
+  assert.ok(!dump.includes('Nagyon-Titkos-42'));
+  assert.ok(!dump.includes(cookie.split('=')[1]));
+  // hibás jelszó: általános hibaüzenet; idegen oldalról jövő kérés tiltva
+  const bad = await accPost({ action: 'login', email: 'peter@pelda.hu', password: 'nem-ez-a-jelszo' });
+  assert.equal(bad.status, 401);
+  assert.equal(bad.body.error, (await accPost({ action: 'login', email: 'nincs@pelda.hu', password: 'nem-ez-a-jelszo' })).body.error);
+  assert.equal((await accPost({ action: 'ticket', pid: 'abcdefgh12345678' }, cookie, { 'sec-fetch-site': 'cross-site' })).status, 403);
+  assert.equal((await accPost({ action: 'ticket', pid: 'abcdefgh12345678' }, cookie, { origin: 'https://evil.example' })).status, 403);
+  assert.equal((await accPost({ action: 'ticket', pid: 'abcdefgh12345678' })).status, 401);
+  // névigazoló jegy: a nyilvános kulccsal ellenőrizhető, a kapcsolat-azonosítóhoz kötött
+  const t = await accPost({ action: 'ticket', pid: 'abcdefgh12345678' }, cookie);
+  const { key } = await accGet('?pubkey=1');
+  const { createPublicKey, verify } = await import('node:crypto');
+  const [bodyB64, sig] = t.body.ticket.split('.');
+  assert.ok(verify('sha256', Buffer.from(bodyB64), { key: createPublicKey({ key, format: 'jwk' }), dsaEncoding: 'ieee-p1363' }, Buffer.from(sig, 'base64url')));
+  const claims = JSON.parse(Buffer.from(bodyB64, 'base64url').toString());
+  assert.equal(claims.n, 'Péter'); assert.equal(claims.p, 'abcdefgh12345678'); assert.ok(claims.e > Date.now());
+  assert.ok(!JSON.stringify(await accGet('?pubkey=1')).includes('"d"'), 'a titkos kulcs nem szivárog');
+  // kilépés után a süti már nem ér semmit
+  await accPost({ action: 'logout' }, cookie);
+  assert.equal((await accGet('', cookie)).user, null);
+  void acc;
+});
+
+test('fiók: túl sok hibás belépés után zárolás', async () => {
+  await makeAccount('Zárolt', 'zarolt@pelda.hu');
+  let last;
+  for (let i = 0; i < 6; i++) last = await accPost({ action: 'login', email: 'zarolt@pelda.hu', password: 'rossz-jelszo-' + i });
+  assert.equal(last.status, 429);
+  // a zárolás alatt a jó jelszó sem enged be
+  assert.equal((await accPost({ action: 'login', email: 'zarolt@pelda.hu', password: 'Nagyon-Titkos-42' })).status, 429);
+});
+
+test('fiók: kétfaktoros belépés, tartalék kódok, kód újrahasználata tiltva', async () => {
+  const { totpAt } = await import('../netlify/lib/account.mjs');
+  const cookie = await makeAccount('Kétfaktor', 'ketfaktor@pelda.hu');
+  assert.equal((await accPost({ action: 'totp-begin', password: 'rossz' }, cookie)).status, 401);
+  const b = await accPost({ action: 'totp-begin', password: 'Nagyon-Titkos-42' }, cookie);
+  assert.match(b.body.secret, /^[A-Z2-7]{32}$/);
+  assert.match(b.body.uri, /^otpauth:\/\/totp\//);
+  assert.equal((await accPost({ action: 'totp-enable', code: '000000' }, cookie)).status, 401);
+  const step = Math.floor(Date.now() / 30000);
+  const en = await accPost({ action: 'totp-enable', code: totpAt(b.body.secret, step) }, cookie);
+  assert.equal(en.status, 200);
+  assert.equal(en.body.backup.length, 8);
+  // belépés: jelszó után kódot kér
+  const l1 = await accPost({ action: 'login', email: 'ketfaktor@pelda.hu', password: 'Nagyon-Titkos-42' });
+  assert.deepEqual(l1.body, { need2fa: true });
+  assert.equal(l1.cookie, '');
+  assert.equal((await accPost({ action: 'login', email: 'ketfaktor@pelda.hu', password: 'Nagyon-Titkos-42', code: '123456' })).status, 401);
+  // a beállításkor használt kód még egyszer nem jó; a következő igen, de az is csak egyszer
+  assert.equal((await accPost({ action: 'login', email: 'ketfaktor@pelda.hu', password: 'Nagyon-Titkos-42', code: totpAt(b.body.secret, step) })).status, 401);
+  const next = totpAt(b.body.secret, step + 1);
+  assert.equal((await accPost({ action: 'login', email: 'ketfaktor@pelda.hu', password: 'Nagyon-Titkos-42', code: next })).status, 200);
+  assert.equal((await accPost({ action: 'login', email: 'ketfaktor@pelda.hu', password: 'Nagyon-Titkos-42', code: next })).status, 401);
+  // tartalék kód: egyszer használható
+  const viaBackup = await accPost({ action: 'login', email: 'ketfaktor@pelda.hu', password: 'Nagyon-Titkos-42', code: en.body.backup[0] });
+  assert.equal(viaBackup.status, 200);
+  assert.equal(viaBackup.body.user.backupLeft, 7);
+  assert.equal((await accPost({ action: 'login', email: 'ketfaktor@pelda.hu', password: 'Nagyon-Titkos-42', code: en.body.backup[0] })).status, 401);
+  // a tartalék kódok nem nyersen tárolódnak
+  assert.ok(!JSON.stringify([...stores.get('picasso-accounts').entries()]).includes(en.body.backup[1].replace('-', '')));
+  // kikapcsolás jelszóval és kóddal
+  const off = await accPost({ action: 'totp-disable', password: 'Nagyon-Titkos-42', code: en.body.backup[1] }, viaBackup.cookie);
+  assert.equal(off.status, 200);
+  assert.equal((await accPost({ action: 'login', email: 'ketfaktor@pelda.hu', password: 'Nagyon-Titkos-42' })).status, 200);
+});
+
+test('fiók: elfelejtett jelszó, jelszócsere, minden eszköz kiléptetése', async () => {
+  const c1 = await makeAccount('Feledékeny', 'feledekeny@pelda.hu');
+  // nem létező címre ugyanaz a válasz, de levél nem megy
+  const n0 = sentMails.length;
+  assert.deepEqual((await accPost({ action: 'forgot', email: 'senki@pelda.hu' })).body, { ok: true });
+  assert.equal(sentMails.length, n0);
+  assert.deepEqual((await accPost({ action: 'forgot', email: 'feledekeny@pelda.hu' })).body, { ok: true });
+  const token = /\?reset=([A-Za-z0-9_-]+)/.exec(sentMails[n0].html)[1];
+  assert.equal((await accPost({ action: 'reset', token, password: 'rovid' })).status, 400);
+  assert.equal((await accPost({ action: 'reset', token: 'x'.repeat(43), password: 'Uj-Jelszo-Hosszu-1' })).status, 400);
+  assert.equal((await accPost({ action: 'reset', token, password: 'Uj-Jelszo-Hosszu-1' })).status, 200);
+  assert.equal((await accPost({ action: 'reset', token, password: 'Megint-Mas-Jelszo-2' })).status, 400, 'a link csak egyszer használható');
+  assert.equal((await accGet('', c1)).user, null, 'a régi munkamenet megszűnt');
+  assert.equal((await accPost({ action: 'login', email: 'feledekeny@pelda.hu', password: 'Nagyon-Titkos-42' })).status, 401);
+  const a = await accPost({ action: 'login', email: 'feledekeny@pelda.hu', password: 'Uj-Jelszo-Hosszu-1' });
+  const b = await accPost({ action: 'login', email: 'feledekeny@pelda.hu', password: 'Uj-Jelszo-Hosszu-1' });
+  // jelszócsere: a régi jelszó kell hozzá, és a többi eszközt kilépteti
+  assert.equal((await accPost({ action: 'password', password: 'rossz', newPassword: 'Harmadik-Jelszo-3' }, a.cookie)).status, 401);
+  assert.equal((await accPost({ action: 'password', password: 'Uj-Jelszo-Hosszu-1', newPassword: 'Harmadik-Jelszo-3' }, a.cookie)).status, 200);
+  assert.equal((await accGet('', a.cookie)).user.name, 'Feledékeny');
+  assert.equal((await accGet('', b.cookie)).user, null);
+});
+
+test('fiók: statisztika és beállítások szinkronja, ütközéskezelés', async () => {
+  const c = await makeAccount('Statisztikus', 'stat@pelda.hu');
+  assert.deepEqual((await accPost({ action: 'stats-get' }, c)).body, { ok: true, stats: null, rev: 0 });
+  assert.equal((await accPost({ action: 'stats-put', stats: { games: 3, wins: 1 }, rev: 0 }, c)).body.rev, 1);
+  // egy másik eszköz régi állapotból írna: ütközés, visszakapja a frisset
+  const conflict = await accPost({ action: 'stats-put', stats: { games: 1 }, rev: 0 }, c);
+  assert.equal(conflict.status, 409);
+  assert.deepEqual(conflict.body.stats, { games: 3, wins: 1 });
+  assert.equal((await accPost({ action: 'stats-put', stats: { games: 4, wins: 1 }, rev: 1 }, c)).body.rev, 2);
+  // hibás / túl nagy adat nem megy át
+  assert.equal((await accPost({ action: 'stats-put', stats: [1, 2], rev: 2 }, c)).status, 400);
+  assert.equal((await accPost({ action: 'stats-put', stats: { x: 'y'.repeat(70000) }, rev: 2 }, c)).status, 400);
+  // beállítások: csak az ismert kulcsok maradnak meg
+  const st = await accPost({ action: 'settings-put', settings: { avatar: '#ff0000', theme: 'tabla', gonosz: '<script>', dark: '<img>' } }, c);
+  assert.deepEqual(st.body.settings, { avatar: '#ff0000', theme: 'tabla' });
+  assert.deepEqual((await accGet('', c)).user.settings, { avatar: '#ff0000', theme: 'tabla' });
+});
+
+test('subscribe: csak fiókkal; régi feliratkozók tájékoztatása és türelmi ideje; értesítés sorból; leiratkozás', async () => {
   const { default: sub } = await import('../netlify/functions/subscribe.mjs');
   const url = '/.netlify/functions/subscribe';
+  const S = fakeStore('picasso-subscribers');
+  // 30 korábbi (fiók nélküli) feliratkozó
   const emails = Array.from({ length: 30 }, (_, i) => `jatekos${i}@pelda.hu`);
-  // párhuzamos feliratkozások (külön IP-ről, a sebességkorlát miatt)
-  await Promise.all(emails.map((e, i) => sub(post(url, { action: 'subscribe', email: e, consent: true }, { 'x-nf-client-connection-ip': '10.0.0.' + i }))));
-  const confirms = sentMails.filter(m => /Erősítsd meg/.test(m.subject));
-  assert.equal(confirms.length, 30);
-  const d0 = await fakeStore('picasso-subscribers').get('subs', { type: 'json' });
-  assert.equal(Object.keys(d0.subs).length, 30, 'egyik feliratkozás sem veszett el');
-  // mindenki megerősít
-  for (const m of confirms) {
-    const link = /href="([^"]+\?confirm=[^"]+)"/.exec(m.html)[1];
-    const r = await sub(new Request(link, { method: 'POST' }));
-    assert.equal(r.status, 200);
-  }
-  const count = await (await sub(new Request('https://example.test' + url))).json();
-  assert.equal(count.count, 30);
+  await S.setJSON('subs', { subs: Object.fromEntries(emails.map((e, i) => ['h' + i, { email: e, status: 'ok', ut: 'ut-' + i, at: 1, okAt: 1 }])) });
+  // fiók nélkül nem lehet feliratkozni
+  let r = await sub(post(url, { action: 'subscribe', email: 'uj@pelda.hu', consent: true }));
+  assert.equal(r.status, 401);
+  // az első lekérdezés elindítja a türelmi időt, és mindenki kap egy tájékoztatót
+  sentMails.length = 0;
+  let g = await (await sub(new Request('https://example.test' + url))).json();
+  assert.equal(g.count, 30); assert.equal(g.loggedIn, false);
+  assert.equal(sentMails.filter(m => /fiókhoz kötött/.test(m.subject)).length, 30);
+  await sub(new Request('https://example.test' + url));
+  assert.equal(sentMails.length, 30, 'a tájékoztató csak egyszer megy ki');
+  const d1 = await S.get('subs', { type: 'json' });
+  assert.ok(d1.legacyUntil > Date.now() + 29 * 86400000);
+
+  // fiókkal: egy kattintás, megerősítő levél nélkül
+  const cookie = await makeAccount('Értesített', 'ertesitett@pelda.hu');
+  r = await sub(post(url, { action: 'subscribe', consent: true }, { cookie }));
+  assert.equal(r.status, 200);
+  g = await (await sub(new Request('https://example.test' + url, { headers: { cookie } }))).json();
+  assert.deepEqual([g.count, g.loggedIn, g.subscribed], [31, true, true]);
+  assert.equal((await accGet('', cookie)).user.notifyEmail, true);
+  r = await sub(post(url, { action: 'unsubscribe' }, { cookie }));
+  assert.equal((await r.json()).subscribed, false);
+  // aki a régi címével regisztrál, annak a feliratkozása megmarad (a fiókjához kötődik)
+  const { subHash } = await import('../netlify/lib/subs.mjs');
+  const dd = await S.get('subs', { type: 'json' });
+  dd.subs[subHash('jatekos0@pelda.hu')] = dd.subs.h0; delete dd.subs.h0; await S.setJSON('subs', dd);
+  const c0 = await makeAccount('Régimotoros', 'jatekos0@pelda.hu');
+  assert.equal((await accGet('', c0)).user.notifyEmail, true);
 
   // értesítés: kitalált szobáról nem megy levél
   sentMails.length = 0;
-  let r = await sub(post(url, { action: 'notify', code: 'ZZZZZ' }));
+  r = await sub(post(url, { action: 'notify', code: 'ZZZZZ' }));
   assert.equal((await r.json()).skipped, 'unverified');
   // valódi szoba: mind a 30 levél kimegy (az egyik hibás címre a hiba nem állítja meg a többit)
   mailFailFor = 'jatekos3@pelda.hu';
@@ -222,12 +413,12 @@ test('subscribe: feliratkozás, megerősítés, értesítés sorból, leiratkoz�
   assert.equal(nj.queued, 30);
   assert.equal(sentMails.length, 29);
   assert.ok(sentMails.every(m => m.list && m.list.unsubscribe && /Péntek esti buli/.test(m.subject)));
-  const q = await fakeStore('picasso-subscribers').get('mailq', { type: 'json' });
+  const q = await S.get('mailq', { type: 'json' });
   assert.equal(q.items.length, 0);
   // második értesítés a hűtési időn belül: nem megy
   r = await sub(post(url, { action: 'notify', code: 'ABCDE' }, { 'x-nf-client-connection-ip': '7.7.7.8' }));
   assert.equal((await r.json()).skipped, 'cooldown');
-  // leiratkozás
+  // leiratkozás a levél aljáról (fiók nélkül is működik)
   const unsubLink = sentMails[0].list.unsubscribe.url;
   r = await sub(new Request(unsubLink, { method: 'POST' }));
   assert.equal(r.status, 200);
@@ -255,6 +446,26 @@ test('subscribe: napi plafon — a maradék a sorban vár', async () => {
   const q = await s.get('mailq', { type: 'json' });
   assert.equal(q.items.length, 24);
   delete process.env.MAIL_DAILY_CAP;
+});
+
+test('subscribe: a türelmi idő után a fiók nélküliek törlődnek; fióktörlés mindent visz', async () => {
+  const { default: sub } = await import('../netlify/functions/subscribe.mjs');
+  const S = fakeStore('picasso-subscribers');
+  const d = await S.get('subs', { type: 'json' });
+  d.legacyUntil = Date.now() - 1000; await S.setJSON('subs', d);
+  const g = await (await sub(new Request('https://example.test/.netlify/functions/subscribe'))).json();
+  assert.equal(g.count, 1, 'csak a fiókhoz kötött feliratkozás maradt');
+  // fióktörlés: jelszó kell hozzá; utána a név szabad, a feliratkozás és a statisztika eltűnik
+  const l = await accPost({ action: 'login', email: 'jatekos0@pelda.hu', password: 'Nagyon-Titkos-42' });
+  await accPost({ action: 'stats-put', stats: { games: 1 }, rev: 0 }, l.cookie);
+  assert.equal((await accPost({ action: 'delete', password: 'rossz' }, l.cookie)).status, 401);
+  assert.equal((await accPost({ action: 'delete', password: 'Nagyon-Titkos-42' }, l.cookie)).status, 200);
+  assert.equal((await accGet('?name=Régimotoros')).taken, false);
+  assert.equal((await accGet('', l.cookie)).user, null);
+  assert.equal((await (await sub(new Request('https://example.test/.netlify/functions/subscribe'))).json()).count, 0);
+  assert.equal((await accPost({ action: 'login', email: 'jatekos0@pelda.hu', password: 'Nagyon-Titkos-42' })).status, 401);
+  assert.ok(![...stores.get('picasso-accounts').values()].some(v => v.text.includes('jatekos0@pelda.hu')), 'a címnek nyoma sem maradt');
+  assert.ok(net.forget.length === 1, 'a játékszerver is megkapta az aláírt törlési kérést');
 });
 
 test('report: gyanús eset naplózása, összevonás, admin listázás és törlés', async () => {
@@ -328,14 +539,16 @@ test('push: csak ismert push-szolgáltató címe fogadható el', async () => {
 
 test('push: kulcs lekérése, feliratkozás, leiratkozás', async () => {
   const { default: push } = await import('../netlify/functions/push.mjs');
-  const call = (method, body, ip = '9.9.9.1') => push(new Request('https://x.test/.netlify/functions/push', {
-    method, headers: { 'content-type': 'application/json', 'x-nf-client-connection-ip': ip }, body: body ? JSON.stringify(body) : undefined }));
+  const cookie = await makeAccount('Pusholó', 'push@pelda.hu');
+  const call = (method, body, ip = '9.9.9.1', ck = cookie) => push(new Request('https://x.test/.netlify/functions/push', {
+    method, headers: Object.assign({ 'content-type': 'application/json', 'x-nf-client-connection-ip': ip }, ck ? { cookie: ck } : {}), body: body ? JSON.stringify(body) : undefined }));
   const a = await (await call('GET')).json();
   const b = await (await call('GET')).json();
   assert.match(a.key, /^[A-Za-z0-9_-]{80,}$/);
   assert.equal(a.key, b.key, 'a küldőkulcs állandó');
   assert.equal(a.count, 0);
   const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/teszt-1', keys: { p256dh: 'B'.repeat(87), auth: 'a'.repeat(22) } };
+  assert.equal((await call('POST', { action: 'subscribe', sub }, '9.9.9.1', '')).status, 401, 'fiók nélkül nem lehet értesítést kérni');
   assert.equal((await call('POST', { action: 'subscribe', sub })).status, 200);
   assert.equal((await call('POST', { action: 'subscribe', sub })).status, 200);   // kétszer ugyanaz: egy marad
   assert.equal((await (await call('GET')).json()).count, 1);

@@ -52,13 +52,23 @@ export async function countPush(store = pushStore()) {
   const d = asObj(await store.get(SUBS_KEY, { type: 'json' }).catch(() => null));
   return Object.keys(asObj(d.subs)).length;
 }
-export async function addPush(sub, store = pushStore()) {
+export async function addPush(sub, uid, store = pushStore()) {
   return updateJSON(store, SUBS_KEY, raw => {
     const d = asObj(raw); d.subs = asObj(d.subs);
     const id = subId(sub.endpoint);
     if (!d.subs[id] && Object.keys(d.subs).length >= MAX_PUSH_SUBS) return { write: false, result: { error: 'full' } };
-    d.subs[id] = { e: sub.endpoint, p: sub.keys.p256dh, a: sub.keys.auth, at: Date.now() };
+    d.subs[id] = { e: sub.endpoint, p: sub.keys.p256dh, a: sub.keys.auth, at: Date.now(), uid: String(uid || '') };
     return { value: d, result: { ok: true, count: Object.keys(d.subs).length } };
+  });
+}
+/** Fiók törlésekor az összes eszközének push-feliratkozása is megy. */
+export async function removePushOf(uid, store = pushStore()) {
+  return updateJSON(store, SUBS_KEY, raw => {
+    const d = asObj(raw); d.subs = asObj(d.subs);
+    const ids = Object.entries(d.subs).filter(([, s]) => s && s.uid === uid).map(([id]) => id);
+    if (!ids.length) return { write: false };
+    ids.forEach(id => delete d.subs[id]);
+    return { value: d };
   });
 }
 export async function removePush(ids, store = pushStore()) {
@@ -76,9 +86,12 @@ export async function removePush(ids, store = pushStore()) {
  * Értesítés minden feliratkozott eszköznek (kivéve `skipId`-t: a szobát nyitó eszközt).
  * A megszűnt feliratkozásokat (404 / 410) törli. Időkorlátos, hogy a függvény ne fusson ki.
  */
-export async function sendPushToAll(payload, { skipId = '', budgetMs = 6000, store = pushStore() } = {}) {
+export async function sendPushToAll(payload, { skipId = '', budgetMs = 6000, store = pushStore(), legacyOk = true, onlyLegacy = false } = {}) {
   const d = asObj(await store.get(SUBS_KEY, { type: 'json' }).catch(() => null));
-  const entries = Object.entries(asObj(d.subs)).filter(([id]) => id !== skipId);
+  // v4.40: értesítés csak fiókhoz kötött eszköznek megy; a régi (fiók nélküli) feliratkozások a türelmi idő végéig élnek
+  const all = Object.entries(asObj(d.subs));
+  if (!legacyOk) { const stale = all.filter(([, s]) => !s || !s.uid).map(([id]) => id); if (stale.length) await removePush(stale, store).catch(() => {}); }
+  const entries = all.filter(([id, s]) => id !== skipId && s && (onlyLegacy ? !s.uid : (s.uid || legacyOk)));
   if (!entries.length) return { sent: 0, failed: 0, removed: 0 };
   const wp = await webpush();
   const vapid = await getVapid(store);
