@@ -414,6 +414,32 @@ function mayUseNameSync(peer, name){
   return c ? !c.taken : null;      // null: még nem tudjuk, le kell kérdezni
 }
 
+// ---------------------------------------------------------------------
+// v4.44: végleges kitiltás az egész játékból. Az admin a Netlify-on dönt, onnan aláírt kérés jön (/api/ban).
+// A szerver az eszközt, az eszközhöz látott IP-címeket és a fiókot tiltja; lemezre menti (bans.json),
+// így újraindítás után is érvényes. A kitiltott kapcsolatot azonnal bontja (4030).
+// ---------------------------------------------------------------------
+const BANS_FILE = path.join(DATA_DIR, 'bans.json');
+let permBans = { devs: {}, ips: {}, uids: {} };
+try{ const b = JSON.parse(fs.readFileSync(BANS_FILE, 'utf8')); if(b && typeof b === 'object') permBans = { devs: b.devs || {}, ips: b.ips || {}, uids: b.uids || {} }; }catch(e){}
+function saveBans(){
+  try{ fs.mkdirSync(DATA_DIR, { recursive: true }); const tmp = BANS_FILE + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(permBans)); fs.renameSync(tmp, BANS_FILE); }catch(e){ log('a tiltólista mentése nem sikerült', e.message); }
+}
+const devIps = new Map();   // eszköz -> az utóbbi időben látott IP-k (a tiltáshoz)
+function noteDevIp(dev, ip){
+  if(!dev || !ip) return;
+  let set = devIps.get(dev);
+  if(!set){ if(devIps.size > 20000) devIps.delete(devIps.keys().next().value); set = new Set(); devIps.set(dev, set); }
+  set.add(ip); if(set.size > 8) set.delete(set.values().next().value);
+}
+function permBanned(peer){
+  return !!((peer.dev && permBans.devs[peer.dev]) || permBans.ips[peer.ip] || (peer.acct && permBans.uids[peer.acct.uid]));
+}
+function dropBanned(peer){
+  try{ if(peer.ws && peer.ws.readyState === 1){ peer.ws.send(JSON.stringify({ t:'error', e:'banned' })); peer.ws.close(4030, 'kitiltva'); } }catch(e){}
+  forget(peer, 'végleg kitiltva');
+}
+
 const GAMES_FILE = path.join(DATA_DIR, 'games.json');
 let games = [];
 try{ games = JSON.parse(fs.readFileSync(GAMES_FILE, 'utf8')); if(!Array.isArray(games)) games = []; }catch(e){ games = []; }
@@ -626,6 +652,32 @@ const server = http.createServer((req, res) => {
     return;
   }
   // v4.40: fióktörléskor a Netlify-függvény aláírt kéréssel jelzi, hogy a játékos a ranglistáról is lekerüljön
+  if(url.pathname === '/api/ban' && req.method === 'POST'){
+    let raw = '';
+    req.on('data', c => { raw += c; if(raw.length > 4000) req.destroy(); });
+    req.on('end', () => {
+      let c = null;
+      try{ c = verifySigned(String(JSON.parse(raw).proof || '')); }catch(e){}
+      const dev = c && (c.ban || c.unban);
+      if(!c || !/^[A-Za-z0-9_-]{8,40}$/.test(String(dev || ''))){ res.writeHead(403, { 'content-type':'application/json' }); res.end('{"error":"forbidden"}'); return; }
+      const uids = Array.isArray(c.uids) ? c.uids.filter(u => isStr(u, 64)).slice(0, 10) : [];
+      if(c.ban){
+        permBans.devs[dev] = Date.now();
+        for(const ip of devIps.get(dev) || []) permBans.ips[ip] = dev;
+        uids.forEach(u => { permBans.uids[u] = dev; });
+        for(const p of [...peers.values()]) if(permBanned(p)) dropBanned(p);
+      } else {
+        delete permBans.devs[dev];
+        for(const [k, v] of Object.entries(permBans.ips)) if(v === dev) delete permBans.ips[k];
+        for(const [k, v] of Object.entries(permBans.uids)) if(v === dev) delete permBans.uids[k];
+        uids.forEach(u => { delete permBans.uids[u]; });
+      }
+      saveBans();
+      log(c.ban ? 'végleges kitiltás' : 'kitiltás feloldva', String(dev).slice(0, 6));
+      res.writeHead(200, { 'content-type':'application/json' }); res.end('{"ok":true}');
+    });
+    return;
+  }
   if(url.pathname === '/api/forget' && req.method === 'POST'){
     let raw = '';
     req.on('data', c => { raw += c; if(raw.length > 4000) req.destroy(); });
@@ -779,6 +831,8 @@ wss.on('connection', (ws, req) => {
         peers.set(peer.id, peer);
         ws.send(JSON.stringify({ t:'welcome', v:2, fresh:true, resumed:false, peers: [], online: peers.size, s: 0 }));
       }
+      noteDevIp(peer.dev, peer.ip);
+      if(permBanned(peer)){ dropBanned(peer); return; }
       if(peer.dirSub){
         const now2 = Date.now();
         directory.forEach((e, k) => { if(now2 - e.at > DIR_TTL_MS) directory.delete(k); else if(e.from !== peer.id) ws.send(JSON.stringify({ t:'dir', d: e.d })); });
@@ -793,6 +847,8 @@ wss.on('connection', (ws, req) => {
         if(!isStr(m.room, 128)) return;
         if(peer.room === m.room) return;
         if(/^[A-Za-z0-9]{16,40}$/.test(String(m.dev || ''))) peer.dev = String(m.dev);
+        noteDevIp(peer.dev, peer.ip);
+        if(permBanned(peer)){ dropBanned(peer); return; }
         if(peer.room) leaveRoom(peer, 'új szoba');
         {
           // v4.43: akit a szobanyitó kirúgott, az 24 óráig nem léphet vissza: se ugyanazzal a kapcsolattal, se ugyanarról
@@ -846,6 +902,7 @@ wss.on('connection', (ws, req) => {
         const th = crypto.createHash('sha256').update(String(peer.token)).digest('hex');
         if(!c || c.p !== peer.id || c.h !== th || !isStr(c.u, 64) || !isStr(c.n, 16) || !nameKey(c.n)){ ws.send(JSON.stringify({ t:'authed', ok:false })); return; }
         peer.acct = { uid: c.u, name: c.n, key: nameKey(c.n) };
+        if(permBanned(peer)){ dropBanned(peer); return; }
         const info = peer.room && roomInfo.get(peer.room);
         if(info){ info.accts = info.accts || new Map(); info.accts.set(peer.acct.key, peer.acct); }
         ws.send(JSON.stringify({ t:'authed', ok:true, name: c.n }));

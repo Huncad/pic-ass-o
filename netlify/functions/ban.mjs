@@ -6,11 +6,24 @@
 //   POST {action:"open",  room, dev}                       szobanyitó bejelenti a szobát  -> {hostKey}
 //   POST {action:"enter", room, dev}                       belépés előtt ellenőrzés       -> {ok, token} | {banned, scope, until}
 //   POST {action:"verify", room, dev, token}               a szobanyitó ellenőrzi a belépőt -> {ok} | {ok:false, reason}
-//   POST {action:"kick",  room, hostKey, targetDev}        kirúgás bejelentése            -> {ok, globalBan}
+//   POST {action:"kick",  room, hostKey, targetDev, how, targetName, hostName, roomName, targetUid}  kirúgás -> {ok, globalBan}
+//   POST {action:"check", dev}                             oldalbetöltéskor: végleg ki van-e tiltva -> {ok} | {banned:'perm'}
+// v4.44 — admin (x-admin-session fejléccel):
+//   POST {action:"kicklog"}                                a kirúgási napló + eszközönkénti összesítés
+//   POST {action:"permban", dev, note}                     végleges kitiltás az egész játékból (eszköz + a hozzá látott IP-k + fiók)
+//   POST {action:"unban", dev}                             a végleges kitiltás feloldása
+// A végleges kitiltás a játékszerverre is eljut (aláírt kérés), így az ott sem enged be.
 // Ha a szerver nem elérhető, a játék átengedi a belépést (fail-open), hogy ne akadjon el a játék.
 import { getStore } from '@netlify/blobs';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { json, makeLimiter, updateJSON } from '../lib/util.mjs';
+import { isAdminRequest } from '../lib/adminauth.mjs';
+import { signPayload, accountStore } from '../lib/account.mjs';
+
+const KICKLOG_KEEP_MS = 180 * 86400000;   // a kirúgási napló 180 napig marad
+const KICKLOG_MAX = 3000;
+const PERM = 8.64e15;                      // „örökké”
+const GAME_SERVER_URL = String(process.env.GAME_SERVER_URL || 'https://picasso.taile8c93.ts.net').replace(/\/+$/, '');
 
 const DAY = 86400000;
 const GLOBAL_BAN_MS = 7 * DAY;     // ennyi ideig tart az egész játékból való kitiltás
@@ -99,12 +112,76 @@ export default async (req) => {
     globalCache = g; globalCacheAt = now;
     return g;
   };
-  const globalBanUntil = (g, d, i) => Math.max(d ? (g.bans['d:' + d] || 0) : 0, i ? (g.bans['i:' + i] || 0) : 0);
+  const globalBanUntil = (g, d, i) => Math.max(d ? (g.bans['d:' + d] || 0) : 0, i ? (g.bans['i:' + i] || 0) : 0,
+    d && g.perm && g.perm['d:' + d] ? PERM : 0, i && g.perm && g.perm['i:' + i] ? PERM : 0);
+
+  // ---- v4.44: admin — kirúgási napló, végleges kitiltás ----
+  if (['kicklog', 'permban', 'unban'].includes(b.action)) {
+    if (!(await isAdminRequest(req))) return json({ error: 'unauthorized' }, 401);
+    if (b.action === 'kicklog') {
+      const log = (await rd('kicklog')) || { items: [] };
+      const g = tidyG(await rd('global'));
+      const items = (log.items || []).filter(x => now - x.at < KICKLOG_KEEP_MS);
+      const byDev = {};
+      for (const x of items) {
+        const e = byDev[x.dev] || (byDev[x.dev] = { dev: x.dev, n: 0, rooms: new Set(), hosts: new Set(), names: new Set(), last: 0, uids: new Set() });
+        e.n++; e.rooms.add(x.room); if (x.hostDev) e.hosts.add(x.hostDev); if (x.name) e.names.add(x.name); if (x.uid) e.uids.add(x.uid); e.last = Math.max(e.last, x.at);
+      }
+      const devs = Object.values(byDev).map(e => ({ dev: e.dev, n: e.n, rooms: e.rooms.size, hosts: e.hosts.size, names: [...e.names].slice(0, 8), last: e.last, account: e.uids.size > 0,
+        perm: !!(g.perm && g.perm['d:' + e.dev]), weekBan: (g.bans['d:' + e.dev] || 0) > now })).sort((a, c) => c.hosts - a.hosts || c.n - a.n);
+      const perms = Object.entries(asObj(g.permInfo) || {}).map(([dev, v]) => ({ dev, at: v.at, note: v.note || '', names: v.names || [] }));
+      return json({ ok: true, items: items.slice(-500).reverse().map(x => ({ at: x.at, room: x.room, roomName: x.roomName, name: x.name, host: x.host, how: x.how, dev: x.dev, reports: x.reports || 0, account: !!x.uid })), devs, perms });
+    }
+    const dev = clean(b.dev, 40);
+    if (!dev) return json({ error: 'bad dev' }, 400);
+    const log = (await rd('kicklog')) || { items: [] };
+    const mine = (log.items || []).filter(x => x.dev === dev);
+    // az eszközhöz valaha látott IP-lenyomatok (kirúgásokból és belépésekből) és fiókok
+    const ips = new Set(mine.map(x => x.ipH).filter(Boolean));
+    const uids = new Set(mine.map(x => x.uid).filter(Boolean));
+    const out = await updateJSON(store, 'global', raw => {
+      const g = tidyG(raw);
+      g.perm = asObj(g.perm) || {}; g.permInfo = asObj(g.permInfo) || {};
+      if (b.action === 'permban') {
+        g.perm['d:' + dev] = 1;
+        for (const i of ips) g.perm['i:' + i] = dev;
+        g.permInfo[dev] = { at: now, note: String(b.note || '').slice(0, 200), names: [...new Set(mine.map(x => x.name).filter(Boolean))].slice(0, 8), ips: [...ips].slice(0, 20), uids: [...uids].slice(0, 10) };
+      } else {
+        const info = asObj(g.permInfo[dev]) || {};
+        delete g.perm['d:' + dev];
+        for (const [k, v] of Object.entries(g.perm)) if (v === dev) delete g.perm[k];
+        (info.uids || []).forEach(u => uids.add(u));
+        delete g.permInfo[dev];
+        delete g.bans['d:' + dev];
+      }
+      return { value: g, result: g };
+    });
+    globalCache = out; globalCacheAt = now;
+    // fiók: végleges tiltásnál nem léphet be
+    const as = accountStore();
+    await Promise.all([...uids].map(u => b.action === 'permban' ? as.setJSON('banned/' + u, { at: now }) : as.delete('banned/' + u))).catch(() => {});
+    // játékszerver: aláírt kérés (az eszköz és a fiók; az IP-ket a szerver maga ismeri az eszközhöz)
+    let server = false;
+    try {
+      const proof = await signPayload({ [b.action === 'permban' ? 'ban' : 'unban']: dev, uids: [...uids], e: now + 10 * 60000 });
+      const r = await fetch(GAME_SERVER_URL + '/api/ban', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ proof }), signal: AbortSignal.timeout(6000) });
+      server = r.ok;
+    } catch (e) { server = false; }
+    return json({ ok: true, server });
+  }
 
   // egy IP-címről érkező, szokatlanul sok hívás: megállítjuk (a játék ilyenkor továbbengedi a játékost)
-  const lim = { open: [15, 3600000], enter: [60, 600000], verify: [200, 600000], kick: [60, 600000] }[b.action];
+  const lim = { open: [15, 3600000], enter: [60, 600000], verify: [200, 600000], kick: [60, 600000], check: [60, 600000] }[b.action];
   if (!lim) return json({ error: 'action' }, 400);
   if (limited(b.action + '|' + (ipH || 'x'), lim[0], lim[1])) return json({ error: 'slow down' }, 429);
+
+  // v4.44: oldalbetöltéskor — végleg kitiltott eszköz / IP az egész játékba nem léphet be
+  if (b.action === 'check') {
+    const g = await getG();
+    const p = asObj(g.perm) || {};
+    if ((dev && p['d:' + dev]) || (ipH && p['i:' + ipH])) return json({ banned: 'perm' });
+    return json({ ok: true });
+  }
 
   if (b.action === 'open') {
     if (!dev || !room) return json({ error: 'bad' }, 400);
@@ -176,7 +253,7 @@ export default async (req) => {
       const ips = ((asObj(r.pres) || {})[target] || []).slice(0, 6);
       r.bDev = Array.from(new Set([...(r.bDev || []), target])).slice(-300);
       r.bIp = Array.from(new Set([...(r.bIp || []), ...ips])).slice(-300);
-      return { value: r, result: { ips } };
+      return { value: r, result: { ips, hostDev: r.hostDev } };
     });
     if (res.err === 'unauthorized') return json({ error: 'unauthorized' }, 401);
     if (res.err) return json({ error: res.err }, 400);
@@ -201,6 +278,16 @@ export default async (req) => {
       return { value: g, result: { g, globalBan } };
     });
     globalCache = out.g; globalCacheAt = now;
+    // v4.44: napló az adminnak (a nevek csak olvasásra; a döntés az eszközön és az IP-n múlik)
+    const ct = s => String(s || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 60);
+    await updateJSON(store, 'kicklog', raw => {
+      const l = asObj(raw) || { items: [] };
+      l.items = (Array.isArray(l.items) ? l.items : []).filter(x => now - x.at < KICKLOG_KEEP_MS);
+      l.items.push({ at: now, room, roomName: ct(b.roomName), name: ct(b.targetName).slice(0, 16), host: ct(b.hostName).slice(0, 16), how: b.how === 'vote' ? 'vote' : 'host',
+        dev: target, ipH: (res.ips || [])[0] || '', hostDev: res.hostDev || '', uid: clean(b.targetUid, 40), reports: Math.max(0, Math.min(40, Number(b.reports) || 0)) });
+      if (l.items.length > KICKLOG_MAX) l.items = l.items.slice(-KICKLOG_MAX);
+      return { value: l };
+    }).catch(() => {});
     return json({ ok: true, globalBan: out.globalBan });
   }
 

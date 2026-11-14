@@ -1,7 +1,7 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 import { Account } from './account.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.43';
+const APP_VERSION = '4.44';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -302,6 +302,7 @@ const SRV = (function(){
       if(me !== ws) return;
       ws = null;
       if(api.up) clog('S02', `a szerverkapcsolat megszakadt (${ev && ev.code})`);
+      if(ev && ev.code === 4030){ gone = true; api.up = false; try{ api.onError && api.onError({ e:'banned' }); }catch(e){} return; }   // v4.44: végleg kitiltva
       api.up = false;
       schedule();
     };
@@ -314,6 +315,7 @@ const SRV = (function(){
     backoff = Math.min(15000, Math.round(backoff * 1.7));
   }
   function kick(){ if(!ws && !gone){ backoff = 800; open(); } }
+  api.stop = ()=>{ gone = true; clearTimeout(retryTimer); try{ ws && ws.close(); }catch(e){} };
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') kick(); });
   window.addEventListener('online', kick);
   window.addEventListener('pageshow', (ev)=>{ if(ev.persisted){ gone = false; kick(); } });
@@ -410,6 +412,41 @@ try{
     }
     return myDeviceId;
   }
+  // ---- v4.44: végleges kitiltás az egész játékból ----
+  // Az eszközazonosító és a kitiltás jele három helyen is megvan (localStorage, IndexedDB, süti), így egyetlen
+  // tároló törlése nem elég a visszatéréshez; a szerver ráadásul az IP-címet és a fiókot is tiltja.
+  const LOCK_KEY = 'picasso-lk';
+  const idb = (()=>{
+    let dbP = null;
+    const open = ()=> dbP || (dbP = new Promise((res, rej)=>{ try{ const r = indexedDB.open('picasso', 1); r.onupgradeneeded = ()=>r.result.createObjectStore('kv'); r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error); }catch(e){ rej(e); } }));
+    return {
+      get: k=>open().then(db=>new Promise(res=>{ const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = ()=>res(q.result); q.onerror = ()=>res(undefined); })).catch(()=>undefined),
+      set: (k, v)=>open().then(db=>new Promise(res=>{ const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = ()=>res(); t.onerror = ()=>res(); })).catch(()=>{})
+    };
+  })();
+  const cookieGet = n=>{ const m = document.cookie.match(new RegExp('(?:^|; )' + n + '=([^;]*)')); return m ? decodeURIComponent(m[1]) : ''; };
+  const cookieSet = (n, v)=>{ try{ document.cookie = `${n}=${encodeURIComponent(v)}; Path=/; Max-Age=${5 * 365 * 86400}; SameSite=Lax; Secure`; }catch(e){} };
+  function showLockout(){
+    try{ localStorage.setItem(LOCK_KEY, '1'); }catch(e){}
+    cookieSet('picasso_lk', '1'); idb.set('lk', 1);
+    try{ SRV.stop && SRV.stop(); }catch(e){}
+    document.title = 'PIC-ASS-O';
+    document.body.className = '';
+    document.body.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#121314;color:#E9E9E6;font:16px/1.5 system-ui,sans-serif;text-align:center"><div style="max-width:420px"><div style="font-size:3rem">🚫</div><h1 style="font-size:1.4rem;margin:8px 0">Ki vagy tiltva a játékból</h1><p style="color:#9A9DA0">Erről az eszközről és hálózatról többé nem lehet játszani, mert több szobából is ismételten kirúgtak. Ha szerinted ez tévedés, írj a picasso.ertesito@gmail.com címre.</p></div></div>';
+  }
+  (async function lockoutCheck(){
+    let marked = false;
+    try{ marked = localStorage.getItem(LOCK_KEY) === '1'; }catch(e){}
+    if(marked || cookieGet('picasso_lk') === '1' || await idb.get('lk')){ showLockout(); return; }
+    // the device id survives clearing one storage: restore it from the others
+    let dev = ''; try{ dev = localStorage.getItem('picasso-device') || ''; }catch(e){}
+    const alt = cookieGet('picasso_d') || (await idb.get('dev')) || '';
+    if(!/^[A-Za-z0-9]{16,40}$/.test(dev) && /^[A-Za-z0-9]{16,40}$/.test(alt)){ try{ localStorage.setItem('picasso-device', alt); }catch(e){} myDeviceId = alt; }
+    const d = deviceId();
+    cookieSet('picasso_d', d); idb.set('dev', d);
+    const r = await banCall({ action:'check', dev: d }, 8000);
+    if(r && r.banned === 'perm') showLockout();
+  })();
   // null = the server could not be reached (then nobody is blocked: better a missed ban than a stuck game)
   async function banCall(body, ms){
     try{
@@ -457,11 +494,85 @@ try{
   // server can't be reached (then it lets everybody in), a kicked player
   // still can't come straight back into THIS room
   const localKickedDevs = new Set();
-  function reportKick(peerId){
+  function reportKick(peerId, how){
     const td = peerDev[peerId];
     if(td) localKickedDevs.add(td);
     if(!isHost || !banHostKey || !td || !roomCode) return;
-    banCall({ action:'kick', room: roomCode, hostKey: banHostKey, targetDev: td });
+    // v4.44: the admin's kick log gets who / by whom / how — the names are only for reading, the device decides
+    banCall({ action:'kick', room: roomCode, hostKey: banHostKey, targetDev: td, how: how === 'vote' ? 'vote' : 'host',
+      targetName: roomNameOf(peerId), hostName: myName, roomName: currentRoomName || '', targetUid: accountUids.get(peerId) || '',
+      reports: (kickRequests.get(peerId) || new Set()).size });
+  }
+  // v4.44: the room owner kicks at once (lobby and game alike), after a confirmation
+  async function hostKickPlayer(peerId){
+    if(!isHost || !peerId || peerId === selfId) return;
+    const name = roomNameOf(peerId);
+    const reqs = (kickRequests.get(peerId) || new Set()).size;
+    if(!(await askConfirm(`Biztosan kirúgod és kitiltod ${name} játékost ebből a szobából?\n\n24 óráig nem jöhet vissza — más névvel, újratöltve, másik böngészőből sem.${reqs ? `\n\n(${reqs} játékos jelezte, hogy ki kéne rúgni.)` : ''}`, { ok:'Kirúgom' }))) return;
+    sndClick();
+    try{ kickAction.send({ reason:'kicked' }, { target:peerId }); }catch(e){}
+    enforceKick(peerId);
+    reportKick(peerId, 'host');
+    kickRequests.delete(peerId);
+    if(!meta){ delete lobbyPlayers[peerId]; renderLobbyPlayers(); announceMyRoom(); }
+    else { try{ handlePeerLeftGame(peerId); }catch(e){} }
+    addSystemChatMessage(`🚫 ${name} kirúgva és kitiltva a szobából.`);
+  }
+  // v4.44: a guest asks the room owner to kick someone. Only the owner sees it; a guest can ask once per player,
+  // the owner decides — so one troll can't remove anyone, and nobody can flood the owner either.
+  const kickRequests = new Map();   // host: target -> Set(reporter)
+  const kickReqAt = new Map();      // host: reporter -> last request time (flood guard)
+  let kickReqAction = null;
+  const accountUids = new Map();    // peerId -> fiók uid (igazolt jegyből)
+  async function askHostToKick(target){
+    if(!kickReqAction || isHost || !target || target === selfId || target === roomHostId()) return;
+    if(!currentRoomPlayerIds().includes(selfId)) return;
+    const k = 'kr|' + target;
+    if(sentKickReqs.has(k)){ askInfo(`Már jelezted a szobanyitónak, hogy ${roomNameOf(target)} játékost ki kéne rúgni.`); return; }
+    sentKickReqs.add(k);
+    try{ kickReqAction.send({ target }, { target: roomHostId() }); }catch(e){}
+    addSystemChatMessage(`🚩 Jelezted a szobanyitónak, hogy ${roomNameOf(target)} játékost ki kéne rúgni. Ő dönt.`);
+  }
+  const sentKickReqs = new Set();
+  function onKickRequest(data, peerId){
+    if(!isHost || !isPlainObject(data)) return;
+    const target = cleanPeerId(data.target);
+    const players = currentRoomPlayerIds();
+    if(!target || target === peerId || target === selfId || !players.includes(peerId) || !players.includes(target)) return;
+    { const now = Date.now(); if(now - (kickReqAt.get(peerId) || 0) < 4000) return; kickReqAt.set(peerId, now); }
+    const set = kickRequests.get(target) || new Set();
+    if(set.has(peerId) || set.size >= 40) return;
+    set.add(peerId); kickRequests.set(target, set);
+    showKickRequestToast(target, peerId, set.size);
+  }
+  function showKickRequestToast(target, reporter, n){
+    document.querySelectorAll('.kickreq-toast').forEach(el=>{ if(el.dataset.target === target) el.remove(); });
+    const box = document.createElement('div');
+    box.className = 'kickreq-toast'; box.dataset.target = target; box.setAttribute('role', 'alert');
+    const t = document.createElement('p');
+    t.textContent = n > 1 ? `🚩 ${n} játékos szerint ${roomNameOf(target)} játékost ki kéne rúgni (legutóbb: ${roomNameOf(reporter)}).` : `🚩 ${roomNameOf(reporter)} szerint ${roomNameOf(target)} játékost ki kéne rúgni.`;
+    const row = document.createElement('div'); row.className = 'kickreq-row';
+    const no = document.createElement('button'); no.type = 'button'; no.className = 'secondary small'; no.textContent = 'Nem';
+    const yes = document.createElement('button'); yes.type = 'button'; yes.className = 'small'; yes.textContent = 'Kirúgom…';
+    no.addEventListener('click', ()=>box.remove());
+    yes.addEventListener('click', ()=>{ box.remove(); hostKickPlayer(target); });
+    row.append(no, yes); box.append(t, row); document.body.appendChild(box);
+    try{ sndChatPing(); }catch(e){}
+    setTimeout(()=>{ try{ box.remove(); }catch(e){} }, 30000);
+  }
+  // v4.44: what a click on another player offers
+  async function playerActionMenu(target){
+    if(!target || target === selfId) return;
+    if(isHost){ hostKickPlayer(target); return; }
+    if(target === roomHostId()) return;
+    const name = roomNameOf(target);
+    const players = currentRoomPlayerIds();
+    const canVote = players.filter(id=>id !== target).length >= 2;
+    const r = await askConfirm(`Mit szeretnél ${name} játékossal?\n\n🚩 Jelzés: csak a szobanyitó látja, ő dönt a kirúgásról.${canVote ? '\n🗳️ Szavazás: ha a többség is így szavaz, kikerül a szobából.' : ''}`,
+      canVote ? { ok:'🗳️ Szavazás', alt:'🚩 Jelzés', cancel:'Mégse' } : { ok:'🚩 Jelzés', cancel:'Mégse' });
+    if(!r) return;
+    if(r === 'alt' || !canVote) askHostToKick(target);
+    else castVoteKick(target, true);
   }
   // v4.40: fiókok — kinek igazolta a jegye a nevét (peerId -> név), és kinek a nevét hagyta már jóvá a szobanyitó
   const accountNames = new Map();
@@ -476,6 +587,7 @@ try{
       if(!c){ try{ renderRosters(); }catch(e){} return; }
       const had = accountNames.get(peerId);
       accountNames.set(peerId, c.name);
+      if(c.uid) accountUids.set(peerId, c.uid);
       if(had !== c.name){ try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){} try{ renderRosters(); }catch(e){} }
     });
   }
@@ -644,16 +756,19 @@ try{
       const okB = document.createElement('button'); okB.type = 'button'; okB.textContent = o.ok;
       let cancelB = null;
       if(o.cancel){ cancelB = document.createElement('button'); cancelB.type = 'button'; cancelB.className = 'secondary'; cancelB.textContent = o.cancel; row.appendChild(cancelB); }
+      let altB = null;   // v4.44: optional third choice -> resolves 'alt'
+      if(o.alt){ altB = document.createElement('button'); altB.type = 'button'; altB.className = 'secondary'; altB.textContent = o.alt; row.appendChild(altB); }
       row.appendChild(okB);
       box.append(p, row); ov.appendChild(box); document.body.appendChild(ov);
       const done = (v)=>{ document.removeEventListener('keydown', onKey, true); ov.remove(); try{ back && back.focus && back.focus(); }catch(e){} resolve(v); };
       const onKey = (e)=>{
         if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); done(false); }
-        else if(e.key === 'Tab'){ const f = [cancelB, okB].filter(Boolean); const i = f.indexOf(document.activeElement); e.preventDefault(); f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus(); }
+        else if(e.key === 'Tab'){ const f = [cancelB, altB, okB].filter(Boolean); const i = f.indexOf(document.activeElement); e.preventDefault(); f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus(); }
       };
       document.addEventListener('keydown', onKey, true);
       okB.addEventListener('click', ()=>done(true));
       if(cancelB) cancelB.addEventListener('click', ()=>done(false));
+      if(altB) altB.addEventListener('click', ()=>done('alt'));
       ov.addEventListener('click', (e)=>{ if(e.target === ov) done(false); });
       (cancelB || okB).focus();
     });
@@ -3601,6 +3716,8 @@ try{
     byeAction = room.makeAction('bye');
     chatReactAction = room.makeAction('chatreact');   // emoji reaction to one chat message
     guessReactAction = room.makeAction('greact');     // v4.42: emoji reaction to one guess
+    kickReqAction = room.makeAction('kickreq');       // v4.44: a guest asks the owner to kick someone
+    kickReqAction.onMessage = (data, {peerId})=>onKickRequest(data, peerId);
     guessReactAction.onMessage = (data, {peerId})=>{
       if(!isPlainObject(data) || !meta || !meta.playerNames[peerId]) return;
       const gid = clampNum(data.gid, 1, 1e6, 0), emoji = String(data.emoji || '');
@@ -4538,7 +4655,7 @@ try{
       votedOutIds.add(target);
       try{ kickAction.send({ reason:'voted' }, { target }); }catch(e){}
       enforceKick(target);
-      reportKick(target);
+      reportKick(target, 'vote');
       const name = roomNameOf(target);
       delete voteKicks[target];
       if(!meta){ delete lobbyPlayers[target]; renderLobbyPlayers(); announceMyRoom(); }
@@ -4547,7 +4664,7 @@ try{
     }
     return votes;
   }
-  async function castVoteKick(target){
+  async function castVoteKick(target, confirmed){
     if(!voteKickAction || !target || target === selfId || target === roomHostId()) return;
     const players = currentRoomPlayerIds();
     if(!players.includes(target)) return;
@@ -4556,7 +4673,7 @@ try{
     const name = roomNameOf(target);
     const set = voteKicks[target] || (voteKicks[target] = new Set());
     if(set.has(selfId)){ askInfo(`Már szavaztál ${name} kizárására.`); return; }
-    if(!(await askConfirm(`Szavazol ${name} kizárására?\n\nHa a többi játékos többsége (${voteKickNeed(eligible.length)} fő) is így szavaz, kikerül a szobából.`, { ok:'Szavazok' }))) return;
+    if(!confirmed && !(await askConfirm(`Szavazol ${name} kizárására?\n\nHa a többi játékos többsége (${voteKickNeed(eligible.length)} fő) is így szavaz, kikerül a szobából.`, { ok:'Szavazok' }))) return;
     sndClick();
     set.add(selfId);
     try{ voteKickAction.send({ target }); }catch(e){}
@@ -5429,7 +5546,7 @@ try{
   function clearRoomActions(){
     helloAction = settingsAction = roundAction = strokeAction = guessAction = feedAction =
       resultAction = scoreAction = chatAction = typingAction = kickAction = hintAction =
-      reactionAction = byeAction = chatReactAction = guessReactAction = lateJoinAction = lateSyncAction =
+      reactionAction = byeAction = chatReactAction = guessReactAction = kickReqAction = lateJoinAction = lateSyncAction =
       rematchVoteAction = turnSyncAction = closeMarkAction = voteKickAction = null;
       cwordsAction = null; lobbyCustom = {}; wflagAction = null;
       { const lw = document.getElementById('lobby-words-input'); if(lw){ lw.value = ''; try{ updateMyWordsCount(); }catch(e){} } }
@@ -8436,26 +8553,14 @@ try{
       return `<div class="player-chip ${id===selfId?'me':''}${away?' away':''}"${away?` title="${away}"`:''}>
         ${nameDotHtml(id)}${escapeHtml(lobbyPlayers[id])}${id===selfId?' (Te)':''}${away?` <small class="chip-away">💤 ${away}</small>`:''}
         ${canKick ? `<button class="lobby-kick-btn" data-peer="${escapeHtml(id)}" title="Kirúgás" aria-label="${escapeHtml(lobbyPlayers[id])} eltávolítása a szobából">✕</button>` : ''}
-        ${canVote ? `<button class="lobby-kick-btn lobby-vote-btn" data-peer="${escapeHtml(id)}" title="Szavazás a kizárásáról" aria-label="Szavazás ${escapeHtml(lobbyPlayers[id])} kizárásáról">🗳️</button>` : ''}
+        ${canVote ? `<button class="lobby-kick-btn lobby-vote-btn" data-peer="${escapeHtml(id)}" title="Szavazás vagy jelzés a szobanyitónak" aria-label="Szavazás vagy jelzés: ${escapeHtml(lobbyPlayers[id])}">🚩</button>` : ''}
       </div>`;
     }).join('');
     document.querySelectorAll('.lobby-vote-btn').forEach(btn=>{
-      btn.addEventListener('click', (e)=>{ e.stopPropagation(); castVoteKick(btn.dataset.peer); });
+      btn.addEventListener('click', (e)=>{ e.stopPropagation(); playerActionMenu(btn.dataset.peer); });
     });
     document.querySelectorAll('.lobby-kick-btn:not(.lobby-vote-btn)').forEach(btn=>{
-      btn.addEventListener('click', async (e)=>{
-        e.stopPropagation();
-        const peerId = btn.dataset.peer;
-        const name = lobbyPlayers[peerId] || 'A játékos';
-        if(!(await askConfirm(`Biztosan kirúgod ${name} játékost a szobából?`, { ok:'Kirúgom' }))) return;
-        sndClick();
-        kickAction.send({ reason:'kicked' }, { target:peerId });
-        enforceKick(peerId);
-        reportKick(peerId);
-        delete lobbyPlayers[peerId];
-        renderLobbyPlayers();
-        addSystemChatMessage(`🚫 ${name} eltávolítva a szobából.`);
-      });
+      btn.addEventListener('click', (e)=>{ e.stopPropagation(); hostKickPlayer(btn.dataset.peer); });
     });
     document.getElementById('lobby-players').insertAdjacentHTML('beforeend', spectatorListHtml());
     document.querySelectorAll('.spec-kick').forEach(btn=>{
@@ -10320,10 +10425,11 @@ try{
     const html = ids.map(id=>{
       const name = meta.playerNames[id];
       const isMe = id === selfId, isDrawer = id === drawerId;
-      const votable = !isMe && id !== roomHostId();
+      const votable = !isMe && id !== roomHostId() && !isHost;
+      const kickable = !isMe && isHost;
       const away = awayLabel(id);
       const tm = teamOf(id);
-      return `<div class="rchip${tm >= 0 ? ' ' + TEAM_INFO[tm].cls : ''}${isMe?' me':''}${isDrawer?' drawer':''}${votable?' votable':''}${away?' away':''}" data-id="${escapeHtml(id)}" title="${escapeHtml(name)}${away?' — '+away:''}${isDrawer?' — most ő rajzol':''}${votable?' · koppints a kizárás megszavazásához':''}">
+      return `<div class="rchip${tm >= 0 ? ' ' + TEAM_INFO[tm].cls : ''}${isMe?' me':''}${isDrawer?' drawer':''}${votable?' votable':''}${kickable?' kickable':''}${away?' away':''}" data-id="${escapeHtml(id)}" title="${escapeHtml(name)}${away?' — '+away:''}${isDrawer?' — most ő rajzol':''}${votable?' · koppints a kizárás megszavazásához':''}">
         ${avatarHtml(id, name)}
         <span class="rname">${escapeHtml(name)}</span>
         ${(gameStats.streak[id]||0) >= STREAK_SHOW ? `<span class="rstreak" title="${gameStats.streak[id]} jó tipp egymás után">🔥${gameStats.streak[id]}</span>` : ''}
@@ -10345,8 +10451,8 @@ try{
     const el = document.getElementById(rid);
     if(!el) return;
     el.addEventListener('click', (e)=>{
-      const chip = e.target.closest && e.target.closest('.rchip.votable');
-      if(chip) castVoteKick(chip.dataset.id);
+      const chip = e.target.closest && e.target.closest('.rchip.votable, .rchip.kickable');
+      if(chip) playerActionMenu(chip.dataset.id);
     });
   });
   // v4.24: a short "−1" badge on the player's score chip
@@ -11683,6 +11789,7 @@ try{
   renderHomeStats();
   // v4.40: fiók — belépés, névigazoló jegy, statisztika- és beállítás-szinkron
   SRV.onError = (m)=>{
+    if(m && m.e === 'banned'){ showLockout(); return; }
     if(!m || m.e !== 'name-taken') return;
     // a szerver nem engedte át a bemutatkozásunkat: ez a név egy regisztrált játékosé
     try{ if(room) leaveRoomAndGoHome(); }catch(e){}
@@ -11973,7 +12080,8 @@ try{
     // invalidated in one go (delayed handoffs, a pending game-end screen, a
     // recorder that is still finishing, re-sends).
     roomGeneration++;
-    accountNames.clear(); nameApproved.clear(); namePending.clear();
+    accountNames.clear(); nameApproved.clear(); namePending.clear(); accountUids.clear(); kickRequests.clear(); sentKickReqs.clear();
+    document.querySelectorAll('.kickreq-toast').forEach(el=>el.remove());
     verifiedPeers.clear(); pendingVerify.clear(); noTokenSince.clear(); kickedPeers.clear(); banHostKey = ''; banToken = ''; localKickedDevs.clear();
     for(const k of Object.keys(peerDev)) delete peerDev[k];
     // Tell the others we're leaving on purpose so they update right away
@@ -12769,6 +12877,59 @@ try{
     try{ await adminSusCall({ action:'clear' }); loadAdminSuspects(); }catch(e){ adminSusStatus(e.message, 'err'); }
   });
   document.getElementById('admin-tabbtn-gyanus').addEventListener('click', ()=>{ if(adminSession) loadAdminSuspects(); });
+  // ---- v4.44: kirúgási napló és végleges kitiltás ----
+  async function adminBanCall(payload){
+    if(!adminSession) throw new Error('Lépj be újra az admin oldalra.');
+    const r = await fetch(BAN_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'x-admin-session': adminSession }, body: JSON.stringify(payload) });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    return j;
+  }
+  function adminKickStatus(text, kind){
+    const el = document.getElementById('admin-kick-status'); if(!el) return;
+    el.style.color = kind === 'err' ? 'var(--red)' : kind === 'ok' ? 'var(--green)' : 'var(--chalk-dim)';
+    el.textContent = text;
+  }
+  async function loadAdminKicks(){
+    adminKickStatus('Betöltés…');
+    try{
+      const j = await adminBanCall({ action:'kicklog' });
+      const fmt = ts => new Date(ts).toLocaleString('hu-HU', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+      const short = d => escapeHtml(String(d || '').slice(0, 8)) + '…';
+      const devs = Array.isArray(j.devs) ? j.devs : [];
+      document.getElementById('admin-kick-devs').innerHTML = devs.length ? devs.slice(0, 100).map(d=>`
+        <div class="admin-note" style="margin:6px 0;padding:8px 12px;text-align:left;${d.hosts >= 3 ? 'border-color:var(--red);' : ''}">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <b style="color:var(--chalk);">${escapeHtml(d.names.join(', ') || '?')}</b>
+            <span>${d.n}× kirúgva · ${d.hosts} különböző szobanyitó · ${d.rooms} szoba${d.account ? ' · 👤 fiókos' : ''}</span>
+            ${d.perm ? '<span style="color:var(--red);font-weight:800;">VÉGLEG KITILTVA</span>' : d.weekBan ? '<span style="color:var(--yellow);">heti tiltás</span>' : ''}
+            <span style="margin-left:auto;font-size:.8rem;color:var(--chalk-dim);">eszköz: ${short(d.dev)} · utoljára ${escapeHtml(fmt(d.last))}</span>
+            ${d.perm ? `<button class="ghost small admin-unban" data-dev="${escapeHtml(d.dev)}">Feloldás</button>` : `<button class="small admin-permban" data-dev="${escapeHtml(d.dev)}" data-names="${escapeHtml(d.names.join(', '))}" style="background:var(--red);">Végleges kitiltás</button>`}
+          </div>
+        </div>`).join('') : '<p class="center-note">Még nem volt kirúgás. 🎉</p>';
+      const perms = Array.isArray(j.perms) ? j.perms : [];
+      document.getElementById('admin-kick-perms').innerHTML = perms.length ? perms.map(p=>`
+        <div class="admin-note" style="margin:6px 0;padding:8px 12px;text-align:left;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <b>${escapeHtml((p.names || []).join(', ') || '?')}</b><span style="color:var(--chalk-dim);">${escapeHtml(fmt(p.at))}${p.note ? ' · ' + escapeHtml(p.note) : ''} · eszköz: ${short(p.dev)}</span>
+          <button class="ghost small admin-unban" data-dev="${escapeHtml(p.dev)}" style="margin-left:auto;">Feloldás</button>
+        </div>`).join('') : '<p class="center-note">Senki.</p>';
+      const items = Array.isArray(j.items) ? j.items : [];
+      document.getElementById('admin-kick-log').innerHTML = items.length ? '<div style="font-size:.85rem;line-height:1.6;text-align:left;">' + items.slice(0, 200).map(x=>
+        `${escapeHtml(fmt(x.at))} · <b>${escapeHtml(x.name || '?')}</b> — ${x.how === 'vote' ? '🗳️ szavazással' : '👑 a szobanyitó (' + escapeHtml(x.host || '?') + ')'} · „${escapeHtml(x.roomName || '')}” (${escapeHtml(x.room || '')})${x.reports ? ` · 🚩 ${x.reports} jelzés` : ''}${x.account ? ' · 👤' : ''} · ${short(x.dev)}`).join('<br>') + '</div>' : '';
+      document.querySelectorAll('.admin-permban').forEach(b=>b.addEventListener('click', async ()=>{
+        if(!(await askConfirm(`Végleg kitiltod az egész játékból: ${b.dataset.names || 'ezt az eszközt'}?\n\nAz eszköz, a hozzá látott IP-címek és a fiókja (ha van) többé nem léphet be. Később feloldható.`, { ok:'Kitiltom' }))) return;
+        try{ const r = await adminBanCall({ action:'permban', dev: b.dataset.dev, note: 'admin' }); adminKickStatus(r.server ? '✅ Kitiltva (a játékszerveren is).' : '✅ Kitiltva — a játékszervert most nem értük el, ott a következő próbálkozásig nem él.', r.server ? 'ok' : 'err'); loadAdminKicks(); }
+        catch(e){ adminKickStatus(e.message, 'err'); }
+      }));
+      document.querySelectorAll('.admin-unban').forEach(b=>b.addEventListener('click', async ()=>{
+        if(!(await askConfirm('Feloldod a végleges kitiltást?', { ok:'Feloldom' }))) return;
+        try{ await adminBanCall({ action:'unban', dev: b.dataset.dev }); adminKickStatus('Feloldva.', 'ok'); loadAdminKicks(); }catch(e){ adminKickStatus(e.message, 'err'); }
+      }));
+      if(!document.getElementById('admin-kick-status').style.color.includes('green')) adminKickStatus('');
+    }catch(e){ adminKickStatus(e instanceof TypeError ? 'A szerver nem érhető el.' : e.message, 'err'); }
+  }
+  document.getElementById('admin-kick-load').addEventListener('click', ()=>{ sndClick(); loadAdminKicks(); });
+  document.getElementById('admin-tabbtn-kirugasok').addEventListener('click', ()=>{ if(adminSession) loadAdminKicks(); });
 
   async function renderChangelog(){
     const currentVersion = APP_VERSION;

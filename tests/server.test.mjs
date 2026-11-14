@@ -255,6 +255,32 @@ test('kirúgás: más kapcsolattal, más névvel sem jöhet vissza ugyanarról a
   await Promise.all([bad.close(), again.close(), again2.close(), other.close()]);
 });
 
+test('végleges kitiltás: csak aláírt kérésre; az eszköz, az IP és a fiók sem léphet be, újraindítás után sem', async () => {
+  const t = client('perm0tro1');
+  await t.connect();
+  t.ws.send(JSON.stringify({ t: 'join', room: 'v2:szoba-perm', dev: 'permtroll000000001' })); t.room = 'v2:szoba-perm';
+  await sleep(100);
+  const post = body => fetch(`http://127.0.0.1:${PORT}/api/ban`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await post({ proof: 'x.y' })).status, 403);
+  assert.equal((await post({ proof: signed({ ban: 'permtroll000000001', uids: [], e: Date.now() - 1 }) })).status, 403, 'lejárt');
+  assert.equal((await post({ proof: signed({ ban: 'permtroll000000001', uids: ['uid-troll'], e: Date.now() + 60000 }) })).status, 200);
+  await sleep(150);
+  assert.ok(t.closes.includes(4030), 'a kapcsolatot azonnal bontotta');
+  // ugyanarról az IP-ről (tesztben minden 127.0.0.1) más eszközzel sem
+  const t2 = client('perm0tro2');
+  await t2.connect().catch(() => {});
+  await sleep(150);
+  assert.ok(t2.closes.includes(4030), 'az IP is tiltva');
+  assert.ok(fs.readFileSync(path.join(dataDir, 'bans.json'), 'utf8').includes('permtroll000000001'), 'lemezre mentve');
+  // feloldás (különben a többi teszt nem tudna csatlakozni)
+  assert.equal((await post({ proof: signed({ unban: 'permtroll000000001', uids: ['uid-troll'], e: Date.now() + 60000 }) })).status, 200);
+  const t3 = client('perm0tro3');
+  await t3.connect();
+  await sleep(100);
+  assert.ok(!t3.closes.includes(4030));
+  await t3.close();
+});
+
 test('ranglista: regisztrált játékos nélkül a játék nem kerül fel', async () => {
   const a = client('mmmm0001'), b = client('nnnn0001');
   await Promise.all([a.connect(), b.connect()]);

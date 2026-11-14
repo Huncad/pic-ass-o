@@ -219,6 +219,7 @@ export async function sessionUser(req, store = accountStore()) {
   if (!sess || !sess.uid || Number(sess.exp) < Date.now()) { if (sess) await store.delete('s/' + sh).catch(() => {}); return null; }
   const user = await getUser(store, sess.uid);
   if (!user || !Array.isArray(user.sess) || !user.sess.includes(sh)) return null;
+  if (await store.get('banned/' + user.uid).catch(() => null)) return null;   // v4.44: végleg kitiltott fiók
   return { user, sh, sess, token };
 }
 /** Minden munkamenet lezárása (a megadott kivételével). */

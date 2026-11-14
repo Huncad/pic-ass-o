@@ -580,7 +580,7 @@
       <h2 id="privacy-title">🔒 Adatvédelem</h2>
       <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
     </div>
-    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. november 14-től · v4.43</p>
+    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. november 14-től · v4.44</p>
     <h3 class="pv-h">Ki kezeli az adatokat?</h3>
     <p><b>Adatkezelő:</b> Ádám, magánszemély, a PIC-ASS-O hobbiprojekt fejlesztője és üzemeltetője.<br>
     <b>Kapcsolat:</b> <a href="mailto:picasso.ertesito@gmail.com" style="color:var(--blue);">picasso.ertesito@gmail.com</a> — minden adatvédelmi kérdéssel és kéréssel ide írhatsz.</p>
@@ -603,7 +603,7 @@
       </li>
       <li><b>Nyilvános szobák listája:</b> a szoba neve, a szobanyitó beceneve és a létszám, amíg a szoba nyitva van. Zárt szoba nem jelenik meg névvel. <i>Jogalap: 6. cikk (1) b.</i></li>
       <li><b>Közös ranglista:</b> a ranglistán <b>csak regisztrált játékosok</b> szerepelnek: a befejezett játékokból a játékosnevük, egy belső fiókazonosító és a pontszámuk kerül a saját játékszerverre, <b>1 évig</b>. A vendégek (fiók nélküli játékosok) neve nem tárolódik, csak a pontszámuk, név nélkül. A fiókod törlésével a ranglistáról is azonnal lekerülsz. <i>Jogalap: jogos érdek (6. cikk (1) f) — tiltakozhatsz ellene.</i></li>
-      <li><b>Kitiltás:</b> ha a szobanyitó kirúg, egy véletlen eszközazonosítót és az IP-címed titkos kulccsal képzett lenyomatát (nem magát a címet) tároljuk a Netlify-on, hogy ne tudj visszalépni. Szobás tiltás legfeljebb 30, egész játékból való tiltás 7 napig marad meg. Emellett a saját játékszerver a memóriájában <b>24 óráig</b> megjegyzi a kirúgott játékos eszközazonosítóját, IP-címét és (ha van) fiókazonosítóját, hogy abba a szobába más névvel se léphessen vissza; ez lemezre nem kerül, és a szerver újraindításakor törlődik. Ha a kirúgott a szobanyitóval egy hálózaton (pl. ugyanazon a wifin) van, az IP-címet nem tiltjuk. <i>Jogalap: jogos érdek a játék rendjének védelméhez (6. cikk (1) f).</i></li>
+      <li><b>Kitiltás:</b> ha a szobanyitó kirúg, egy véletlen eszközazonosítót és az IP-címed titkos kulccsal képzett lenyomatát (nem magát a címet) tároljuk a Netlify-on, hogy ne tudj visszalépni. Szobás tiltás legfeljebb 30, egész játékból való tiltás 7 napig marad meg. Emellett a saját játékszerver a memóriájában <b>24 óráig</b> megjegyzi a kirúgott játékos eszközazonosítóját, IP-címét és (ha van) fiókazonosítóját, hogy abba a szobába más névvel se léphessen vissza; ez lemezre nem kerül, és a szerver újraindításakor törlődik. Ha a kirúgott a szobanyitóval egy hálózaton (pl. ugyanazon a wifin) van, az IP-címet nem tiltjuk. <b>Kirúgási napló:</b> minden kirúgásról az üzemeltető naplót kap (időpont, szoba, a kirúgott és a szobanyitó beceneve, a véletlen eszközazonosító, az IP-cím lenyomata, hogy volt-e fiókja, és hány játékos jelezte), <b>180 napig</b>. Aki rendszeresen kirúgásra kerül, azt az üzemeltető <b>véglegesen kitilthatja</b>: ekkor az eszközazonosító, a hozzá látott IP-címek (a Netlify-on lenyomatként, a játékszerveren a tiltólistán) és a fiókazonosító a feloldásig tárolódik, és a kitiltás jele az eszközön is megmarad (helyi tárhely, IndexedDB, süti). <i>Jogalap: jogos érdek a játék rendjének és a többi játékos védelméhez (6. cikk (1) f).</i></li>
       <li><b>E-mail értesítő új szobákról (csak ha bekapcsolod a fiókodban):</b> értesítést csak regisztrált játékos kérhet; a levél a fiókod megerősített e-mail címére megy, ezért a bekapcsolás időpontján kívül nem tárolunk hozzá új adatot. Csak az új szobákról szóló értesítéshez használjuk (legfeljebb 15 percenként egy levél). Kikapcsoláskor, a levelek alján lévő leiratkozó linkre kattintva vagy a fiók törlésekor azonnal töröljük. <i>Jogalap: a hozzájárulásod (6. cikk (1) a), amit bármikor visszavonhatsz — a visszavonás az addigi küldések jogszerűségét nem érinti.</i> <b>Korábbi feliratkozók:</b> aki a fiókok bevezetése előtt, fiók nélkül iratkozott fel, egy tájékoztató levelet kap; ha 30 napon belül nem regisztrál ugyanazzal a címmel, a címét töröljük.</li>
       <li><b>Szabálytalan játék jelzése:</b> ha egy játékos eszközéről olyan üzenet érkezik, amit a játék módosítatlan változata nem küld (például üzenetáradat, más nevében küldött üzenet, a megfejtés a chatben), a többi eszköz ezt jelzi az üzemeltetőnek: a becenév, a véletlen eszközazonosító, a szoba, a gyanú fajtája és a jelző beceneve kerül a Netlify-on tárolt naplóba, <b>60 napig</b>. Az IP-címet nem tároljuk, csak egy lenyomatát. <i>Jogalap: jogos érdek a játék rendjének védelméhez (6. cikk (1) f).</i></li>
       <li><b>Visszajelzés-űrlap:</b> amit beírsz (a név és az elérhetőség önkéntes), a Netlify Forms tárolja; a válasz után, de legkésőbb 1 év múlva töröljük. <i>Jogalap: hozzájárulás (6. cikk (1) a).</i></li>
@@ -1168,6 +1168,7 @@
       <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-zene" data-tab="zene" aria-controls="admin-tab-zene">🎵 Zene</button>
       <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-visszajelzes" data-tab="visszajelzes" aria-controls="admin-tab-visszajelzes">📬 Visszajelzések</button>
       <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-gyanus" data-tab="gyanus" aria-controls="admin-tab-gyanus">🚩 Gyanús esetek</button>
+      <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-kirugasok" data-tab="kirugasok" aria-controls="admin-tab-kirugasok">🚫 Kirúgások</button>
       <button type="button" role="tab" class="admin-tab" id="admin-tabbtn-beallitas" data-tab="beallitas" aria-controls="admin-tab-beallitas">⚙️ Beállítások</button>
     </div>
 
@@ -1376,6 +1377,25 @@
     </div>
 
     <!-- v4.32: a játékosok eszközei által jelzett szabálytalan / hamisított / elárasztó üzenetek -->
+    <div class="admin-tabpanel" id="admin-tab-kirugasok" role="tabpanel" aria-labelledby="admin-tabbtn-kirugasok">
+    <div class="admin-note" style="margin-bottom:18px;">
+      <div class="admin-panel-header" style="margin-bottom:6px;">
+        <strong style="color:var(--chalk);">🚫 Kirúgások</strong>
+        <button class="secondary small" id="admin-kick-load" type="button">🔄 Betöltés</button>
+      </div>
+      Minden kirúgás ide kerül (180 napig). Fent az <b>eszközök</b> vannak, a legtöbb <i>különböző szobanyitó</i> által kirúgott elöl —
+      ez a megbízható jel, mert egy szobanyitó egyedül nem tudja „lejáratni” a másikat. A <b>Végleges kitiltás</b> az eszközt, a hozzá
+      látott IP-címeket és a fiókját (ha van) zárja ki az egész játékból; a játékszerver is megkapja. Feloldható.
+      <div id="admin-kick-status" class="admin-warning" style="text-align:left;"></div>
+      <h4 style="margin:14px 0 6px;color:var(--yellow);">Eszközök</h4>
+      <div id="admin-kick-devs"></div>
+      <h4 style="margin:14px 0 6px;color:var(--yellow);">Végleg kitiltva</h4>
+      <div id="admin-kick-perms"></div>
+      <h4 style="margin:14px 0 6px;color:var(--yellow);">Napló</h4>
+      <div id="admin-kick-log"></div>
+    </div>
+    </div>
+
     <div class="admin-tabpanel" id="admin-tab-gyanus" role="tabpanel" aria-labelledby="admin-tabbtn-gyanus">
     <div class="admin-note" style="margin-bottom:18px;">
       <div class="admin-panel-header" style="margin-bottom:6px;">

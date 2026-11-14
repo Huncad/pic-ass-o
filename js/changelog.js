@@ -2,6 +2,11 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.44', changes:[
+    'A szobanyitó játék közben is azonnal kirúghat bárkit: a játékosra koppintva, megerősítés után. A kirúgott 24 óráig nem jöhet vissza abba a szobába.',
+    'A többi játékos a 🚩 gombbal (vagy a játékosra koppintva) választhat: szavazás a kizárásról, vagy jelzés a szobanyitónak. A jelzést csak a szobanyitó látja, és ő dönt; ugyanazt a játékost egy játékos csak egyszer jelezheti.',
+    'Aki rendszeresen kirúgásra kerül, azt az üzemeltető véglegesen kitilthatja az egész játékból: az eszköz, a hálózat és a fiók sem léphet be többé.'
+  ]},
   { version:'4.43', changes:[
     'Új: belépés jelkulccsal (passkey) — jelszó helyett ujjlenyomattal, arcfelismeréssel vagy a telefonod képernyőzár-kódjával. A fiókodban add hozzá („🔑 Jelkulcsok” → Hozzáadás), utána a belépésnél a „Belépés jelkulccsal” gomb elég.',
     'A játék levelei (megerősítés, értesítő, biztonsági levelek) a játékban beállított színvilágodban érkeznek — ha nálad szürke a téma, a levél is szürke.',

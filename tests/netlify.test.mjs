@@ -71,6 +71,7 @@ globalThis.fetch = async (url, opts = {}) => {
     return res(200, gistBody());
   }
   if (u.endsWith('/api/szobak')) return res(200, { rooms: net.rooms });
+  if (u.endsWith('/api/ban')) { (net.bans = net.bans || []).push(JSON.parse(opts.body)); return res(200, { ok: true }); }
   if (u.endsWith('/api/forget')) { net.forget.push(JSON.parse(opts.body)); return res(200, { ok: true }); }
   if (u.startsWith('https://example.test/.netlify/functions/subscribe')) {
     net.selfCalls.push(opts);
@@ -169,6 +170,40 @@ test('ban: szobanyitás, belépés, kirúgás és heti tiltás', async () => {
   assert.equal(k2.globalBan, true);
   const blocked = await call({ action: 'enter', room: 'KLMNO', dev: 'guestdevice0001' }, '5.6.7.8');
   assert.equal(blocked.scope, 'global');
+});
+
+test('kirúgási napló és végleges kitiltás (admin)', async () => {
+  const { default: ban } = await import('../netlify/functions/ban.mjs');
+  const { makeSession } = await import('../netlify/lib/adminauth.mjs');
+  const call = async (b, ip = '1.2.3.4', h = {}) => { const r = await ban(post('/.netlify/functions/ban', b, Object.assign({ 'x-nf-client-connection-ip': ip }, h))); return { status: r.status, j: await r.json() }; };
+  const o = (await call({ action: 'open', room: 'LOGGA', dev: 'hostdevicelog01' }, '30.0.0.1')).j;
+  await call({ action: 'enter', room: 'LOGGA', dev: 'trolldevice0001' }, '31.0.0.1');
+  await call({ action: 'kick', room: 'LOGGA', hostKey: o.hostKey, targetDev: 'trolldevice0001', how: 'host', targetName: 'Troll<b>', hostName: 'Anna', roomName: 'Buli', reports: 2 }, '30.0.0.1');
+  // admin nélkül semmi
+  assert.equal((await call({ action: 'kicklog' })).status, 401);
+  assert.equal((await call({ action: 'permban', dev: 'trolldevice0001' })).status, 401);
+  const admin = { 'x-admin-session': await makeSession() };
+  const log = (await call({ action: 'kicklog' }, '1.2.3.4', admin)).j;
+  assert.equal(log.items[0].name, 'Trollb', 'a név tisztítva');
+  assert.equal(log.items[0].reports, 2);
+  const td = log.devs.find(d => d.dev === 'trolldevice0001');
+  assert.ok(td && td.hosts === 1 && td.n === 1);
+  assert.equal(log.devs.find(d => d.dev === 'guestdevice0001').hosts, 2, 'a több szobanyitó által kirúgott elöl');
+  assert.equal(log.devs[0].dev, 'guestdevice0001');
+  // még nincs végleg kitiltva
+  assert.deepEqual((await call({ action: 'check', dev: 'trolldevice0001' }, '31.0.0.1')).j, { ok: true });
+  net.bans = [];
+  assert.equal((await call({ action: 'permban', dev: 'trolldevice0001' }, '1.2.3.4', admin)).j.ok, true);
+  assert.equal(net.bans.length, 1, 'a játékszerver is megkapta');
+  // az eszköz és a hozzá látott IP — más eszközről, ugyanarról a hálózatról sem
+  assert.equal((await call({ action: 'check', dev: 'trolldevice0001' }, '99.0.0.1')).j.banned, 'perm');
+  assert.equal((await call({ action: 'check', dev: 'ujeszkoz0000001' }, '31.0.0.1')).j.banned, 'perm');
+  assert.equal((await call({ action: 'enter', room: 'LOGGB', dev: 'ujeszkoz0000001' }, '31.0.0.1')).j.scope, 'global');
+  assert.deepEqual((await call({ action: 'check', dev: 'artatlan0000001' }, '32.0.0.1')).j, { ok: true });
+  assert.equal((await call({ action: 'kicklog' }, '1.2.3.4', admin)).j.perms.length, 1);
+  // feloldás
+  assert.equal((await call({ action: 'unban', dev: 'trolldevice0001' }, '1.2.3.4', admin)).j.ok, true);
+  assert.deepEqual((await call({ action: 'check', dev: 'trolldevice0001' }, '31.0.0.1')).j, { ok: true });
 });
 
 test('wordused / wordblock: csak a játékszerver jelezhet, és párhuzamosan sem vész el jelzés', async () => {

@@ -247,6 +247,7 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
       });
       if (!fresh) return err('Ezt a kódot már felhasználtad, várd meg a következőt.', 401, { need2fa: true });
     }
+    if (await store.get('banned/' + user.uid).catch(() => null)) return err('Ez a fiók végleg ki van tiltva a játékból.', 403);
     await lockClear(store, eh);
     if (needsRehash(user.pw)) {
       const pw = await hashPassword(password);
@@ -293,6 +294,7 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
       raw.pk = (raw.pk || []).map(k => k.id === credId ? Object.assign(k, { counter: v.authenticationInfo.newCounter, used: Date.now() }) : k);
       return { value: raw };
     });
+    if (await store.get('banned/' + owner.uid).catch(() => null)) return err('Ez a fiók végleg ki van tiltva a játékból.', 403);
     await lockClear(store, owner.eh);
     const token = await createSession(store, owner.uid, req);
     return json({ ok: true, user: await publicUser(await getUser(store, owner.uid)) }, 200, { 'set-cookie': sessionCookie(token) });
