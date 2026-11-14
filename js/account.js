@@ -422,6 +422,12 @@ function paintPasskeys(){
   if(!box || !list) return;
   box.classList.toggle('hidden', !pkSupported());
   { const ph = $('acct-pk-add-phone'), hint = $('acct-pk-phone-hint'); const show = pkSupported() && !isPhone(); if(ph) ph.classList.toggle('hidden', !show); if(hint) hint.classList.toggle('hidden', !show); }
+  // v4.47: ahol a gép maga nem tud jelkulcsot tárolni (pl. Linux), a gépi gomb helyett egy rövid magyarázat
+  if(!isPhone()) localPasskeyOk().then(ok=>{
+    const loc = $('acct-pk-add'), why = $('acct-pk-nolocal');
+    if(loc) loc.classList.toggle('hidden', !ok);
+    if(why){ why.textContent = ok ? '' : noLocalText(); why.classList.toggle('hidden', ok); }
+  });
   list.textContent = '';
   const keys = (user && Array.isArray(user.passkeys)) ? user.passkeys : [];
   if(!keys.length){ const li = document.createElement('li'); li.className = 'acct-why'; li.textContent = 'Még nincs jelkulcsod.'; list.appendChild(li); return; }
@@ -439,6 +445,23 @@ function paintPasskeys(){
     li.append(t, b); list.appendChild(li);
   });
 }
+// v4.47: tud-e ez a gép maga jelkulcsot tárolni (Windows Hello, Mac Touch ID, Chrome / Google Jelszókezelő)
+let localPkCache = null;
+function localPasskeyOk(){
+  if(localPkCache) return localPkCache;
+  localPkCache = (async ()=>{ try{ return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); }catch(e){ return false; } })();
+  return localPkCache;
+}
+function osName(){
+  const ua = navigator.userAgent || '';
+  return /Windows/.test(ua) ? 'windows' : /Mac OS X|Macintosh/.test(ua) ? 'mac' : /CrOS/.test(ua) ? 'chromeos' : /Linux|X11/.test(ua) ? 'linux' : 'other';
+}
+function noLocalText(){
+  const os = osName();
+  if(os === 'windows') return 'Ezen a gépen nincs beállítva Windows Hello, ezért ide nem lehet jelkulcsot tenni. Állítsd be (Beállítások → Fiókok → Bejelentkezési lehetőségek → PIN), vagy használd a telefonodat.';
+  if(os === 'linux') return 'Linuxon a böngészők nem tudnak jelkulcsot a gépen tárolni — használd a telefonodat: a „📱 A telefonomra” gombbal hozz létre jelkulcsot, és a gépen a belépésnél a QR-kódot olvasd be vele.';
+  return 'Ez a gép / böngésző nem tud jelkulcsot tárolni — használd a telefonodat a „📱 A telefonomra” gombbal.';
+}
 const isPhone = ()=> /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 async function addPasskey(phone){
   const btn = $(phone === true ? 'acct-pk-add-phone' : 'acct-pk-add');
@@ -446,15 +469,8 @@ async function addPasskey(phone){
   msg('acct-m-profile', phone === true ? '📱 Olvasd be a megjelenő QR-kódot a telefonoddal, és erősítsd meg ott…' : 'Kövesd a telefonod / géped utasításait…');
   try{
     const W = await loadWebAuthn();
-    // v4.46: van-e a gépnek saját jelkulcs-tárolója (Windows Hello, Touch ID) — ha nincs, megmondjuk, mit tegyen
-    if(phone !== true){
-      let local = true;
-      try{ local = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); }catch(e){}
-      if(!local && !isPhone()){
-        msg('acct-m-profile', 'Ezen a gépen nincs beállítva Windows Hello (PIN, ujjlenyomat vagy arc), ezért ide nem lehet jelkulcsot tenni. Állítsd be a Windows Beállítások → Fiókok → Bejelentkezési lehetőségek alatt, vagy használd a „📱 A telefonomra” gombot.', 'bad');
-        return;
-      }
-    }
+    // v4.47: ha a gépnek nincs saját jelkulcs-tárolója, a gomb el sem látszik (lásd paintPasskeys) — itt csak biztosra megyünk
+    if(phone !== true && !isPhone() && !(await localPasskeyOk())){ msg('acct-m-profile', noLocalText(), 'bad'); paintPasskeys(); return; }
     const b = await call({ action:'pk-reg-begin', phone: phone === true });
     if(!b.ok){ msg('acct-m-profile', b.j.error || 'Nem sikerült.', 'bad'); return; }
     let resp;
