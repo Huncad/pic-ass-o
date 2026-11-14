@@ -133,6 +133,23 @@ Ha a kulcs hiányzik, a játék működik, csak a közös szólisták nem friss�
 
 Nem kötelező beállítások: `WORD_USED_DAY_CAP` (alapból 300) és `WORD_BLOCK_DAY_CAP` (alapból 20) — ennyi szót jelezhet naponta összesen az egész játék.
 
+## Fiókok és névvédelem (v4.40-től)
+
+A regisztrációt a Netlify kezeli, a játékszervernek ehhez **nem kell semmit beállítani**: induláskor magától letölti a
+névigazoló jegyek *nyilvános* kulcsát a játék oldaláról (jelszót, e-mail címet soha nem lát). Annyi a teendő, hogy a
+szervert frissíted (a 4. lépés egy sorát újra lefuttatod) — a régi szerver nem ismeri a jegyeket, vele a ranglistára
+senki nem kerülne fel.
+
+Honnan látod, hogy rendben van: `journalctl -u picasso -n 50` kimenetében ott a `fiókkulcs betöltve innen: https://…` sor.
+Ha nincs ott, a szerver nem éri el a játék oldalát; ilyenkor megadhatod kézzel, honnan kérje:
+
+```
+[Service]
+Environment=ACCOUNT_API_BASE=https://a-jatek-cime.netlify.app
+```
+
+(ugyanúgy egy `/etc/systemd/system/picasso.service.d/*.conf` fájlban, mint a szójelentések kulcsát, utána `systemctl daemon-reload && systemctl restart picasso`).
+
 ## Hasznos parancsok (a konténer konzoljában)
 
 | Mit | Parancs |

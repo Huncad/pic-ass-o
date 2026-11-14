@@ -7,6 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
+import http from 'node:http';
+import crypto from 'node:crypto';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = 20000 + Math.floor(Math.random() * 20000);
@@ -14,12 +16,30 @@ const URL_WS = `ws://127.0.0.1:${PORT}/ws`;
 const ORIGIN = 'http://localhost';
 let proc, dataDir;
 
+// ---- hamis fiókszolgáltatás (a Netlify account függvénye helyett): nyilvános kulcs + névlekérdezés ----
+const acctKeys = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
+const registered = new Set(['peter']);
+const signed = obj => {
+  const body = Buffer.from(JSON.stringify(obj)).toString('base64url');
+  return body + '.' + crypto.sign('sha256', Buffer.from(body), { key: acctKeys.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+};
+const th = token => crypto.createHash('sha256').update(token).digest('hex');
+const ticketFor = (pid, name = 'Péter', uid = 'uid-peter', token = 'tok-' + pid) => signed({ u: uid, n: name, p: pid, h: th(token), e: Date.now() + 60000 });
+const acctSrv = http.createServer((req, res) => {
+  const u = new URL(req.url, 'http://x');
+  res.setHeader('content-type', 'application/json');
+  if (u.searchParams.has('pubkey')) return res.end(JSON.stringify({ key: acctKeys.publicKey.export({ format: 'jwk' }) }));
+  if (u.searchParams.has('name')) return res.end(JSON.stringify({ taken: registered.has(u.searchParams.get('name')) }));
+  res.statusCode = 404; res.end('{}');
+});
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 before(async () => {
+  await new Promise(r => acctSrv.listen(0, '127.0.0.1', r));
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'picasso-test-'));
   proc = spawn(process.execPath, [process.env.PICASSO_SERVER_JS || path.join(ROOT, 'server', 'server.js')], {
-    env: { ...process.env, PORT: String(PORT), DATA_DIR: dataDir }, stdio: ['ignore', 'pipe', 'pipe']
+    env: { ...process.env, PORT: String(PORT), DATA_DIR: dataDir, ACCOUNT_API_BASE: `http://127.0.0.1:${acctSrv.address().port}`, MIN_GAME_MS: '300' }, stdio: ['ignore', 'pipe', 'pipe']
   });
   proc.stdout.on('data', () => {});
   proc.stderr.on('data', d => process.stderr.write(d));
@@ -29,11 +49,11 @@ before(async () => {
   }
   throw new Error('a szerver nem indult el');
 });
-after(() => { try { proc.kill('SIGKILL'); } catch (e) {} });
+after(() => { try { proc.kill('SIGKILL'); } catch (e) {} acctSrv.close(); });
 
 /** Kis kliens, ami úgy viselkedik, mint a böngésző SRV-modulja (sorszámozás, újraküldés). */
 function client(id, token = 'tok-' + id) {
-  const c = { id, token, msgs: [], recvQ: 0, outSeq: 0, unacked: [], closes: [], ws: null, room: null };
+  const c = { id, token, msgs: [], recvQ: 0, outSeq: 0, unacked: [], closes: [], ws: null, room: null, errors: [], acks: [], authed: null };
   c.connect = () => new Promise((resolve, reject) => {
     const ws = new WebSocket(URL_WS, { origin: ORIGIN });
     c.ws = ws;
@@ -51,6 +71,9 @@ function client(id, token = 'tok-' + id) {
       if (m.t === 'pong') c.unacked = c.unacked.filter(x => x.s > m.s);
       if (m.t === 'msg') c.msgs.push(m);
       if (m.t === 'joined') c.joined = m;
+      if (m.t === 'error') c.errors.push(m);
+      if (m.t === 'authed') c.authed = m;
+      if (m.t === 'resultack') c.acks.push(m.r);
     });
     ws.on('close', code => { c.closes.push(code); });
     ws.on('error', reject);
@@ -140,6 +163,77 @@ test('ranglista: túl rövid játék nem kerül fel, a JSON-végpont működik',
   assert.ok(Array.isArray(lb));
   const html = await (await fetch(`http://127.0.0.1:${PORT}/ranglista`)).text();
   assert.match(html, /PIC-ASS-O ranglista/);
+  await Promise.all([a.close(), b.close()]);
+});
+
+test('névvédelem: regisztrált névvel csak érvényes jeggyel lehet bemutatkozni', async () => {
+  await sleep(300);   // a szerver ekkorra letöltötte a nyilvános kulcsot
+  const host = client('host0001'), fake = client('fake0001'), real = client('real0001'), guest = client('gues0001');
+  await Promise.all([host.connect(), fake.connect(), real.connect(), guest.connect()]);
+  for (const c of [host, fake, real, guest]) await c.join('v2:szoba-nev');
+  // jegy nélkül: a bemutatkozást a szerver nem továbbítja, a küldő hibát kap; az utána küldött üzenetek sorrendje megmarad
+  fake.send('hello', { name: 'PETER ' });
+  fake.send('chat', { text: 'utána' });
+  // szabad név: átmegy
+  guest.send('hello', { name: 'Vendég Béla' });
+  await sleep(300);
+  assert.equal(fake.errors[0] && fake.errors[0].e, 'name-taken');
+  assert.ok(!host.msgs.some(m => m.f === 'fake0001' && m.a === 'hello'));
+  assert.ok(host.msgs.some(m => m.f === 'fake0001' && m.a === 'chat'));
+  assert.ok(host.msgs.some(m => m.f === 'gues0001' && m.a === 'hello'));
+  // más kapcsolatához kiállított (ellopott) jegy nem ér semmit; hamisított aláírás sem
+  fake.ws.send(JSON.stringify({ t: 'auth', k: ticketFor('real0001') }));
+  await sleep(100);
+  assert.equal(fake.authed.ok, false);
+  // jó azonosítóra szóló, de más kapcsolat-kulcsához kötött jegy (pl. a tulajdonos régi azonosítóját átvevő támadó)
+  fake.ws.send(JSON.stringify({ t: 'auth', k: ticketFor('fake0001', 'Péter', 'uid-peter', 'a-tulajdonos-kulcsa') }));
+  await sleep(100);
+  assert.equal(fake.authed.ok, false);
+  const good = ticketFor('fake0001'), mid = good.length - 40;   // az aláírás közepén egy karakter megváltoztatva
+  const forged = good.slice(0, mid) + (good[mid] === 'A' ? 'B' : 'A') + good.slice(mid + 1);
+  fake.ws.send(JSON.stringify({ t: 'auth', k: forged }));
+  await sleep(100);
+  assert.equal(fake.authed.ok, false);
+  fake.send('hello', { name: 'Péter' });
+  await sleep(150);
+  assert.ok(!host.msgs.some(m => m.f === 'fake0001' && m.a === 'hello'));
+  // a valódi tulajdonos a saját jegyével: igazolva, és a bemutatkozása átmegy
+  real.ws.send(JSON.stringify({ t: 'auth', k: ticketFor('real0001') }));
+  await sleep(100);
+  assert.deepEqual(real.authed, { t: 'authed', ok: true, name: 'Péter' });
+  real.send('hello', { name: 'Péter' });
+  await sleep(150);
+  assert.ok(host.msgs.some(m => m.f === 'real0001' && m.a === 'hello'));
+
+  // ranglista: csak a regisztrált játékos kerül fel név szerint
+  await sleep(300);
+  const rows = [{ name: 'Péter', score: 120 }, { name: 'Vendég Béla', score: 200 }, { name: 'Hoszt', score: 10 }];
+  for (const c of [host, real, guest]) c.ws.send(JSON.stringify({ t: 'result', rows }));
+  await sleep(200);
+  assert.ok([host, real, guest].some(c => c.acks.includes('ok')), JSON.stringify([host.acks, real.acks, guest.acks]));
+  const lb = await (await fetch(`http://127.0.0.1:${PORT}/api/ranglista`)).json();
+  assert.equal(lb.length, 1);
+  assert.equal(lb[0].name, 'Péter'); assert.equal(lb[0].wins, 0, 'a vendég nyert, de ő nincs a listán');
+  const html = await (await fetch(`http://127.0.0.1:${PORT}/ranglista`)).text();
+  assert.ok(!html.includes('Vendég Béla'), 'a vendég neve sehol nem jelenik meg');
+  // fióktörlés: csak aláírt kérésre, utána a játékos eltűnik a ranglistáról
+  const forget = body => fetch(`http://127.0.0.1:${PORT}/api/forget`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await forget({ proof: 'aaaa.bbbb' })).status, 403);
+  assert.equal((await forget({ proof: ticketFor('x') })).status, 403);
+  assert.equal((await forget({ proof: signed({ del: 'uid-peter', e: Date.now() + 60000 }) })).status, 200);
+  assert.equal((await (await fetch(`http://127.0.0.1:${PORT}/api/ranglista`)).json()).length, 0);
+  await Promise.all([host.close(), fake.close(), real.close(), guest.close()]);
+});
+
+test('ranglista: regisztrált játékos nélkül a játék nem kerül fel', async () => {
+  const a = client('mmmm0001'), b = client('nnnn0001');
+  await Promise.all([a.connect(), b.connect()]);
+  await a.join('v2:szoba-vendeg'); await b.join('v2:szoba-vendeg');
+  await sleep(350);
+  const rows = [{ name: 'Anna', score: 100 }, { name: 'Bence', score: 50 }];
+  a.ws.send(JSON.stringify({ t: 'result', rows })); b.ws.send(JSON.stringify({ t: 'result', rows }));
+  await sleep(200);
+  assert.ok(b.acks.includes('nincs regisztrált játékos') || a.acks.includes('nincs regisztrált játékos'), JSON.stringify([a.acks, b.acks]));
   await Promise.all([a.close(), b.close()]);
 });
 

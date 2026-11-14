@@ -1,6 +1,7 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
+import { Account } from './account.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.38';
+const APP_VERSION = '4.40';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -225,7 +226,7 @@ const SRV = (function(){
   try{ const o = localStorage.getItem('picasso-server-url'); if(o) base = o; }catch(e){}
   base = String(base || '').trim().replace(/\/+$/, '');
   const api = { enabled: /^https?:\/\//.test(base), base, up:false, everUp:false, onDir:null, onUp:null };
-  if(!api.enabled) { api.ready = ()=>Promise.resolve(false); api.send = ()=>false; api.attach = ()=>{}; api.detach = ()=>{}; return api; }
+  if(!api.enabled) { api.ready = ()=>Promise.resolve(false); api.send = ()=>false; api.attach = ()=>{}; api.detach = ()=>{}; api.setAuth = ()=>{}; api.tokenHash = async ()=>''; return api; }
   const rnd = new Uint8Array(24); crypto.getRandomValues(rnd);
   const token = Array.from(rnd, b=>b.toString(16).padStart(2,'0')).join('');
   let ws = null, backoff = 800, retryTimer = 0, cur = null, gone = false;
@@ -275,6 +276,7 @@ const SRV = (function(){
             if(!m.resumed) unacked.length = 0;   // back in a different room: the old messages are stale
           }
           api.online = Number(m.online) || api.online || 1;
+          if(authTicket) raw({ t:'auth', k: authTicket });   // v4.40: névigazoló jegy, még a szobába lépés előtt
           setUp(true);
           clog('S01', `kapcsolódva a játékszerverhez${m.resumed ? ' — a szobabeli hely megmaradt' : ''}`);
           if(cur && cur.rid){
@@ -292,6 +294,7 @@ const SRV = (function(){
         case 'msg':     if(cur) cur._msg(m.a, m.d, m.f); return;
         case 'dir':     try{ api.onDir && api.onDir(m.d); }catch(e){} return;
         case 'online':  api.online = Number(m.n) || 0; return;
+        case 'error':   try{ api.onError && api.onError(m); }catch(e){} return;
       }
     };
     me.onclose = (ev)=>{
@@ -351,6 +354,11 @@ const SRV = (function(){
   // tesztelés / hibakeresés: kapcsolat bontása, újracsatlakozás csak ms múlva
   api._drop = (ms)=>{ const w = ws; ws = null; api.up = false; try{ w && w.close(); }catch(e){} clearTimeout(retryTimer); retryTimer = setTimeout(open, ms || 0); };
   try{ window.__picassoSrv = api; }catch(e){}
+  // v4.40: a fiók névigazoló jegye — a szerver ezzel tudja, hogy a regisztrált név tényleg a miénk
+  let authTicket = '';
+  api.setAuth = (k)=>{ authTicket = String(k || ''); if(authTicket && api.up) raw({ t:'auth', k: authTicket }); };
+  // a jegyet a Netlify ennek a kapcsolatnak a titkos kulcsához köti (csak a lenyomatát kapja meg)
+  api.tokenHash = async ()=>{ const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)); return Array.from(new Uint8Array(d), b=>b.toString(16).padStart(2,'0')).join(''); };
   api.attach = (r)=>{ cur = r; };
   api.detach = (r)=>{ if(cur === r) cur = null; };
   open();
@@ -440,7 +448,7 @@ try{
       if(ent && ent.banned){ leaveRoomAndGoHome(); document.getElementById('home-warning').textContent = banText(ent); return; }
       if(ent && ent.token){
         banToken = ent.token;
-        try{ helloAction.send({ name: myName, isHost:false, avatar: myAvatarColor, spectator: amSpectator || undefined, dev: deviceId(), tok: banToken }); }catch(e){}
+        try{ helloAction.send({ name: myName, isHost:false, avatar: myAvatarColor, spectator: amSpectator || undefined, dev: deviceId(), tok: banToken, tk: Account.ticket || undefined }); }catch(e){}
       }
     });
   }
@@ -454,6 +462,45 @@ try{
     if(!isHost || !banHostKey || !td || !roomCode) return;
     banCall({ action:'kick', room: roomCode, hostKey: banHostKey, targetDev: td });
   }
+  // v4.40: fiókok — kinek igazolta a jegye a nevét (peerId -> név), és kinek a nevét hagyta már jóvá a szobanyitó
+  const accountNames = new Map();
+  const nameApproved = new Map();
+  const namePending = new Set();
+  function noteAccountTicket(data, peerId){
+    const tk = isPlainObject(data) && typeof data.tk === 'string' ? data.tk : '';
+    if(!tk){ return; }
+    Account.verifyTicket(tk, peerId).then(c=>{
+      if(!c) return;
+      const had = accountNames.get(peerId);
+      accountNames.set(peerId, c.name);
+      if(had !== c.name){ try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){} try{ renderRosters(); }catch(e){} }
+    });
+  }
+  /** Igazolt-e, hogy ez a játékos a megjelenített (regisztrált) név gazdája. */
+  function accountVerified(peerId){
+    if(peerId === selfId) return !!(Account.user && Account.ticket && nameKey(Account.user.name) === nameKey(myName));
+    const n = accountNames.get(peerId);
+    return !!n && nameKey(n) === nameKey(roomNameOf(peerId));
+  }
+  const acctBadgeHtml = (peerId)=> accountVerified(peerId) ? '<span class="acct-badge" title="Regisztrált játékos — a név igazoltan az övé" aria-label="regisztrált játékos">✔</span>' : '';
+  function approveHelloName(data, peerId){
+    const name = cleanName(isPlainObject(data) ? data.name : ''), k = nameKey(name), pk = peerId + '|' + k;
+    if(namePending.has(pk)) return;
+    namePending.add(pk);
+    const thisRoom = room;
+    Account.mayUse(name, isPlainObject(data) && typeof data.tk === 'string' ? data.tk : '', peerId).then(ok=>{
+      namePending.delete(pk);
+      if(!isHost || room !== thisRoom || !kickAction || !helloAction) return;
+      if(!ok){
+        clog('K13', `regisztrált név jegy nélkül: „${name}” — a belépőt visszaküldtük`);
+        try{ kickAction.send({ reason:'nametaken' }, { target: peerId }); }catch(e){}
+        return;
+      }
+      nameApproved.set(peerId, k);
+      helloAction.onMessage(data, { peerId });
+    });
+  }
+  let dirFromServer = false;   // v4.40: csak a saját szerverről érkező szobahirdetés jelölhet igazolt szobanyitót
   function gateHello(data, peerId){
     if(pendingVerify.has(peerId)) return;
     const d = String((isPlainObject(data) && data.dev) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
@@ -1562,7 +1609,7 @@ try{
     const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const supported = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
     const say = (t)=>{ st.textContent = t; };
-    const post = (body)=>fetch(PUSH_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const post = (body)=>fetch(PUSH_URL, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body: JSON.stringify(body) });
     const keyBytes = (b64)=>{ const pad = '='.repeat((4 - b64.length % 4) % 4); const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, ch=>ch.charCodeAt(0)); };
     async function currentSub(){
       const r = await navigator.serviceWorker.getRegistration();
@@ -1590,14 +1637,15 @@ try{
       try{ sub = await currentSub(); }catch(e){ sub = null; }
       myPushEndpoint = sub ? sub.endpoint : '';
       show(!!sub);
-      say(sub ? '✅ Ez az eszköz értesítést kap, ha valaki nyilvános szobát nyit.' : 'Egy koppintás, e-mail cím nélkül — akkor is szól, ha a játék nincs megnyitva.');
+      say(sub ? (Account.user ? '✅ Ez az eszköz értesítést kap, ha valaki nyilvános szobát nyit.' : '⚠️ Az értesítés mostantól fiókhoz kötött: lépj be ezen az eszközön, különben megszűnik.')
+        : (Account.user ? 'Egy koppintás — akkor is szól, ha a játék nincs megnyitva.' : 'Értesítést csak regisztrált játékosok kérhetnek — előbb lépj be.'));
       // keep the server's copy alive (it may have been lost), at most once a week
       if(sub){
         try{
           const last = Number(localStorage.getItem('picasso-push-sync') || 0);
-          if(Date.now() - last > 7 * 86400000){
+          if(Account.user && (Date.now() - last > 7 * 86400000 || localStorage.getItem('picasso-push-owner') !== nameKey(Account.user.name))){
             const r = await post({ action:'subscribe', sub: sub.toJSON() });
-            if(r.ok) localStorage.setItem('picasso-push-sync', String(Date.now()));
+            if(r.ok){ localStorage.setItem('picasso-push-sync', String(Date.now())); localStorage.setItem('picasso-push-owner', nameKey(Account.user.name)); }
           }
         }catch(e){}
       }
@@ -1605,6 +1653,7 @@ try{
     btn.addEventListener('click', async ()=>{
       try{ sndClick(); }catch(e){}
       if(!supported || btn.disabled) return;
+      if(btn.dataset.on !== '1' && !Account.user){ Account.open(); return; }   // v4.40: értesítést csak fiókkal lehet kérni
       btn.disabled = true;
       try{
         if(btn.dataset.on === '1'){
@@ -1622,7 +1671,7 @@ try{
             const sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: keyBytes(key) });
             const r = await post({ action:'subscribe', sub: sub.toJSON() });
             if(!r.ok){ try{ await sub.unsubscribe(); }catch(e){} throw new Error('HTTP ' + r.status); }
-            try{ localStorage.setItem('picasso-push-sync', String(Date.now())); }catch(e){}
+            try{ localStorage.setItem('picasso-push-sync', String(Date.now())); localStorage.setItem('picasso-push-owner', nameKey(Account.user.name)); }catch(e){}
           }
         }
         await refresh();
@@ -1632,6 +1681,7 @@ try{
       }
     });
     refresh();
+    Account.onChange(()=>{ refresh(); });
   })();
   function showSubCount(n){
     const el = document.getElementById('sub-count');
@@ -1641,24 +1691,6 @@ try{
     try{ const r = await fetch(SUBSCRIBE_URL, { cache:'no-store' }); if(r.ok) showSubCount((await r.json()).count); }
     catch(e){ const b = document.getElementById('subscribe-box'); if(b && location.protocol === 'file:') b.classList.add('hidden'); }
   })();
-  async function doSubscribe(){
-    const input = document.getElementById('sub-email'), st = document.getElementById('sub-status'), btn = document.getElementById('btn-subscribe');
-    const email = input.value.trim();
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ st.style.color='var(--red)'; st.textContent='Adj meg egy érvényes e-mail címet.'; return; }
-    if(!document.getElementById('sub-consent').checked){ st.style.color='var(--red)'; st.textContent='A feliratkozáshoz pipáld be a hozzájárulást.'; return; }
-    btn.disabled = true; st.style.color='var(--chalk-dim)'; st.textContent='Küldés…';
-    try{
-      const r = await fetch(SUBSCRIBE_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'subscribe', email, consent:true }) });
-      const j = await r.json().catch(()=>({}));
-      if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
-      showSubCount(j.count);
-      st.style.color='var(--green)';
-      // v4.33: a szerver mindig ugyanazt válaszolja (a válaszból nem derül ki, fel van-e iratkozva a cím)
-      st.textContent = '📬 Ha ez a cím még nincs feliratkozva, küldtünk rá egy megerősítő levelet; ha már fel van, egy levelet a leiratkozó linkkel. Nézd meg a postafiókodat (a Spam mappát is)! Ugyanarra a címre 10 percenként egy levél megy.';
-      input.value = '';
-    }catch(e){ st.style.color='var(--red)'; st.textContent = 'Nem sikerült: ' + e.message; }
-    finally{ btn.disabled = false; }
-  }
   (function(){
     const box = document.getElementById('subscribe-box'), tg = document.getElementById('sub-toggle');
     const set = open => { box.classList.toggle('collapsed', !open); tg.setAttribute('aria-expanded', open ? 'true' : 'false'); };
@@ -1672,9 +1704,7 @@ try{
     document.addEventListener('pointerdown', e=>{ if(!box.contains(e.target)) shut(); });
     document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && open && floating()){ shut(); try{ tg.focus(); }catch(err){} } });
   })();
-  document.getElementById('btn-subscribe').addEventListener('click', doSubscribe);
   document.getElementById('sub-privacy-link').addEventListener('click', e=>{ e.preventDefault(); const b = document.getElementById('btn-open-privacy'); if(b) b.click(); });
-  document.getElementById('sub-email').addEventListener('keydown', e=>{ if(e.key === 'Enter') doSubscribe(); });
 
   function cleanNotifyTopic(t){ const s = String(t || '').trim(); return /^[A-Za-z0-9_-]{8,64}$/.test(s) ? s : ''; }
   // v4.15: the channel name no longer comes from the public gist — it lives
@@ -3193,9 +3223,10 @@ try{
   playerAvatars[selfId] = myAvatarColor;
   function nameDotHtml(peerId){
     const color = playerAvatars[peerId];
-    if(!(typeof color === 'string' && SAFE_COLOR_RE.test(color))) return '';
+    const badge = acctBadgeHtml(peerId);   // v4.40: ✔ a regisztrált, igazolt név előtt
+    if(!(typeof color === 'string' && SAFE_COLOR_RE.test(color))) return badge;
     const em = avatarEmoji(color);   // v4.18
-    return em ? `<span class="name-av" aria-hidden="true">${em}</span>` : `<span class="name-dot" style="background:${color};"></span>`;
+    return (em ? `<span class="name-av" aria-hidden="true">${em}</span>` : `<span class="name-dot" style="background:${color};"></span>`) + badge;
   }
 
   const wordsLoadedPromise = loadWords();
@@ -3240,6 +3271,7 @@ try{
     const nameEl = document.getElementById('home-name');
     const warn = document.getElementById('home-warning');
     if(!nameEl.value.trim()){ warn.textContent = 'Írd be előbb a neved!'; return; }
+    { const np = Account.nameProblem(nameEl.value); if(np){ warn.textContent = np; return; } }
     warn.textContent = '';
     myName = nameEl.value.trim().slice(0,16);
     sndClick();
@@ -3256,6 +3288,7 @@ try{
     const nameEl = document.getElementById('home-name');
     const warn = document.getElementById('home-warning');
     if(!nameEl.value.trim()){ warn.textContent = 'Írd be előbb a neved!'; return; }
+    { const np = Account.nameProblem(nameEl.value); if(np){ warn.textContent = np; return; } }
     warn.textContent = '';
     myName = nameEl.value.trim().slice(0,16);
     sndClick();
@@ -3866,7 +3899,7 @@ try{
         laterInRoom(()=>maybeFlushStrokes(true), 800);
       }
       helloAction.send({
-        name: myName, isHost, avatar: myAvatarColor, spectator: amSpectator || undefined,
+        name: myName, isHost, avatar: myAvatarColor, spectator: amSpectator || undefined, tk: Account.ticket || undefined,
         dev: isHost ? undefined : deviceId(), tok: isHost ? undefined : (banToken || (ensureBanToken(), undefined)),
         roomName: isHost ? currentRoomName : undefined,
         isPublic: isHost ? roomIsPublic : undefined,
@@ -3895,7 +3928,7 @@ try{
       if(newId === selfId){
         isHost = true;
         try{
-          helloAction.send({ name: myName, isHost: true, avatar: myAvatarColor, roomName: currentRoomName, isPublic: roomIsPublic });
+          helloAction.send({ name: myName, isHost: true, avatar: myAvatarColor, roomName: currentRoomName, isPublic: roomIsPublic, tk: Account.ticket || undefined });
         }catch(e){}
         // take over the room's entry in the public room list
         const listName = currentRoomName || `${myName} szobája`;
@@ -3956,6 +3989,9 @@ try{
       if(!isPlainObject(data)) data = {};
       if(isHost && kickedPeers.has(peerId)) return;        // audit: a kirúgott nem jöhet vissza egy újabb hello-val
       if(isHost && peerId !== selfId && !verifiedPeers.has(peerId)){ gateHello(data, peerId); return; }   // v3.85: ban check first
+      // v4.40: regisztrált nevet csak a gazdája használhat (a szobanyitó ellenőrzi; a saját szerver is)
+      if(isHost && peerId !== selfId && nameApproved.get(peerId) !== nameKey(cleanName(data.name))){ approveHelloName(data, peerId); return; }
+      noteAccountTicket(data, peerId);
       if(data.spectator === true && !data.isHost){ handleSpectatorHello(data, peerId); return; }
       if(spectators[peerId]){ delete spectators[peerId]; }
       const isNew = !lobbyPlayers[peerId];
@@ -4070,6 +4106,8 @@ try{
         ? 'Ebbe a szobába (vagy az egész játékba) ki vagy tiltva, ezért nem léphetsz be.'
         : reason === 'update'
         ? 'A belépéshez frissítsd az oldalt (új verzió érhető el), aztán próbáld újra.'
+        : reason === 'nametaken'
+        ? 'Ez a név egy regisztrált játékosé. Lépj be a fiókoddal, vagy válassz másik nevet.'
         : reason === 'full'
         ? 'Ez a szoba már megtelt.'
         : reason === 'started'
@@ -5023,7 +5061,7 @@ try{
     if(!newName || newName === myName) return;
     const old = myName;
     myName = newName;              // only for this room; the saved name stays as typed
-    try{ helloAction.send({ name: myName, isHost:false, avatar: myAvatarColor, spectator: amSpectator || undefined, dev: deviceId(), tok: banToken || undefined }); }catch(e){}
+    try{ helloAction.send({ name: myName, isHost:false, avatar: myAvatarColor, spectator: amSpectator || undefined, dev: deviceId(), tok: banToken || undefined, tk: Account.ticket || undefined }); }catch(e){}
     if(quiet){ try{ addSystemChatMessage(`🔄 Visszakaptad a neved: ${myName}.`); }catch(e){} }   // v3.84: no "name taken" popup when it was only a reload
     else try{ showRenameNotice(old, myName); }catch(e){}
     try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){}
@@ -5504,6 +5542,7 @@ try{
       isPrivate,
       name: cleanText(data.name, 60),
       hostName: cleanText(data.hostName, 20),
+      verified: data.verified === true && dirFromServer,   // v4.40: a szerver igazolta, hogy a szobanyitó regisztrált játékos
       players: clampNum(data.players, 0, 999, 0),
       max: clampNum(data.max, 0, 999, 0),
       inGame: !!data.inGame,
@@ -5731,7 +5770,7 @@ try{
     const startWebrtcList = ()=>{ if(!dirPaused && !SRV.up) startDirectoryTransports(); };
     // v4.00: a szerver adja a szobalistát — ha 3 mp alatt feláll, a WebRTC-s
     // lista el sem indul (telefonon ez a legnagyobb erőforrás-zabáló)
-    SRV.onDir = (d)=>{ try{ handleDirectoryMessage(d); }catch(e){} };
+    SRV.onDir = (d)=>{ dirFromServer = true; try{ handleDirectoryMessage(d); }catch(e){} dirFromServer = false; };
     SRV.onUp = ()=>{ try{ announceMyRoom(); updateDirectoryStatusUI(); renderRanglistaLink(); }catch(e){} };
     if(SRV.enabled && !SRV.up){
       SRV.ready(3000).then(ok=>{ if(!ok) connectDirectoryP2P(startWebrtcList); else updateDirectoryStatusUI(); });
@@ -6938,7 +6977,7 @@ try{
         <span class="ri-av" aria-hidden="true">${initial}</span>
         <div class="ri-main">
           <div class="room-item-name">${escapeHtml(r.name)}</div>
-          <div class="room-item-meta">${escapeHtml(r.hostName)} szobája</div>
+          <div class="room-item-meta">${r.verified ? '<span class="acct-badge" title="Regisztrált játékos">✔</span>' : ''}${escapeHtml(r.hostName)} szobája</div>
           <div class="ri-tags"><span class="rs rs-count">👥 ${count}</span>${status}${kind}</div>
         </div>
         <span class="ri-go">${action}</span>
@@ -6954,6 +6993,7 @@ try{
         const nameEl = document.getElementById('home-name');
         const warn = document.getElementById('home-warning');
         if(!nameEl.value.trim()){ warn.textContent = 'Írd be előbb a neved!'; return; }
+        { const np = Account.nameProblem(nameEl.value); if(np){ warn.textContent = np; return; } }
         warn.textContent = '';
         myName = nameEl.value.trim().slice(0,16);
         sndClick();
@@ -11399,6 +11439,7 @@ try{
   window.addEventListener('resize', ()=>{ if(!document.getElementById('stats-overlay').classList.contains('hidden')) fitStatsBox(); });
   function openStats(){
     flushPlayTime();
+    if(Account.user) Account.syncStats();   // v4.40: a többi eszközön szerzett eredmények is látszódjanak
     renderStatsPage();
     document.getElementById('stats-overlay').classList.remove('hidden');
     fitStatsBox();
@@ -11411,9 +11452,10 @@ try{
   document.getElementById('stats-overlay').addEventListener('click', e=>{ if(e.target.id === 'stats-overlay') e.target.classList.add('hidden'); });
   document.addEventListener('keydown', e=>{ if(e.key === 'Escape') document.getElementById('stats-overlay').classList.add('hidden'); });
   document.getElementById('stats-reset-btn').addEventListener('click', async ()=>{
-    if(!(await askConfirm('Biztosan nullázod a statisztikádat ezen az eszközön? Ez nem vonható vissza.', { ok:'Nullázom' }))) return;
+    if(!(await askConfirm(Account.user ? 'Biztosan nullázod a fiókod statisztikáját? Minden eszközödön eltűnik, és nem vonható vissza.' : 'Biztosan nullázod a statisztikádat ezen az eszközön? Ez nem vonható vissza.', { ok:'Nullázom' }))) return;
     try{ localStorage.removeItem(STATS_KEY); }catch(e){}
     savePersonalStats(loadPersonalStats());   // a fresh start date
+    if(Account.user){ try{ await Account.resetStats(); }catch(e){} }
     renderStatsPage(); renderHomeStats(); fitStatsBox();
   });
   function renderHomeStats(){
@@ -11421,10 +11463,25 @@ try{
     if(!el) return;
     const st = loadPersonalStats();
     if(!st.games){ el.classList.add('hidden'); return; }
-    el.textContent = `📊 Ezen az eszközön eddig ${st.games} játék, ${st.wins} győzelem, legjobb eredményed ${st.best} pont.` + (N(st.playMs) ? ` Játékidő: ${fmtDuration(st.playMs)}.` : '');
+    el.textContent = `📊 ${Account.user ? 'A fiókodban' : 'Ezen az eszközön'} eddig ${st.games} játék, ${st.wins} győzelem, legjobb eredményed ${st.best} pont.` + (N(st.playMs) ? ` Játékidő: ${fmtDuration(st.playMs)}.` : '');
     el.classList.remove('hidden');
   }
   renderHomeStats();
+  // v4.40: fiók — belépés, névigazoló jegy, statisztika- és beállítás-szinkron
+  SRV.onError = (m)=>{
+    if(!m || m.e !== 'name-taken') return;
+    // a szerver nem engedte át a bemutatkozásunkat: ez a név egy regisztrált játékosé
+    try{ if(room) leaveRoomAndGoHome(); }catch(e){}
+    document.getElementById('home-warning').textContent = 'Ez a név egy regisztrált játékosé. Lépj be a fiókoddal, vagy válassz másik nevet.';
+  };
+  Account.init({ selfId, hooks: {
+    click: ()=>{ try{ sndClick(); }catch(e){} },
+    onTicket: (tk)=>{ try{ SRV.setAuth(tk); }catch(e){} },
+    tokenHash: ()=>SRV.tokenHash(),
+    onStats: ()=>{ try{ renderHomeStats(); if(!document.getElementById('stats-overlay').classList.contains('hidden')){ renderStatsPage(); fitStatsBox(); } }catch(e){} },
+    onSubCount: (n)=>{ try{ showSubCount(n); }catch(e){} }
+  } });
+  Account.onChange(()=>{ try{ renderHomeStats(); }catch(e){} });
   // v4.00: közös ranglista a játékszerveren (csak ha a szerver elérhető)
   function renderRanglistaLink(){
     const wrap = document.getElementById('home-ranglista-wrap');
@@ -11700,6 +11757,7 @@ try{
     // invalidated in one go (delayed handoffs, a pending game-end screen, a
     // recorder that is still finishing, re-sends).
     roomGeneration++;
+    accountNames.clear(); nameApproved.clear(); namePending.clear();
     verifiedPeers.clear(); pendingVerify.clear(); noTokenSince.clear(); kickedPeers.clear(); banHostKey = ''; banToken = ''; localKickedDevs.clear();
     for(const k of Object.keys(peerDev)) delete peerDev[k];
     // Tell the others we're leaving on purpose so they update right away

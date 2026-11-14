@@ -2147,8 +2147,8 @@
   .tile-ico{ width:32px; height:32px; font-size:1.05rem; }
   .tile-emoji{ font-size:1.3rem; }
   .home-foot{ margin-top:10px; padding-top:10px; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 14px; }
-  .home-foot .home-stats{ margin:0; }
-  .home-foot .stats-open-btn{ padding:6px 14px; }
+  .home-foot .home-stats{ margin:0; flex-basis:100%; text-align:center; }
+  .home-foot .stats-open-btn{ padding:6px 14px; margin:0; }
 
   /* v4.16: a fő művelet a játékoskártyában, a név alatt */
   #player-card .create-wrap{ animation:none; }
@@ -2617,3 +2617,39 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   .home-tile .tile-ico{ width:28px; height:28px; font-size:.95rem; }
   .home-tile .tile-emoji{ font-size:1.1rem; }
 }
+
+  /* v4.40: fiók (belépés, regisztráció, kétfaktoros belépés) */
+  #account-overlay{ position:fixed; inset:0; z-index:1001; background:rgba(10,20,16,0.92); display:flex; align-items:flex-start; justify-content:center; padding:20px; overflow-y:auto; }
+  .acct-box{ max-width:460px; width:100%; }
+  .acct-box p, .acct-box dd, .acct-box dt{ font-size:.92rem; line-height:1.45; color:var(--chalk); }
+  .acct-box input[type=text], .acct-box input[type=email], .acct-box input[type=password]{ width:100%; margin-bottom:12px; }
+  .acct-box label.field-label{ margin-bottom:6px; }
+  .acct-box button.big{ width:100%; margin-top:6px; }
+  .acct-pw{ position:relative; display:block; }
+  .acct-pw input{ padding-right:48px; }
+  .acct-eye{ position:absolute; right:6px; top:6px; padding:4px 8px; background:transparent; border:0; box-shadow:none; font-size:1.1rem; cursor:pointer; min-height:0; }
+  .acct-msg{ min-height:1.3em; margin:4px 0 8px; font-weight:700; color:var(--chalk-dim) !important; }
+  .acct-msg.bad{ color:var(--red) !important; } .acct-msg.ok{ color:var(--green) !important; }
+  .acct-links{ text-align:center; margin:14px 0 0; }
+  .acct-links a, .acct-box a{ color:var(--yellow); }
+  .acct-why{ color:var(--chalk-dim) !important; font-size:.84rem !important; margin-top:12px; }
+  .acct-big{ font-size:2.4rem !important; text-align:center; margin:0; }
+  .acct-dl{ display:grid; grid-template-columns:auto 1fr; gap:6px 14px; margin:0 0 12px; }
+  .acct-dl dt{ color:var(--chalk-dim); } .acct-dl dd{ margin:0; overflow-wrap:anywhere; }
+  .acct-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .acct-actions .secondary{ flex:1 1 180px; }
+  .acct-danger{ color:var(--red); margin-left:auto; }
+  .acct-danger-btn{ background:var(--red) !important; }
+  .acct-qr{ display:flex; justify-content:center; margin:8px 0; }
+  .acct-qr canvas{ border-radius:10px; max-width:100%; height:auto; }
+  #acct-totp-secret{ font-size:1rem; letter-spacing:.04em; display:block; margin-top:4px; user-select:all; }
+  .acct-codes{ list-style:none; padding:12px; margin:8px 0; display:grid; grid-template-columns:1fr 1fr; gap:6px 16px; background:rgba(0,0,0,.2); border-radius:12px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:1.02rem; user-select:all; }
+  .acct-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .acct-btn{ padding:6px 12px; border-radius:10px; }
+  .acct-btn.logged-in{ border-color:var(--green); }
+  .acct-badge{ display:inline-flex; align-items:center; justify-content:center; width:1.15em; height:1.15em; border-radius:50%; background:var(--blue-fill, #3d9bd1); color:#fff; font-size:.72em; font-weight:900; line-height:1; vertical-align:.08em; margin-right:.25em; flex-shrink:0; }
+  .name-note{ margin:4px 0 8px; font-size:.84rem; min-height:0; color:var(--chalk-dim); }
+  .name-note:empty{ display:none; }
+  .name-note.bad{ color:var(--red); font-weight:700; } .name-note.ok{ color:var(--green); }
+  #home-name.name-locked{ opacity:.85; cursor:default; }
+  #sub-loggedout{ text-align:center; }

@@ -36,14 +36,20 @@ function staticServer(port, srvPort) {
 }
 
 /** Játékszerver + statikus kiszolgáló indítása. */
-async function startServers() {
+async function startServers(opts = {}) {
   const srvPort = 21000 + Math.floor(Math.random() * 9000);
   const webPort = srvPort + 1;
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'picasso-ui-'));
+  // v4.40: opts.functions — a fiókokat kezelő Netlify-függvények is futnak (memóriabeli tárolóval), és a játékszerver tőlük kéri a nyilvános kulcsot
   const srv = spawn(process.execPath, [path.join(ROOT, 'server', 'server.js')], {
-    env: { ...process.env, PORT: String(srvPort), DATA_DIR: dataDir }, stdio: 'ignore'
+    env: { ...process.env, PORT: String(srvPort), DATA_DIR: dataDir, ...(opts.functions ? { ACCOUNT_API_BASE: `http://127.0.0.1:${webPort}`, MIN_GAME_MS: '1000' } : {}) }, stdio: 'ignore'
   });
-  const web = staticServer(webPort, srvPort);
+  let web;
+  if (opts.functions) {
+    const proc = spawn(process.execPath, ['--experimental-test-module-mocks', '--no-warnings', path.join(__dirname, 'fn-server.mjs'), String(webPort), String(srvPort)], { stdio: ['ignore', 'pipe', 'inherit'] });
+    await new Promise(r => proc.stdout.once('data', r));
+    web = { close() { try { proc.kill('SIGTERM'); } catch (e) {} } };
+  } else web = staticServer(webPort, srvPort);
   for (let i = 0; i < 60; i++) {
     try { if ((await fetch(`http://127.0.0.1:${srvPort}/api/health`)).ok) break; } catch (e) {}
     await new Promise(r => setTimeout(r, 100));

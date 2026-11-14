@@ -15,7 +15,11 @@
 //      azonnal megkapja az aktuális listát.
 //   4. Ranglista: a játék végén minden játékos elküldi az eredményt; csak a
 //      többség által egyezően megerősített eredmény kerül be (v4.11)
-//      (/ranglista oldal, /api/ranglista JSON).
+//      (/ranglista oldal, /api/ranglista JSON). v4.40: a ranglistán csak
+//      regisztrált (fiókkal igazolt) játékosok szerepelnek.
+//   5. Névvédelem (v4.40): regisztrált játékos nevével csak a fiók gazdája
+//      léphet be — a böngésző a Netlify-on kapott, aláírt névigazoló jegyet
+//      mutatja be, a szerver a nyilvános kulccsal ellenőrzi.
 //
 // A szerver a szobakódot sem látja: a böngésző a kód lassított (PBKDF2)
 // lenyomatával lép be. Az üzenetek TARTALMÁT viszont látja (továbbítja) —
@@ -248,6 +252,13 @@ async function handleDir(peer, d){
   const clean = { srv: 1, name: clampStr(d.name, 60), hostName: clampStr(d.hostName, 24),
     players: clampInt(d.players, 0, 999), max: clampInt(d.max, 0, 999), inGame: !!d.inGame };
   if(!clean.name) return;
+  // v4.40: regisztrált nevet csak a gazdája hirdethet szobanyitóként
+  {
+    let ok = mayUseNameSync(peer, clean.hostName);
+    if(ok === null) ok = !(await nameRegistered(nameKey(clean.hostName)));
+    if(!ok) clean.hostName = 'Vendég';
+  }
+  if(peer.acct && nameKey(clean.hostName) === peer.acct.key) clean.verified = true;
   if(code) clean.code = code; else { clean.id = fp; clean.isPrivate = true; }
   directory.set(key, { d: clean, from: peer.id, room: roomId, ip: peer.ip, at: Date.now(), firstAt: prev && prev.from === peer.id ? (prev.firstAt || prev.at) : Date.now() });
   broadcastDir(clean, peer.id);
@@ -314,6 +325,77 @@ function broadcastDir(d, fromId){
 // ---------------------------------------------------------------------
 // Ranglista (egyszerű JSON fájl — egy családi játékhoz bőven elég)
 // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// Fiókok (v4.40): névigazoló jegyek ellenőrzése és a regisztrált nevek védelme.
+// A fiókokat a Netlify-függvény (account) kezeli; a szerver csak a NYILVÁNOS
+// kulcsot kéri le tőle, jelszót vagy e-mail címet soha nem lát.
+// Beállítás (nem kötelező): ACCOUNT_API_BASE — alapból a WORDS_API_BASE, majd
+// az engedélyezett oldalak címei közül az első, amelyik válaszol.
+// ---------------------------------------------------------------------
+const ACCOUNT_BASES = [...new Set([process.env.ACCOUNT_API_BASE, WORDS_API, ...ALLOWED_ORIGINS.filter(o => o.startsWith('https://'))]
+  .filter(Boolean).map(b => String(b).replace(/\/+$/, '')))];
+const ACCOUNT_PATH = '/.netlify/functions/account';
+let accountKey = null, accountBase = '';
+async function loadAccountKey(){
+  for(const base of (process.env.ACCOUNT_API_BASE ? [String(process.env.ACCOUNT_API_BASE).replace(/\/+$/, '')] : ACCOUNT_BASES)){
+    try{
+      const r = await fetch(base + ACCOUNT_PATH + '?pubkey=1', { signal: AbortSignal.timeout(6000), headers: { accept: 'application/json' } });
+      if(!r.ok) continue;
+      const j = await r.json();
+      if(!j || !j.key || j.key.kty !== 'EC' || j.key.crv !== 'P-256') continue;
+      accountKey = crypto.createPublicKey({ key: { kty: 'EC', crv: 'P-256', x: String(j.key.x), y: String(j.key.y) }, format: 'jwk' });
+      if(accountBase !== base) log('fiókkulcs betöltve innen:', base);
+      accountBase = base;
+      return true;
+    }catch(e){ /* következő cím */ }
+  }
+  return false;
+}
+(function keepAccountKey(){
+  loadAccountKey().then(ok => { setTimeout(keepAccountKey, ok ? 6 * 3600_000 : 60_000).unref?.(); });
+})();
+/** Aláírt "törzs.aláírás" ellenőrzése; a törzs tartalma, vagy null. */
+function verifySigned(str){
+  if(!accountKey || typeof str !== 'string' || str.length > 1200) return null;
+  const i = str.indexOf('.');
+  if(i < 10) return null;
+  const body = str.slice(0, i), sig = str.slice(i + 1);
+  if(!/^[A-Za-z0-9_-]+$/.test(body) || !/^[A-Za-z0-9_-]{80,90}$/.test(sig)) return null;
+  try{
+    if(!crypto.verify('sha256', Buffer.from(body), { key: accountKey, dsaEncoding: 'ieee-p1363' }, Buffer.from(sig, 'base64url'))) return null;
+    const c = JSON.parse(Buffer.from(body, 'base64url').toString());
+    return (c && typeof c === 'object' && Number(c.e) > Date.now()) ? c : null;
+  }catch(e){ return null; }
+}
+/** key -> { taken, at } — a regisztrált nevek rövid életű gyorsítótára */
+const nameCache = new Map();
+function nameCached(key){
+  const c = nameCache.get(key);
+  return (c && Date.now() - c.at < (c.taken ? 5 * 60_000 : 30_000)) ? c : null;
+}
+/** Regisztrált-e a név. Ha a fiókszolgáltatás nem érhető el, nem akadályozzuk a játékot (false). */
+async function nameRegistered(key){
+  const c = nameCached(key);
+  if(c) return c.taken;
+  if(!accountBase) return false;
+  try{
+    const r = await fetch(accountBase + ACCOUNT_PATH + '?name=' + encodeURIComponent(key), { signal: AbortSignal.timeout(4000), headers: { accept: 'application/json' } });
+    if(!r.ok) return false;
+    const taken = !!(await r.json()).taken;
+    if(nameCache.size > 5000) nameCache.clear();
+    nameCache.set(key, { taken, at: Date.now() });
+    return taken;
+  }catch(e){ return false; }
+}
+/** Használhatja-e ez a kapcsolat ezt a nevet: szabad név, vagy a saját (igazolt) neve. */
+function mayUseNameSync(peer, name){
+  const key = nameKey(String(name || '').slice(0, 40));
+  if(!key || !accountKey) return true;
+  if(peer.acct && peer.acct.key === key) return true;
+  const c = nameCached(key);
+  return c ? !c.taken : null;      // null: még nem tudjuk, le kell kérdezni
+}
+
 const GAMES_FILE = path.join(DATA_DIR, 'games.json');
 let games = [];
 try{ games = JSON.parse(fs.readFileSync(GAMES_FILE, 'utf8')); if(!Array.isArray(games)) games = []; }catch(e){ games = []; }
@@ -344,7 +426,7 @@ const pendingResults = new Map();
 /** ip-csoport -> [rögzítés időpontjai] — egy IP-ről naponta legfeljebb ennyi játék kerülhet be */
 const recordsByIpSet = new Map();
 const MAX_GAMES_PER_IPSET_DAY = 40;
-const MIN_GAME_MS = 90_000;            // ennél rövidebb ideig élő szoba eredménye nem számít
+const MIN_GAME_MS = Number(process.env.MIN_GAME_MS || 90_000);            // ennél rövidebb ideig élő szoba eredménye nem számít
 
 function nameKey(n){ return String(n).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim(); }
 
@@ -406,14 +488,31 @@ function recordGame(peer, rows){
   const recent = (recordsByIpSet.get(ipKey) || []).filter(t => now - t < 86400_000);
   if(recent.length >= MAX_GAMES_PER_IPSET_DAY) return 'napi korlát';
   recent.push(now); recordsByIpSet.set(ipKey, recent);
+  // v4.40: a ranglistára csak regisztrált (jeggyel igazolt) játékos kerül név szerint;
+  // a vendégek sora név nélkül marad meg (a győztes megállapításához kell a pontjuk)
+  const players = e.rows.map(r => { const a = info.accts && info.accts.get(nameKey(r.name)); return a ? { name: a.name, score: r.score, u: a.uid } : { g: 1, score: r.score }; });
+  if(!players.some(p => p.u)) return 'nincs regisztrált játékos';
   e.done = true;
   lastReportByRoom.set(roomId, now);
-  games.push({ at: now, start: info.createdAt, players: e.rows });
+  games.push({ at: now, start: info.createdAt, players });
   pruneOldGames();
   if(games.length > 20000) games.splice(0, games.length - 20000);
   saveGames();
-  log('játék rögzítve', `${e.rows.length} játékos, ${live} megerősítés`);   // nevek/pontok nem kerülnek a naplóba
+  log('játék rögzítve', `${players.length} játékos (${players.filter(p => p.u).length} regisztrált), ${live} megerősítés`);   // nevek/pontok nem kerülnek a naplóba
   return 'ok';
+}
+
+/** Fióktörlés: a játékos sorai névtelenné válnak; amiben már nincs regisztrált játékos, az a játék törlődik. */
+function forgetAccount(uid){
+  let changed = 0;
+  for(const g of games){
+    g.players = g.players.map(p => { if(p.u !== uid) return p; changed++; return { g: 1, score: p.score }; });
+  }
+  if(!changed) return 0;
+  const keep = games.filter(g => g.players.some(p => p.u));
+  games.length = 0; games.push(...keep);
+  saveGames();
+  return changed;
 }
 
 function leaderboard(days){
@@ -423,7 +522,8 @@ function leaderboard(days){
     if(g.at < since) continue;
     const top = Math.max(...g.players.map(p => p.score));
     for(const p of g.players){
-      const k = nameKey(p.name);
+      if(!p.u) continue;               // v4.40: csak regisztrált játékos (a régi, fiók előtti sorok sem)
+      const k = p.u;
       let e = by.get(k);
       if(!e){ e = { name: p.name, games: 0, wins: 0, total: 0, best: 0, last: 0 }; by.set(k, e); }
       e.games++; e.total += p.score; e.best = Math.max(e.best, p.score);
@@ -432,7 +532,7 @@ function leaderboard(days){
     }
   }
   return [...by.values()]
-    .map(e => ({ ...e, avg: Math.round(e.total / e.games) }))
+    .map(e => ({ ...e, verified: true, avg: Math.round(e.total / e.games) }))
     .sort((a, b) => b.wins - a.wins || b.avg - a.avg || b.games - a.games);
 }
 
@@ -440,7 +540,7 @@ function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;'
 
 function leaderboardPage(days){
   const rows = leaderboard(days);
-  const recent = games.slice(-15).reverse();
+  const recent = games.filter(g => g.players.some(p => p.u)).slice(-15).reverse();
   const tab = (d, label) => `<a href="?napok=${d}" class="${(days||0) === d ? 'on' : ''}">${label}</a>`;
   const fmt = ts => new Date(ts).toLocaleString('hu-HU', { timeZone:'Europe/Budapest', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
   return `<!doctype html><html lang="hu"><head><meta charset="utf-8">
@@ -468,13 +568,13 @@ function leaderboardPage(days){
   @media (max-width:420px){ .hide-s{ display:none; } th,td{ padding:8px 6px; } }
 </style></head><body><main>
 <h1>🏆 PIC-ASS-O ranglista</h1>
-<p class="sub">Minden befejezett, legalább kétfős játék számít. A sorrend: győzelmek, aztán átlagpont.</p>
+<p class="sub">Minden befejezett, legalább kétfős játék számít, amelyben volt regisztrált játékos. A listán csak regisztrált (✔) játékosok szerepelnek. A sorrend: győzelmek, aztán átlagpont.</p>
 <nav class="tabs">${tab(0,'Mindig')}${tab(30,'Utolsó 30 nap')}${tab(7,'Utolsó 7 nap')}</nav>
 ${rows.length ? `<table><thead><tr><th class="rank">#</th><th>Név</th><th>Győzelem</th><th>Játék</th><th>Átlag</th><th class="hide-s">Legjobb</th></tr></thead><tbody>
-${rows.map((r, i) => `<tr><td class="rank">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td><td>${escapeHtml(r.name)}</td><td>${r.wins}</td><td>${r.games}</td><td>${r.avg}</td><td class="hide-s">${r.best}</td></tr>`).join('')}
+${rows.map((r, i) => `<tr><td class="rank">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td><td>${escapeHtml(r.name)} <span title="regisztrált játékos">✔</span></td><td>${r.wins}</td><td>${r.games}</td><td>${r.avg}</td><td class="hide-s">${r.best}</td></tr>`).join('')}
 </tbody></table>` : `<p class="empty">Még nincs befejezett játék ebben az időszakban.</p>`}
 <h2>Legutóbbi játékok</h2>
-${recent.length ? recent.map(g => { const s = [...g.players].sort((a,b)=>b.score-a.score); return `<div class="g"><time>${fmt(g.at)}${g.start ? ' · ⏱ a szoba ' + idotartam(g.at - g.start) + ' élt' : ''}</time>${s.map((p,i)=>`${i===0?'👑 ':''}<b>${escapeHtml(p.name)}</b> ${p.score}`).join(' · ')}</div>`; }).join('') : '<p class="empty">Még nincs.</p>'}
+${recent.length ? recent.map(g => { const s = [...g.players].sort((a,b)=>b.score-a.score); return `<div class="g"><time>${fmt(g.at)}${g.start ? ' · ⏱ a szoba ' + idotartam(g.at - g.start) + ' élt' : ''}</time>${s.map((p,i)=>`${i===0?'👑 ':''}${p.u ? `<b>${escapeHtml(p.name)}</b> ✔` : '<i>vendég</i>'} ${p.score}`).join(' · ')}</div>`; }).join('') : '<p class="empty">Még nincs.</p>'}
 </main></body></html>`;
 }
 
@@ -505,6 +605,22 @@ const server = http.createServer((req, res) => {
     });
     res.writeHead(200, { 'content-type':'application/json', 'cache-control':'no-store' });
     res.end(JSON.stringify({ rooms: list }));
+    return;
+  }
+  // v4.40: fióktörléskor a Netlify-függvény aláírt kéréssel jelzi, hogy a játékos a ranglistáról is lekerüljön
+  if(url.pathname === '/api/forget' && req.method === 'POST'){
+    let raw = '';
+    req.on('data', c => { raw += c; if(raw.length > 4000) req.destroy(); });
+    req.on('end', () => {
+      let c = null;
+      try{ c = verifySigned(String(JSON.parse(raw).proof || '')); }catch(e){}
+      if(!c || !isStr(c.del, 64)){ res.writeHead(403, { 'content-type':'application/json' }); res.end('{"error":"forbidden"}'); return; }
+      const n = forgetAccount(c.del);
+      for(const p of peers.values()) if(p.acct && p.acct.uid === c.del) p.acct = null;
+      nameCache.clear();
+      log('fiók törölve a ranglistáról', `${n} sor`);
+      res.writeHead(200, { 'content-type':'application/json' }); res.end('{"ok":true}');
+    });
     return;
   }
   if(url.pathname === '/api/ranglista'){
@@ -561,6 +677,45 @@ wss.on('connection', (ws, req) => {
   }
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
+
+  // v4.40: regisztrált névvel csak a gazdája mutatkozhat be — az ilyen üzenetet nem továbbítjuk
+  function rejectName(m){
+    if(typeof m.s === 'number' && m.s > peer.inSeq) peer.inSeq = m.s;
+    try{ ws.send(JSON.stringify({ t:'error', e:'name-taken', name: String(m.d.name).slice(0, 16) })); }catch(e){}
+    log('foglalt név elutasítva', peer.id.slice(0,6));
+  }
+  function relaySend(m){
+        if(!peer.room || !isStr(m.a, 32)) return;
+        if(typeof m.s === 'number' && m.s <= peer.inSeq) return;   // újraküldött példány, amit már továbbítottunk
+        const lim = ACTION_LIMITS[m.a];
+        if(lim){
+          const now2 = Date.now();
+          peer.act = peer.act || {};
+          const arr = (peer.act[m.a] || []).filter(t => now2 - t < lim[1]);
+          if(arr.length >= lim[0]){
+            peer.act[m.a] = arr;
+            if(typeof m.s === 'number') peer.inSeq = m.s;   // szándékosan eldobva: nem kell újraküldeni
+            if(!peer.actLogAt || now2 - peer.actLogAt > 30_000){ peer.actLogAt = now2; log('áradat eldobva', peer.id.slice(0,6), m.a, 'szoba', String(peer.room).slice(0,8)); }
+            return;
+          }
+          arr.push(now2); peer.act[m.a] = arr;
+        }
+        const set = roomMembers(peer.room);
+        const out = JSON.stringify({ t:'msg', a: m.a, d: m.d, f: peer.id });
+        const targets = Array.isArray(m.to) ? m.to.filter(id => typeof id === 'string' && set.has(id)).length : Math.max(0, set.size - 1);
+        const cost = Buffer.byteLength(out, 'utf8') * targets;
+        // v4.30: a sorszámot csak a továbbítás után léptetjük, így egy itt eldobott üzenet újra jöhet
+        if(fanTokens - cost < 0){ overLimit('továbbítás'); return; }
+        fanTokens -= cost;
+        if(typeof m.s === 'number') peer.inSeq = m.s;
+        if(Array.isArray(m.to)){
+          m.to.slice(0, MAX_ROOM_PEERS).forEach(id => {
+            if(typeof id === 'string' && id !== peer.id && set.has(id)){ const p = peers.get(id); if(p) sendRaw(p, out); }
+          });
+        } else {
+          set.forEach(id => { if(id !== peer.id){ const p = peers.get(id); if(p) sendRaw(p, out); } });
+        }
+  }
 
   ws.on('message', (buf, isBinary) => {
     // egyszerű sebességkorlát
@@ -636,6 +791,7 @@ wss.on('connection', (ws, req) => {
         let info = roomInfo.get(m.room);
         if(!info){ info = { createdAt: Date.now(), ever: new Set(), ips: new Set(), owner: peer.id, banned: new Set(), ipBlock: new Map() }; roomInfo.set(m.room, info); }
         info.ever.add(peer.id); if(info.ips.size < 50) info.ips.add(peer.ip);
+        if(peer.acct){ info.accts = info.accts || new Map(); info.accts.set(peer.acct.key, peer.acct); }
         ws.send(JSON.stringify({ t:'joined', room: m.room, peers: others, owner: info.owner }));
         others.forEach(id => { const p = peers.get(id); if(p) sendRaw(p, { t:'pjoin', id: peer.id }); });
         log('belépés', peer.id.slice(0,6), 'szoba', m.room.slice(0,8), 'létszám', set.size);
@@ -656,37 +812,36 @@ wss.on('connection', (ws, req) => {
         leaveRoom(target, 'kirúgva');
         return;
       }
+      case 'auth': {
+        // v4.40: névigazoló jegy — a Netlify írta alá, és ehhez a kapcsolat-azonosítóhoz szól
+        const c = verifySigned(m.k);
+        // a jegy a kapcsolat titkos kulcsához is kötött: aki csak látta a jegyet (pl. szobatársként), nem tudja felhasználni
+        const th = crypto.createHash('sha256').update(String(peer.token)).digest('hex');
+        if(!c || c.p !== peer.id || c.h !== th || !isStr(c.u, 64) || !isStr(c.n, 16) || !nameKey(c.n)){ ws.send(JSON.stringify({ t:'authed', ok:false })); return; }
+        peer.acct = { uid: c.u, name: c.n, key: nameKey(c.n) };
+        const info = peer.room && roomInfo.get(peer.room);
+        if(info){ info.accts = info.accts || new Map(); info.accts.set(peer.acct.key, peer.acct); }
+        ws.send(JSON.stringify({ t:'authed', ok:true, name: c.n }));
+        return;
+      }
       case 'send': {
         if(!peer.room || !isStr(m.a, 32)) return;
-        if(typeof m.s === 'number' && m.s <= peer.inSeq) return;   // újraküldött példány, amit már továbbítottunk
-        const lim = ACTION_LIMITS[m.a];
-        if(lim){
-          const now2 = Date.now();
-          peer.act = peer.act || {};
-          const arr = (peer.act[m.a] || []).filter(t => now2 - t < lim[1]);
-          if(arr.length >= lim[0]){
-            peer.act[m.a] = arr;
-            if(typeof m.s === 'number') peer.inSeq = m.s;   // szándékosan eldobva: nem kell újraküldeni
-            if(!peer.actLogAt || now2 - peer.actLogAt > 30_000){ peer.actLogAt = now2; log('áradat eldobva', peer.id.slice(0,6), m.a, 'szoba', String(peer.room).slice(0,8)); }
+        // v4.40: amíg egy bemutatkozás névellenőrzése folyik, a kapcsolat többi üzenete sorban vár (a sorrend megmarad)
+        if(peer.holdQ){ if(peer.holdQ.length < 300) peer.holdQ.push(m); return; }
+        if(m.a === 'hello' && m.d && typeof m.d === 'object' && typeof m.d.name === 'string'){
+          const ok = mayUseNameSync(peer, m.d.name);
+          if(ok === false){ rejectName(m); return; }
+          if(ok === null){
+            peer.holdQ = [];
+            nameRegistered(nameKey(m.d.name.slice(0, 40))).then(taken => {
+              const q = peer.holdQ || []; peer.holdQ = null;
+              if(taken && !(peer.acct && peer.acct.key === nameKey(m.d.name.slice(0, 40)))) rejectName(m); else relaySend(m);
+              q.forEach(x => { if(peer.room) relaySend(x); });
+            });
             return;
           }
-          arr.push(now2); peer.act[m.a] = arr;
         }
-        const set = roomMembers(peer.room);
-        const out = JSON.stringify({ t:'msg', a: m.a, d: m.d, f: peer.id });
-        const targets = Array.isArray(m.to) ? m.to.filter(id => typeof id === 'string' && set.has(id)).length : Math.max(0, set.size - 1);
-        const cost = Buffer.byteLength(out, 'utf8') * targets;
-        // v4.30: a sorszámot csak a továbbítás után léptetjük, így egy itt eldobott üzenet újra jöhet
-        if(fanTokens - cost < 0){ overLimit('továbbítás'); return; }
-        fanTokens -= cost;
-        if(typeof m.s === 'number') peer.inSeq = m.s;
-        if(Array.isArray(m.to)){
-          m.to.slice(0, MAX_ROOM_PEERS).forEach(id => {
-            if(typeof id === 'string' && id !== peer.id && set.has(id)){ const p = peers.get(id); if(p) sendRaw(p, out); }
-          });
-        } else {
-          set.forEach(id => { if(id !== peer.id){ const p = peers.get(id); if(p) sendRaw(p, out); } });
-        }
+        relaySend(m);
         return;
       }
       case 'dir': {
