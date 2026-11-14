@@ -281,6 +281,30 @@ test('végleges kitiltás: csak aláírt kérésre; az eszköz, az IP és a fió
   await t3.close();
 });
 
+test('v4.49: „csak regisztráltak” szoba és havi szezon', async () => {
+  const host = client('rego0hst1'), guest = client('rego0gst1'), reg = client('rego0reg1');
+  await Promise.all([host.connect(), guest.connect(), reg.connect()]);
+  host.ws.send(JSON.stringify({ t: 'auth', k: ticketFor('rego0hst1', 'Gazda', 'uid-gazda') }));
+  reg.ws.send(JSON.stringify({ t: 'auth', k: ticketFor('rego0reg1', 'Regisztrált', 'uid-reg') }));
+  await sleep(100);
+  await host.join('v2:szoba-rego');
+  host.ws.send(JSON.stringify({ t: 'rflags', regOnly: true }));
+  await sleep(80);
+  await guest.join('v2:szoba-rego');
+  await reg.join('v2:szoba-rego');
+  await sleep(150);
+  assert.equal(guest.errors.at(-1) && guest.errors.at(-1).e, 'regonly', 'vendég nem léphet be');
+  assert.ok(!reg.errors.some(e => e.e === 'regonly'), 'regisztrált beléphet');
+  // vendég nem állíthatja át a szoba beállítását
+  guest.ws.send(JSON.stringify({ t: 'rflags', regOnly: false }));
+  const html = await (await fetch(`http://127.0.0.1:${PORT}/ranglista`)).text();
+  assert.match(html, /Ez a hónap/);
+  assert.match(html, /havi szezon/);
+  const d = await (await fetch(`http://127.0.0.1:${PORT}/api/dobogo?pid=uid-gazda`)).json();
+  assert.deepEqual(d, { podiums: [] });
+  await Promise.all([host.close(), guest.close(), reg.close()]);
+});
+
 test('ranglista: regisztrált játékos nélkül a játék nem kerül fel', async () => {
   const a = client('mmmm0001'), b = client('nnnn0001');
   await Promise.all([a.connect(), b.connect()]);

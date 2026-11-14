@@ -355,7 +355,7 @@ async function toggleEmailNotify(on){
 
 // ---------- a fiók ablak ----------
 let view = 'login';
-const VIEWS = ['login','register','registered','link-sent','profile','delete'];
+const VIEWS = ['login','register','registered','link-sent','profile','devices','gallery','delete'];
 function show(v){
   view = v;
   VIEWS.forEach(x=>{ const el = $('acct-v-' + x); if(el) el.classList.toggle('hidden', x !== v); });
@@ -381,6 +381,12 @@ function paintProfile(){
   $('acct-p-since').textContent = user.createdAt ? new Date(user.createdAt).toLocaleDateString('hu-HU', { year:'numeric', month:'long', day:'numeric' }) : '';
   const n = $('acct-p-notify'); if(n) n.checked = !!user.notifyEmail;
   paintPasskeys();
+  // v4.49
+  { const pp = $('acct-p-public'); if(pp) pp.checked = user.profilePublic !== false; }
+  { const fm = $('acct-p-followmail'); if(fm) fm.checked = user.followMail !== false; }
+  { const rc = $('acct-roomcode-input'); if(rc && document.activeElement !== rc) rc.value = user.roomCode || ''; }
+  { const ri = $('acct-rename-input'); if(ri && document.activeElement !== ri) ri.value = user.name; }
+  paintFriends();
 }
 /** Űrlap bekötése: a gombot a kérés idejére letiltja, a hibát az űrlap üzenetsorába írja. */
 function form(id, msgId, fn){
@@ -406,6 +412,82 @@ async function afterLogin(u){
 }
 // ---------- v4.43: jelkulcs (passkey) ----------
 const pkSupported = ()=> typeof window.PublicKeyCredential === 'function' && !!navigator.credentials && window.isSecureContext;
+// ---------- v4.49: követés, eszközök, galéria, szólisták ----------
+function paintFriends(){
+  const ul = $('acct-friends'); if(!ul || !user) return;
+  ul.textContent = '';
+  const fr = Array.isArray(user.friends) ? user.friends : [];
+  if(!fr.length){ const li = document.createElement('li'); li.className = 'acct-why'; li.textContent = 'Még senkit nem követsz. Koppints egy ✔ jelvényes játékos nevére, vagy írd be a nevét.'; ul.appendChild(li); return; }
+  fr.forEach(f=>{
+    const li = document.createElement('li');
+    const a = document.createElement('a'); a.href = '#'; a.textContent = '👤 ' + f.name; a.className = 'pf-link';
+    a.addEventListener('click', e=>{ e.preventDefault(); try{ hooks.openProfile && hooks.openProfile(f.name); }catch(err){} });
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost small'; b.textContent = 'Leállítás';
+    b.addEventListener('click', async ()=>{ b.disabled = true; await follow(false, f.name, f.uid); });
+    li.append(a, b); ul.appendChild(li);
+  });
+}
+async function follow(on, name, uid){
+  const r = await call(on ? { action:'follow', name } : { action:'unfollow', uid });
+  if(r.ok && r.j.user){ user = Object.assign(user, r.j.user); paintFriends(); msg('acct-m-follow', on ? `✅ Mostantól követed: ${name}.` : `Leállítottad: ${name}.`, 'ok'); }
+  else msg('acct-m-follow', r.j.error || 'Nem sikerült.', 'bad');
+  return r.ok;
+}
+async function paintDevices(){
+  const ul = $('acct-devices'); if(!ul) return;
+  ul.textContent = 'Betöltés…';
+  const r = await call({ action:'sessions' }).catch(()=>({ ok:false, j:{} }));
+  ul.textContent = '';
+  if(!r.ok){ msg('acct-m-devices', r.j.error || 'Nem sikerült betölteni.', 'bad'); return; }
+  r.j.sessions.forEach(x=>{
+    const li = document.createElement('li');
+    const t = document.createElement('span');
+    t.textContent = `${x.current ? '📍 ' : ''}${x.label} · belépett: ${new Date(x.at).toLocaleDateString('hu-HU')} · utoljára: ${new Date(x.last).toLocaleString('hu-HU', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}${x.current ? ' (ez az eszköz)' : ''}`;
+    li.appendChild(t);
+    if(!x.current){
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost small'; b.textContent = 'Kiléptetés';
+      b.addEventListener('click', async ()=>{ b.disabled = true; const q = await call({ action:'session-revoke', id: x.id }); if(q.ok) li.remove(); else { b.disabled = false; msg('acct-m-devices', q.j.error || 'Nem sikerült.', 'bad'); } });
+      li.appendChild(b);
+    }
+    ul.appendChild(li);
+  });
+}
+async function paintGallery(){
+  const box = $('acct-gallery'); if(!box) return;
+  box.textContent = 'Betöltés…';
+  const r = await call({ action:'gallery-list' }).catch(()=>({ ok:false, j:{} }));
+  box.textContent = '';
+  if(!r.ok){ msg('acct-m-gallery', r.j.error || 'Nem sikerült betölteni.', 'bad'); return; }
+  const c = $('acct-gallery-count'); if(c) c.textContent = `(${r.j.items.length} / 50)`;
+  if(!r.j.items.length){ const p = document.createElement('p'); p.className = 'acct-why'; p.textContent = 'Még üres.'; box.appendChild(p); return; }
+  r.j.items.forEach(it=>{
+    const f = document.createElement('figure');
+    const img = document.createElement('img'); img.loading = 'lazy'; img.alt = it.word || 'rajz'; img.src = `${API}?img=${encodeURIComponent(r.j.pid + '.' + it.id)}`;
+    const cap = document.createElement('figcaption');
+    const w = document.createElement('span'); w.textContent = it.word || '';
+    const del = document.createElement('button'); del.type = 'button'; del.textContent = '✕'; del.setAttribute('aria-label', 'Rajz törlése');
+    del.addEventListener('click', async ()=>{ del.disabled = true; const q = await call({ action:'gallery-del', id: it.id }); if(q.ok) f.remove(); });
+    cap.append(w, del); f.append(img, cap); box.appendChild(f);
+  });
+}
+async function galleryAdd(img, word){
+  const r = await call({ action:'gallery-add', img, word });
+  return r.ok ? { ok:true, full: r.j.full } : { ok:false, error: r.j.error || 'Nem sikerült.' };
+}
+async function saveWordlists(lists){
+  const r = await call({ action:'wordlists-put', lists });
+  if(r.ok && user) user.wordlists = r.j.wordlists;
+  return r.ok;
+}
+async function exportData(){
+  const r = await fetch(API, { method:'POST', headers:{ 'Content-Type':'application/json' }, credentials:'same-origin', body: JSON.stringify({ action:'export' }) });
+  if(!r.ok) return false;
+  const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type:'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'picasso-adataim.json';
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  return true;
+}
+
 function loadWebAuthn(){
   return new Promise((res, rej)=>{
     if(window.SimpleWebAuthnBrowser) return res(window.SimpleWebAuthnBrowser);
@@ -494,7 +576,7 @@ async function loginWithPasskey(){
     if(!b.ok){ msg('acct-m-login', b.j.error || 'Nem sikerült.', 'bad'); return; }
     let resp;
     try{ resp = await W.startAuthentication({ optionsJSON: b.j.options }); }
-    catch(e){ msg('acct-m-login', pkCancelled(e) ? 'Megszakítva. Ha még nincs jelkulcsod, lépj be jelszóval, és a fiókodban add hozzá.' : 'Ez az eszköz most nem tudott jelkulccsal belépni.', pkCancelled(e) ? '' : 'bad'); return; }
+    catch(e){ msg('acct-m-login', pkCancelled(e) ? 'Megszakítva. Ha még nincs jelkulcsod, kérj belépőlinket e-mailben, és utána a fiókodban add hozzá.' : 'Ez az eszköz most nem tudott jelkulccsal belépni.', pkCancelled(e) ? '' : 'bad'); return; }
     const f = await call({ action:'pk-login-finish', response: resp });
     if(!f.ok){ msg('acct-m-login', f.j.error || 'Nem sikerült belépni.', 'bad'); return; }
     await afterLogin(f.j.user);
@@ -544,6 +626,40 @@ function wire(){
     [STATS_KEY, BASE_KEY, REV_KEY, OWNER_KEY, SETTINGS_MARK, 'picasso-name', 'picasso-push-sync'].forEach(ls.del);
     location.reload();
   });
+  // v4.49
+  $('acct-btn-rename') && $('acct-btn-rename').addEventListener('click', ()=>{ $('acct-f-rename').classList.toggle('hidden'); $('acct-rename-input').focus(); });
+  $('acct-btn-email') && $('acct-btn-email').addEventListener('click', ()=>{ $('acct-f-email').classList.toggle('hidden'); $('acct-email-input').focus(); });
+  form('acct-f-rename', 'acct-m-rename', async fd=>{
+    const r = await call({ action:'rename', name: String(fd.get('name') || '').trim() });
+    if(!r.ok){ msg('acct-m-rename', r.j.error || 'Nem sikerült.', 'bad'); return; }
+    setUser(r.j.user); await fetchTicket(); paintProfile();
+    $('acct-f-rename').classList.add('hidden');
+    msg('acct-m-profile', `✅ Az új neved: ${user.name}.`, 'ok');
+  });
+  form('acct-f-email', 'acct-m-email', async fd=>{
+    const r = await call({ action:'email-begin', email: String(fd.get('email') || '').trim() });
+    if(!r.ok){ msg('acct-m-email', r.j.error || 'Nem sikerült.', 'bad'); return; }
+    msg('acct-m-email', '📬 Küldtünk egy megerősítő levelet az új címre. A csere akkor történik meg, ha ott rákattintasz (24 óráig érvényes).', 'ok');
+  });
+  form('acct-f-roomcode', 'acct-m-roomcode', async fd=>{
+    const r = await call({ action:'roomcode-set', code: String(fd.get('code') || '').trim().toUpperCase() });
+    if(!r.ok){ msg('acct-m-roomcode', r.j.error || 'Nem sikerült.', 'bad'); return; }
+    user = Object.assign(user, r.j.user);
+    msg('acct-m-roomcode', user.roomCode ? `✅ Az állandó kódod: ${user.roomCode}` : 'Az állandó kód törölve.', 'ok');
+    try{ hooks.onUserChange && hooks.onUserChange(); }catch(e){}
+  });
+  form('acct-f-follow', 'acct-m-follow', async fd=>{
+    const name = String(fd.get('name') || '').trim();
+    if(!name) return;
+    if(await follow(true, name)) $('acct-follow-input').value = '';
+  });
+  const prefs = async (patch)=>{ const r = await call(Object.assign({ action:'prefs-put' }, patch)); if(r.ok) user = Object.assign(user, r.j.user); };
+  $('acct-p-public') && $('acct-p-public').addEventListener('change', e=>prefs({ profilePublic: e.target.checked }));
+  $('acct-p-followmail') && $('acct-p-followmail').addEventListener('change', e=>prefs({ followMail: e.target.checked }));
+  $('acct-btn-myprofile') && $('acct-btn-myprofile').addEventListener('click', ()=>{ try{ hooks.openProfile && hooks.openProfile(user.name); }catch(e){} });
+  $('acct-btn-devices') && $('acct-btn-devices').addEventListener('click', ()=>{ show('devices'); paintDevices(); });
+  $('acct-btn-gallery') && $('acct-btn-gallery').addEventListener('click', ()=>{ show('gallery'); paintGallery(); });
+  $('acct-btn-export') && $('acct-btn-export').addEventListener('click', async ()=>{ const ok = await exportData().catch(()=>false); msg('acct-m-profile', ok ? '⬇️ Letöltve: picasso-adataim.json' : 'Nem sikerült letölteni.', ok ? 'ok' : 'bad'); });
   $('acct-btn-logout').addEventListener('click', async ()=>{
     $('acct-btn-logout').disabled = true;
     try{ if(statsDirty()) await syncStats(); await pushSettings(); await call({ action:'logout' }); }catch(e){}
@@ -595,5 +711,6 @@ export const Account = {
   get accountsOff(){ return !accountsOn; },
   get ticket(){ return (user && ticket && ticketExp > Date.now()) ? ticket : ''; },
   onChange(f){ listeners.add(f); },
-  verifyTicket, nameTaken, mayUse, nameProblem, syncStats, resetStats, fetchTicket
+  verifyTicket, nameTaken, mayUse, nameProblem, syncStats, resetStats, fetchTicket,
+  follow, galleryAdd, saveWordlists, exportData
 };

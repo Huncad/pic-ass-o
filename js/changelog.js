@@ -2,6 +2,17 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.49', changes:[
+    'Új: profil — koppints egy játékos ✔ jelvényére: szint, mérföldkövek, kitüntetések, havi dobogós helyezések, statisztika és a galériája. A saját profilod nyilvánosságát a fiókodban állíthatod.',
+    'Új: szintek és mérföldkövek (a Statisztikáim tetején is), és havi szezon a közös ranglistán: minden hónap elején újraindul, a hónap legjobb 3 játékosa 🏆 jelvényt kap.',
+    'Új: követés — kövesd a barátaidat (a profiljukon vagy a nevük beírásával), és szólunk (push és e-mail), amikor szobát nyitnak.',
+    'Új: rajzgaléria — rajzolóként a kör végén a „💾 Mentés a galériámba” gombbal megőrizheted a rajzodat (legfeljebb 50).',
+    'Új: saját szólisták a fiókban — a váróban elmentheted a szavaidat egy listába, és bármelyik eszközön betöltheted (véletlenszerűen, a szobában engedett számig).',
+    'Új: állandó szobakód — foglalj le egy saját 5 karakteres kódot, és nyiss vele szobát, így a barátaid mindig ugyanott találnak. Más nem foglalhatja el.',
+    'Új: „Csak regisztrált játékosok” szoba — szobanyitáskor bekapcsolhatod; vendég nem léphet be (a szerver is betartja), a kirúgás így a fiókhoz kötött.',
+    'A fiókodban mostantól módosíthatod a neved (30 naponta egyszer; a régi név 30 napig a tiéd marad) és az e-mail címed (megerősítéssel), láthatod, hol vagy belépve (és egyenként kiléptetheted), és letöltheted az adataidat.',
+    'Javítva: az „új jelkulcs” értesítő levél még jelszócserét javasolt — jelszó már nincs, a levél most a jelkulcs törlését és a többi eszköz kiléptetését ajánlja.'
+  ]},
   { version:'4.48', changes:[
     'Jelkulcs Linuxon: az „Ezen az eszközön” gomb újra látszik — a rendszer maga nem tárol jelkulcsot, de egy jelszókezelő (Google Jelszókezelő a Chrome-ban, Bitwarden, KeePassXC, 1Password, Proton Pass) igen. Ha nincs ilyen, a játék elmagyarázza, hogy a telefonoddal (QR-kóddal) tudsz belépni.'
   ]},

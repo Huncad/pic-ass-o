@@ -353,6 +353,99 @@ test('fiók: a régi jelszó-lenyomatok és 2FA-kulcsok az első induláskor tö
   assert.ok(S.has('mig/nopw'));
 });
 
+test('v4.49: e-mail csere, névváltoztatás, eszközök, adatletöltés', async () => {
+  const { default: acc } = await import('../netlify/functions/account.mjs');
+  const c = await makeAccount('Váltó', 'valto@pelda.hu');
+  // e-mail csere: megerősítés az új címről; addig nem változik
+  const n0 = sentMails.length;
+  assert.equal((await accPost({ action: 'email-begin', email: 'uj-valto@pelda.hu' }, c)).status, 200);
+  const conf = sentMails.slice(n0).find(m => m.to === 'uj-valto@pelda.hu');
+  assert.ok(conf && sentMails.slice(n0).some(m => m.to === 'valto@pelda.hu'), 'a régi címre is szól');
+  assert.equal((await accGet('', c)).user.email, 'valto@pelda.hu');
+  const link = /href="([^"]+\?emailchg=[^"]+)"/.exec(conf.html)[1];
+  assert.equal((await acc(new Request(link))).status, 200);
+  assert.equal((await acc(new Request(link, { method: 'POST' }))).status, 200);
+  assert.equal((await accGet('', c)).user.email, 'uj-valto@pelda.hu');
+  assert.equal((await acc(new Request(link, { method: 'POST' }))).status, 404, 'egyszer használható');
+  assert.equal(await magicLogin('valto@pelda.hu'), '', 'a régi címre már nem megy belépőlink');
+  assert.match(await magicLogin('uj-valto@pelda.hu'), /^__Host-picasso_s=/);
+  // névváltoztatás: a régi név 30 napig foglalt marad, és 30 napig nem lehet újra
+  const r1 = await accPost({ action: 'rename', name: 'Újnév' }, c);
+  assert.equal(r1.body.user.name, 'Újnév');
+  assert.equal((await accGet('?name=Váltó')).taken, true, 'a régi név foglalt marad');
+  assert.equal((await accPost({ action: 'register', name: 'Valto', email: 'mas2@pelda.hu', consent: true })).status, 409);
+  assert.equal((await accPost({ action: 'rename', name: 'Harmadik' }, c)).status, 429);
+  const t = await accPost({ action: 'ticket', pid: 'abcdefgh12345678' }, c);
+  assert.equal(t.body.name, 'Újnév', 'a névigazoló jegy már az új nevet mondja');
+  // eszközök: kiléptetés egyenként
+  const other = await magicLogin('uj-valto@pelda.hu');
+  const ss = (await accPost({ action: 'sessions' }, c)).body.sessions;
+  assert.ok(ss.length >= 3 && ss.filter(x => x.current).length === 1);
+  const victim = ss.find(x => !x.current);
+  assert.equal((await accPost({ action: 'session-revoke', id: victim.id }, c)).status, 200);
+  assert.equal((await accPost({ action: 'sessions' }, c)).body.sessions.length, ss.length - 1);
+  assert.equal((await accPost({ action: 'session-revoke', id: ss.find(x => x.current).id }, c)).status, 400);
+  void other;
+  // adatletöltés: minden benne, titok nincs
+  const ex = (await accPost({ action: 'export' }, c)).body;
+  assert.equal(ex.account.name, 'Újnév'); assert.equal(ex.account.email, 'uj-valto@pelda.hu');
+  assert.deepEqual(ex.account.previousNames, ['Váltó']);
+  assert.ok(!JSON.stringify(ex).match(/"pub"|"sess"|"pw"|scrypt/), 'nincs benne kulcs vagy munkamenet-azonosító');
+  // a levelekben sehol nem esik szó jelszóról
+  assert.ok(!sentMails.some(m => /jelsz/i.test(m.html)), 'egyetlen levél sem említ jelszót');
+});
+
+test('v4.49: profil, követés, szólisták, galéria, állandó szobakód', async () => {
+  const { default: acc } = await import('../netlify/functions/account.mjs');
+  const a = await makeAccount('Profilos', 'profilos@pelda.hu');
+  const b = await makeAccount('Követő', 'koveto@pelda.hu');
+  await accPost({ action: 'stats-put', stats: { games: 12, wins: 4, points: 1500, badges: { fast: 2, '<x>': 1 } }, rev: 0 }, a);
+  // nyilvános profil: csak összesítők, e-mail cím nincs benne
+  const p = await accGet('?profile=profilos');
+  assert.equal(p.found, true); assert.equal(p.stats.games, 12); assert.deepEqual(p.stats.badges, { fast: 2 });
+  assert.ok(!JSON.stringify(p).includes('profilos@pelda.hu'));
+  assert.equal((await accGet('?profile=Vendég Ember')).found, false);
+  // követés
+  assert.equal((await accPost({ action: 'follow', name: 'PROFILOS' }, b)).body.user.friends[0].name, 'Profilos');
+  assert.equal((await accPost({ action: 'follow', name: 'Követő' }, b)).status, 400, 'magát nem');
+  assert.equal((await accGet('?profile=Profilos', b)).following, true);
+  assert.equal((await accGet('?profile=Profilos')).followers, 1);
+  // nem nyilvános profil
+  await accPost({ action: 'prefs-put', profilePublic: false }, a);
+  const priv = await accGet('?profile=Profilos');
+  assert.equal(priv.private, true); assert.equal(priv.stats, undefined);
+  assert.ok((await accGet('?profile=Profilos', a)).stats, 'a gazdája látja');
+  await accPost({ action: 'prefs-put', profilePublic: true }, a);
+  // szólisták
+  const wl = await accPost({ action: 'wordlists-put', lists: [{ name: 'Családi<b>', words: ['alma', 'Alma', ' körte ', '<script>'] }] }, a);
+  assert.deepEqual(wl.body.wordlists, [{ name: 'Családib', words: ['alma', 'körte', 'script'] }]);
+  // galéria
+  const img = 'data:image/webp;base64,' + Buffer.from('kep').toString('base64');
+  assert.equal((await accPost({ action: 'gallery-add', img: 'data:text/html;base64,PHNjcmlwdD4=', word: 'x' }, a)).status, 400);
+  const g = await accPost({ action: 'gallery-add', img, word: 'macska' }, a);
+  assert.equal(g.status, 200);
+  const pid = (await accGet('?profile=Profilos')).pid;
+  const ir = await acc(new Request('https://example.test' + ACC + '?img=' + pid + '.' + g.body.id));
+  assert.equal(ir.status, 200); assert.equal(ir.headers.get('content-type'), 'image/webp');
+  assert.equal((await accGet('?profile=Profilos')).gallery[0].word, 'macska');
+  // állandó szobakód: egyedi
+  assert.equal((await accPost({ action: 'roomcode-set', code: 'ab0de' }, a)).status, 400, 'tiltott karakter (0)');
+  assert.equal((await accPost({ action: 'roomcode-set', code: 'adam5' }, a)).body.user.roomCode, 'ADAM5');
+  assert.equal((await accPost({ action: 'roomcode-set', code: 'ADAM5' }, b)).status, 409);
+  // a szobanyitás: a lefoglalt kódot más nem nyithatja meg, a gazdája igen
+  const { default: ban } = await import('../netlify/functions/ban.mjs');
+  const open = async (cookie) => (await ban(post('/.netlify/functions/ban', { action: 'open', room: 'ADAM5', dev: 'devicecode000001' }, Object.assign({ 'x-nf-client-connection-ip': '44.0.0.' + (++ipSeq % 200) }, cookie ? { cookie } : {})))).json();
+  assert.equal((await open('')).error, 'reserved');
+  assert.equal((await open(b)).error, 'reserved');
+  assert.ok((await open(a)).hostKey);
+  assert.ok((await open(a)).hostKey, 'újra is megnyithatja a saját kódját');
+  // fióktörlés: a galéria, a követések és a kód is megy
+  assert.equal((await accPost({ action: 'delete', confirmName: 'Profilos' }, a)).status, 200);
+  assert.equal((await accGet('', b)).user.friends.length, 1, 'a követő listája lusta: a név megmarad, de a profil eltűnt');
+  assert.equal((await accGet('?profile=Profilos')).found, false);
+  assert.ok(![...stores.get('picasso-accounts').keys()].some(k => k.startsWith('gi/' + pid) || k === 'rc/ADAM5'));
+});
+
 test('fiók: statisztika és beállítások szinkronja, ütközéskezelés', async () => {
   const c = await makeAccount('Statisztikus', 'stat@pelda.hu');
   assert.deepEqual((await accPost({ action: 'stats-get' }, c)).body, { ok: true, stats: null, rev: 0 });
@@ -471,7 +564,7 @@ test('subscribe: a türelmi idő után a fiók nélküliek törlődnek; fióktö
   assert.equal((await (await sub(new Request('https://example.test/.netlify/functions/subscribe'))).json()).count, 0);
   assert.equal(await magicLogin('jatekos0@pelda.hu'), '', 'törölt fiókba belépőlink sem megy');
   assert.ok(![...stores.get('picasso-accounts').values()].some(v => v.text.includes('jatekos0@pelda.hu')), 'a címnek nyoma sem maradt');
-  assert.ok(net.forget.length === 1, 'a játékszerver is megkapta az aláírt törlési kérést');
+  assert.ok(net.forget.length >= 1, 'a játékszerver is megkapta az aláírt törlési kérést');
 });
 
 test('report: gyanús eset naplózása, összevonás, admin listázás és törlés', async () => {

@@ -31,7 +31,8 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { esc, page, sendMail, mailWrap, btn, mailConfigured } from '../lib/mail.mjs';
 import { json, ipOf, makeLimiter, updateJSON } from '../lib/util.mjs';
 import { sendPushToAll, subId } from '../lib/push.mjs';
-import { sessionUser, sameOrigin } from '../lib/account.mjs';
+import { sessionUser, sameOrigin, accountStore } from '../lib/account.mjs';
+import { nameKey } from '../../js/rules.js';
 import { subsStore, tidySubs, countSubs, setAccountSub, accountSubOn, LEGACY_GRACE_MS, MAX_SUBS } from '../lib/subs.mjs';
 
 const KEY = 'subs';
@@ -139,6 +140,33 @@ async function startLegacyGrace(store, self, site) {
   await kickDrain(store, self);
 }
 
+/** v4.49: a szobát nyitó (regisztrált) játékos követőinek értesítése. Szobánként egyszer, követőnként óránként legfeljebb 3. */
+async function notifyFollowers(room, name, host, joinUrl) {
+  const as = accountStore();
+  const nb = await as.get('n/' + Buffer.from(nameKey(host)).toString('hex'), { type: 'json' }).catch(() => null);
+  if (!nb || !nb.uid) return;
+  const once = await as.setJSON('fwn/' + String(room.code).toUpperCase(), { at: Date.now() }, { onlyIfNew: true }).catch(() => null);
+  if (!once || once.modified === false) return;
+  const fw = asObj(await as.get('fw/' + nb.uid, { type: 'json' }).catch(() => null));
+  const uids = (Array.isArray(fw.uids) ? fw.uids : []).slice(0, 300);
+  if (!uids.length) return;
+  await sendPushToAll({ title: `🎨 ${host} szobát nyitott!`, body: `${name} — koppints a csatlakozáshoz!`, url: joinUrl }, { onlyUids: new Set(uids), budgetMs: 4000 }).catch(() => {});
+  let sent = 0;
+  for (const uid of uids) {
+    if (sent >= 40) break;
+    const u = await as.get('u/' + uid, { type: 'json' }).catch(() => null);
+    if (!u || u.followMail === false || !u.email) continue;
+    const k = 'fwm/' + uid, now = Date.now();
+    const rec = asObj(await as.get(k, { type: 'json' }).catch(() => null));
+    const times = (Array.isArray(rec.t) ? rec.t : []).filter(x => now - x < 3600_000);
+    if (times.length >= 3) continue;
+    await as.setJSON(k, { t: times.concat(now) }).catch(() => {});
+    const pal = (u.settings && u.settings['mail-colors']) || (u.regPal ? JSON.stringify(u.regPal) : null);
+    await sendMail(u.email, `🎨 ${host} szobát nyitott — PIC-ASS-O`, mailWrap(`<p>Szia, <b>${esc(u.name)}</b>! <b>${esc(host)}</b>, akit követsz, most nyitotta meg a(z) <b>„${esc(name)}”</b> szobát.</p>${btn(joinUrl, '🚀 Csatlakozás')}<p style="font-size:12px;color:#BFD3C4">Azért kaptad, mert követed őt. A követést vagy ezeket a leveleket a fiókodban kapcsolhatod ki.</p>`), undefined, pal).catch(() => {});
+    sent++;
+  }
+}
+
 export default async (req) => {
   const url = new URL(req.url);
   const self = url.origin + url.pathname;
@@ -235,6 +263,8 @@ export default async (req) => {
     if (!room || Date.now() - Number(room.firstAt || 0) > 3 * 60 * 1000) return json({ ok: true, skipped: 'unverified' });
     const name = String(room.name || '').slice(0, 60).trim() || 'Új szoba';
     const host = String(room.hostName || '').slice(0, 24).trim() || 'Valaki';
+    // v4.49: a szobanyitó követői külön értesítést kapnak (push + e-mail), a 15 perces közös hűtéstől függetlenül
+    if (room.verified) { try { await notifyFollowers(room, name, host, `${site}/?join=${encodeURIComponent(code)}`); } catch (e) { console.error('követők értesítése', e && e.message); } }
     const res = await updateJSON(store, KEY, raw => {
       const d = tidy(raw);
       if (Date.now() - (d.lastNotifyAt || 0) < NOTIFY_COOLDOWN_MS) return { write: false, result: { skipped: 'cooldown' } };

@@ -18,7 +18,7 @@ import { getStore } from '@netlify/blobs';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { json, makeLimiter, updateJSON } from '../lib/util.mjs';
 import { isAdminRequest } from '../lib/adminauth.mjs';
-import { signPayload, accountStore } from '../lib/account.mjs';
+import { signPayload, accountStore, sessionUser } from '../lib/account.mjs';
 
 const KICKLOG_KEEP_MS = 180 * 86400000;   // a kirúgási napló 180 napig marad
 const KICKLOG_MAX = 3000;
@@ -198,10 +198,19 @@ export default async (req) => {
       } catch (e) { /* nem fontos */ }
     }
     const hostKey = randomBytes(16).toString('hex');
+    // v4.49: állandó szobakód — csak a gazdája nyithatja meg (a véletlen kód sem eshet egy lefoglaltra)
+    const rc = await accountStore().get('rc/' + room, { type: 'json' }).catch(() => null);
+    let ownCode = false;
+    if (rc && rc.uid) {
+      const su = await sessionUser(req).catch(() => null);
+      if (!su || su.user.uid !== rc.uid) return json({ error: 'reserved' }, 409);
+      ownCode = true;
+    }
     // v4.30: ütközésbiztos — két egyszerre nyitó közül csak az egyik kapja meg a szobát
     const taken = await updateJSON(store, 'room:' + room, ex => {
       const e = asObj(ex);
-      if (e && e.hostKey && now - e.created < ROOM_KEEP_MS) return { write: false, result: true };
+      if (e && e.hostKey && now - e.created < ROOM_KEEP_MS && !ownCode) return { write: false, result: true };
+      if (ownCode && e) return { value: Object.assign(e, { created: now, hostDev: dev, hostKey, pres: {} }), result: false };   // a saját kódját újranyitja: a régi tiltások maradnak
       return { value: { created: now, hostDev: dev, hostKey, pres: {}, bDev: [], bIp: [] }, result: false };
     });
     if (taken) return json({ error: 'taken' }, 409);

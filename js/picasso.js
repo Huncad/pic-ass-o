@@ -1,7 +1,8 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 import { Account } from './account.js';
+import { initProfile, openProfile, levelOf, levelTitle, milestones } from './profile.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.48';
+const APP_VERSION = '4.49';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -607,7 +608,7 @@ try{
   }
   const acctBadgeHtml = (peerId)=>{
     const st = acctState(peerId);
-    if(st === 'reg') return '<span class="acct-badge" title="Regisztrált játékos — a név igazoltan az övé" aria-label="regisztrált játékos">✔</span>';
+    if(st === 'reg') return `<span class="acct-badge clickable" data-pname="${escapeHtml(peerId === selfId ? myName : roomNameOf(peerId))}" role="button" tabindex="0" title="Regisztrált játékos — koppints a profiljáért" aria-label="regisztrált játékos, profil megnyitása">✔</span>`;
     if(st === 'guest') return '<span class="guest-badge" title="Vendég — nem regisztrált játékos, a neve nem védett" aria-label="vendég">vendég</span>';
     return '';
   };
@@ -616,7 +617,14 @@ try{
     if(namePending.has(pk)) return;
     namePending.add(pk);
     const thisRoom = room;
-    Account.mayUse(name, isPlainObject(data) && typeof data.tk === 'string' ? data.tk : '', peerId).then(ok=>{
+    const tkx = isPlainObject(data) && typeof data.tk === 'string' ? data.tk : '';
+    (roomRegOnly ? Account.verifyTicket(tkx, peerId).then(c=>!!c) : Promise.resolve(true)).then(reg=>{ if(reg) return null;
+      namePending.delete(pk);
+      clog('K13', `csak regisztráltak: „${name}” fiók nélkül próbált belépni`);
+      try{ kickAction.send({ reason:'regonly' }, { target: peerId }); }catch(e){}
+      return 'stop';
+    }).then(stop=>{ if(stop) return;
+    Account.mayUse(name, tkx, peerId).then(ok=>{
       namePending.delete(pk);
       if(!isHost || room !== thisRoom || !kickAction || !helloAction) return;
       if(!ok){
@@ -626,6 +634,7 @@ try{
       }
       nameApproved.set(peerId, k);
       helloAction.onMessage(data, { peerId });
+    });
     });
   }
   let dirFromServer = false;   // v4.40: csak a saját szerverről érkező szobahirdetés jelölhet igazolt szobanyitót
@@ -2865,6 +2874,7 @@ try{
   const WORD_CHOICE_OPTIONS = [1,2,3,5,7,10];
   const WRONG_PENALTY_OPTIONS = [0,1,2,3,5,10];   // v4.29: points a wrong guess costs, set per room
   let roomIsPublic = false;
+  let roomRegOnly = false;   // v4.49: csak regisztrált játékosok léphetnek be (a szobanyitó és a szerver is betartja)
 
   let room = null;
   let guessReactAction = null;   // v4.42: emoji reaction to someone's guess
@@ -4249,6 +4259,8 @@ try{
         ? 'Ebbe a szobába (vagy az egész játékba) ki vagy tiltva, ezért nem léphetsz be.'
         : reason === 'update'
         ? 'A belépéshez frissítsd az oldalt (új verzió érhető el), aztán próbáld újra.'
+        : reason === 'regonly'
+        ? 'Ebbe a szobába csak regisztrált játékosok léphetnek be. Lépj be a fiókodba (a neved fölötti gombbal), és próbáld újra.'
         : reason === 'nametaken'
         ? 'Ez a név egy regisztrált játékosé. Lépj be a fiókoddal, vagy válassz másik nevet.'
         : reason === 'full'
@@ -5729,7 +5741,8 @@ try{
       ...myHostedRoomAnnouncement,
       players: meta ? activePlayerIds.size : Object.keys(lobbyPlayers).length,
       max: settings.maxPlayers,
-      inGame: !!meta && !gameEnded
+      inGame: !!meta && !gameEnded,
+      regOnly: roomRegOnly || undefined
     };
   }
   function announceMyRoom(){
@@ -5770,7 +5783,8 @@ try{
       isPrivate,
       name: cleanText(data.name, 60),
       hostName: cleanText(data.hostName, 20),
-      verified: data.verified === true && dirFromServer,   // v4.40: a szerver igazolta, hogy a szobanyitó regisztrált játékos
+      verified: data.verified === true && dirFromServer,
+      regOnly: data.regOnly === true,   // v4.40: a szerver igazolta, hogy a szobanyitó regisztrált játékos
       players: clampNum(data.players, 0, 999, 0),
       max: clampNum(data.max, 0, 999, 0),
       inGame: !!data.inGame,
@@ -7197,7 +7211,7 @@ try{
       const count = `${players}${max ? '/' + max : ''} játékos`;
       const status = full ? '<span class="rs rs-full">Megtelt</span>'
         : (r.inGame ? '<span class="rs rs-game">Játék folyik</span>' : '<span class="rs rs-wait">Várakozik</span>');
-      const kind = r.isPrivate ? '<span class="rs rs-priv">🔒 Zárt</span>' : '';
+      const kind = (r.isPrivate ? '<span class="rs rs-priv">🔒 Zárt</span>' : '') + (r.regOnly ? '<span class="rs rs-priv" title="Csak regisztrált játékosok léphetnek be">✔ Csak regisztráltak</span>' : '');
       const action = full ? 'Megtelt' : (r.isPrivate ? 'Kóddal' : 'Belépés');
       const initial = escapeHtml((Array.from(String(r.hostName || '?').trim())[0] || '?').toUpperCase());
       return `
@@ -8258,11 +8272,15 @@ try{
     if(turnLoadState === 'loading' || turnLoadState === 'failed') createBtn.textContent = 'Kapcsolat előkészítése… ⏳';
     await turnReady(9000);
     createBtn.textContent = createLabel;
-    roomCode = genRoomCode();
+    // v4.49: állandó saját kód (regisztráltaknak) és „csak regisztráltak” szoba
+    const ownCode = Account.user && Account.user.roomCode && document.getElementById('opt-owncode').checked ? Account.user.roomCode : '';
+    roomRegOnly = !!(Account.user && document.getElementById('opt-regonly').checked);
+    roomCode = ownCode || genRoomCode();
     banHostKey = ''; banToken = '';
     {
       let opened = await banCall({ action:'open', room: roomCode, dev: deviceId() });
-      if(opened && opened.error === 'taken'){ roomCode = genRoomCode(); opened = await banCall({ action:'open', room: roomCode, dev: deviceId() }); }
+      if(opened && opened.error === 'reserved' && ownCode){ document.getElementById('home-warning').textContent = 'Az állandó kódodat most nem lehetett megnyitni — lépj be újra.'; }
+      for(let i = 0; i < 3 && opened && (opened.error === 'taken' || opened.error === 'reserved'); i++){ roomCode = genRoomCode(); opened = await banCall({ action:'open', room: roomCode, dev: deviceId() }); }
       if(opened && opened.banned){
         roomCode = '';
         document.getElementById('home-warning').textContent = banText(opened);
@@ -8365,6 +8383,7 @@ try{
     roomCode = code;
     isHost = false;
     roomIsPublic = false; // will be corrected by the host's hello, if different
+    roomRegOnly = false;
     roomNoCustom = false;
     amSpectator = joinAsSpectator;
     joinOrderIds = amSpectator ? [] : [selfId];
@@ -11512,6 +11531,13 @@ try{
   }
   function renderRoundEnd(idx, result){
     if(!meta || !currentRound) return;
+    { // v4.49: a rajzoló elmentheti a rajzát a galériájába
+      const mine = currentRound.drawerId === selfId && !!Account.user;
+      if(mine) rememberDrawingForGallery(); else lastDrawingForGallery = null;
+      const w = document.getElementById('gallery-save-wrap'); if(w) w.classList.toggle('hidden', !(mine && lastDrawingForGallery));
+      const b = document.getElementById('btn-gallery-save'); if(b) b.disabled = false;
+      const st = document.getElementById('gallery-save-status'); if(st) st.textContent = '';
+    }
     showOnly(['screen-roundend']);
     showingRoundEnd = true;
     roundEndReleased = false;
@@ -11757,10 +11783,25 @@ try{
     }
   }
   window.addEventListener('resize', ()=>{ if(!document.getElementById('stats-overlay').classList.contains('hidden')) fitStatsBox(); });
+  // v4.49: szint és mérföldkövek a Statisztikáim tetején
+  function paintStatsLevel(){
+    try{
+      const body = document.getElementById('stats-body'); if(!body) return;
+      const st = loadPersonalStats();
+      if(!N(st.games) && !N(st.drawn)) return;
+      const L = levelOf(st), ms = milestones(st), done = ms.filter(m=>m.done);
+      const next = ms.find(m=>!m.done);
+      const div = document.createElement('div');
+      div.className = 'pf-level stats-level';
+      div.innerHTML = `<b>Szint ${L.level} · ${escapeHtml(levelTitle(L.level))}</b> <span class="pf-sub">${L.xp} XP — a következő szintig ${L.next - L.xp}</span><div class="pf-bar"><i style="width:${L.pct}%"></i></div>
+        <div class="pf-badges">${done.slice(-8).map(m=>`<span class="pf-badge">${m.em} ${escapeHtml(m.title)}</span>`).join('')}${next ? `<span class="pf-badge locked" title="${next.prog}/${next.of}">${next.em} ${escapeHtml(next.title)} (${next.prog}/${next.of})</span>` : ''}</div>`;
+      body.prepend(div);
+    }catch(e){}
+  }
   function openStats(){
     flushPlayTime();
     if(Account.user) Account.syncStats();   // v4.40: a többi eszközön szerzett eredmények is látszódjanak
-    renderStatsPage();
+    renderStatsPage(); paintStatsLevel();
     document.getElementById('stats-overlay').classList.remove('hidden');
     fitStatsBox();
     document.getElementById('stats-close-btn').focus();
@@ -11790,6 +11831,7 @@ try{
   // v4.40: fiók — belépés, névigazoló jegy, statisztika- és beállítás-szinkron
   SRV.onError = (m)=>{
     if(m && m.e === 'banned'){ showLockout(); return; }
+    if(m && m.e === 'regonly'){ try{ if(room) leaveRoomAndGoHome(); }catch(e){} document.getElementById('home-warning').textContent = 'Ebbe a szobába csak regisztrált játékosok léphetnek be. Lépj be a fiókodba, és próbáld újra.'; return; }
     if(!m || m.e !== 'name-taken') return;
     // a szerver nem engedte át a bemutatkozásunkat: ez a név egy regisztrált játékosé
     try{ if(room) leaveRoomAndGoHome(); }catch(e){}
@@ -11799,11 +11841,99 @@ try{
     click: ()=>{ try{ sndClick(); }catch(e){} },
     onTicket: (tk)=>{ try{ SRV.setAuth(tk); }catch(e){} },
     tokenHash: ()=>SRV.tokenHash(),
+    openProfile: n=>openProfile(n),
+    onUserChange: ()=>{ try{ paintCreateAcctOpts(); paintWordlists(); }catch(e){} },
     inRoom: ()=>!!room,
-    onStats: ()=>{ try{ renderHomeStats(); if(!document.getElementById('stats-overlay').classList.contains('hidden')){ renderStatsPage(); fitStatsBox(); } }catch(e){} },
+    onStats: ()=>{ try{ renderHomeStats(); if(!document.getElementById('stats-overlay').classList.contains('hidden')){ renderStatsPage(); paintStatsLevel(); fitStatsBox(); } }catch(e){} },
     onSubCount: (n)=>{ try{ showSubCount(n); }catch(e){} }
   } });
-  Account.onChange(()=>{ try{ renderHomeStats(); }catch(e){} });
+  Account.onChange(()=>{ try{ renderHomeStats(); }catch(e){} try{ paintCreateAcctOpts(); paintWordlists(); }catch(e){} });
+  // v4.49: a szerver is betartja a „csak regisztráltak” beállítást
+  setInterval(()=>{ if(isHost && room && SRV.up && roomRegOnly) SRV.send({ t:'rflags', regOnly:true }); }, 5000);
+  function paintCreateAcctOpts(){
+    const u = Account.user;
+    const box = document.getElementById('create-acct-opts'); if(!box) return;
+    box.classList.toggle('hidden', !u);
+    const wrap = document.getElementById('opt-owncode-wrap');
+    if(wrap){ wrap.classList.toggle('hidden', !(u && u.roomCode)); document.getElementById('opt-owncode-code').textContent = (u && u.roomCode) || ''; if(u && u.roomCode && !wrap.dataset.init){ wrap.dataset.init = '1'; document.getElementById('opt-owncode').checked = true; } }
+  }
+  // ---- v4.49: saját szólisták a fiókban (a váróban) ----
+  function paintWordlists(){
+    const row = document.getElementById('wordlist-row'), sel = document.getElementById('wordlist-select');
+    if(!row || !sel) return;
+    const u = Account.user;
+    row.classList.toggle('hidden', !u);
+    if(!u) return;
+    const prev = sel.value;
+    sel.textContent = '';
+    (u.wordlists || []).forEach((l, i)=>{ const o = document.createElement('option'); o.value = String(i); o.textContent = `${l.name} (${l.words.length} szó)`; sel.appendChild(o); });
+    const o = document.createElement('option'); o.value = 'new'; o.textContent = '➕ Új lista'; sel.appendChild(o);
+    if([...sel.options].some(x=>x.value === prev)) sel.value = prev;
+  }
+  document.getElementById('wordlist-load').addEventListener('click', ()=>{
+    sndClick();
+    const u = Account.user, sel = document.getElementById('wordlist-select');
+    const l = u && u.wordlists && u.wordlists[Number(sel.value)];
+    if(!l || !l.words.length){ askInfo('Válassz egy listát (vagy előbb ments bele szavakat).'); return; }
+    const pick = l.words.slice().sort(()=>Math.random() - 0.5).slice(0, MAX_WORDS_PER_PLAYER);   // a listából véletlenszerűen, legfeljebb a szobában engedett számú
+    const el = document.getElementById('lobby-words-input');
+    el.value = pick.join('\n');
+    el.dispatchEvent(new Event('input', { bubbles:true }));
+    addSystemChatMessage(`📝 ${pick.length} szó betöltve a(z) „${l.name}” listádból.`);
+  });
+  document.getElementById('wordlist-save').addEventListener('click', async ()=>{
+    sndClick();
+    const u = Account.user; if(!u) return;
+    const words = cleanCustomWords(document.getElementById('lobby-words-input').value);
+    if(!words.length){ askInfo('Előbb írj be néhány szót a mezőbe.'); return; }
+    const sel = document.getElementById('wordlist-select');
+    const lists = (u.wordlists || []).map(l=>({ name: l.name, words: l.words.slice() }));
+    let i = Number(sel.value);
+    if(sel.value === 'new' || !lists[i]){
+      if(lists.length >= 10){ askInfo('Legfeljebb 10 listád lehet.'); return; }
+      let name = ''; try{ name = (prompt('Mi legyen a lista neve?', `Lista ${lists.length + 1}`) || '').trim(); }catch(e){ name = `Lista ${lists.length + 1}`; }
+      if(!name) return;
+      lists.push({ name: name.slice(0, 30), words: [] }); i = lists.length - 1;
+    }
+    const have = new Set(lists[i].words.map(w=>w.toLowerCase()));
+    words.forEach(w=>{ if(!have.has(w.toLowerCase())){ lists[i].words.push(w); have.add(w.toLowerCase()); } });
+    lists[i].words = lists[i].words.slice(0, 300);
+    if(await Account.saveWordlists(lists)){ paintWordlists(); sel.value = String(i); addSystemChatMessage(`💾 Elmentve a(z) „${lists[i].name}” listádba (${lists[i].words.length} szó).`); }
+    else askInfo('Nem sikerült menteni.');
+  });
+  // ---- v4.49: profil ----
+  initProfile({ serverBase: SRV.enabled ? SRV.base : '', account: Account, avatarEmoji: c=>{ try{ return avatarEmoji(c); }catch(e){ return ''; } },
+    onFollow: (on, name, pid)=>Account.follow(on, name, pid) });
+  document.addEventListener('click', e=>{
+    const b = e.target.closest && e.target.closest('.acct-badge.clickable[data-pname]');
+    if(!b) return;
+    e.preventDefault(); e.stopPropagation();
+    try{ sndClick(); }catch(err){}
+    openProfile(b.dataset.pname);
+  }, true);
+  // ---- v4.49: rajz mentése a galériába (a rajzolónak, a kör végén) ----
+  let lastDrawingForGallery = null;
+  function rememberDrawingForGallery(){
+    try{
+      const cv = document.getElementById('fd-canvas');
+      if(!cv || !cv.width || !currentRound || currentRound.drawerId !== selfId) return;
+      const W = Math.min(720, cv.width), H = Math.round(cv.height * W / cv.width);
+      const out = document.createElement('canvas'); out.width = W; out.height = H;
+      const g = out.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H); g.drawImage(cv, 0, 0, W, H);
+      let q = 0.82, img = out.toDataURL('image/webp', q);
+      if(!/^data:image\/webp/.test(img)) img = out.toDataURL('image/jpeg', q);
+      while(img.length > 200000 && q > 0.3){ q -= 0.15; img = out.toDataURL(/webp/.test(img) ? 'image/webp' : 'image/jpeg', q); }
+      lastDrawingForGallery = { img, word: String(currentRound.word || '').slice(0, 40) };
+    }catch(e){ lastDrawingForGallery = null; }
+  }
+  document.getElementById('btn-gallery-save').addEventListener('click', async ()=>{
+    const st = document.getElementById('gallery-save-status'), b = document.getElementById('btn-gallery-save');
+    if(!lastDrawingForGallery) return;
+    b.disabled = true; st.textContent = 'Mentés…';
+    const r = await Account.galleryAdd(lastDrawingForGallery.img, lastDrawingForGallery.word);
+    st.textContent = r.ok ? (r.full ? '✅ Elmentve (a legrégebbi rajz kikerült, max. 50).' : '✅ Elmentve a galériádba!') : '⚠️ ' + r.error;
+    if(!r.ok) b.disabled = false;
+  });
   Account.ready.then(()=>{ try{ renderRosters(); }catch(e){} try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){} });
   // v4.00: közös ranglista a játékszerveren (csak ha a szerver elérhető)
   function renderRanglistaLink(){

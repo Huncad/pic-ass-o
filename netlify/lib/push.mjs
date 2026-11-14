@@ -86,12 +86,12 @@ export async function removePush(ids, store = pushStore()) {
  * Értesítés minden feliratkozott eszköznek (kivéve `skipId`-t: a szobát nyitó eszközt).
  * A megszűnt feliratkozásokat (404 / 410) törli. Időkorlátos, hogy a függvény ne fusson ki.
  */
-export async function sendPushToAll(payload, { skipId = '', budgetMs = 6000, store = pushStore(), legacyOk = true, onlyLegacy = false } = {}) {
+export async function sendPushToAll(payload, { skipId = '', budgetMs = 6000, store = pushStore(), legacyOk = true, onlyLegacy = false, onlyUids = null } = {}) {
   const d = asObj(await store.get(SUBS_KEY, { type: 'json' }).catch(() => null));
   // v4.40: értesítés csak fiókhoz kötött eszköznek megy; a régi (fiók nélküli) feliratkozások a türelmi idő végéig élnek
   const all = Object.entries(asObj(d.subs));
   if (!legacyOk) { const stale = all.filter(([, s]) => !s || !s.uid).map(([id]) => id); if (stale.length) await removePush(stale, store).catch(() => {}); }
-  const entries = all.filter(([id, s]) => id !== skipId && s && (onlyLegacy ? !s.uid : (s.uid || legacyOk)));
+  const entries = all.filter(([id, s]) => id !== skipId && s && (onlyUids ? onlyUids.has(s.uid) : (onlyLegacy ? !s.uid : (s.uid || legacyOk))));   // v4.49: onlyUids = a követők eszközei
   if (!entries.length) return { sent: 0, failed: 0, removed: 0 };
   const wp = await webpush();
   const vapid = await getVapid(store);

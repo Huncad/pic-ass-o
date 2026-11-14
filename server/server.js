@@ -268,7 +268,7 @@ async function handleDir(peer, d){
   for(const [k, e] of directory){ if(k !== key && (e.from === peer.id || e.room === roomId)) directory.delete(k); }
   if(directory.size > 300 && !prev) return;
   const clean = { srv: 1, name: clampStr(d.name, 60), hostName: clampStr(d.hostName, 24),
-    players: clampInt(d.players, 0, 999), max: clampInt(d.max, 0, 999), inGame: !!d.inGame };
+    players: clampInt(d.players, 0, 999), max: clampInt(d.max, 0, 999), inGame: !!d.inGame, regOnly: d.regOnly === true || undefined };
   if(!clean.name) return;
   // v4.40: regisztrált nevet csak a gazdája hirdethet szobanyitóként
   {
@@ -559,17 +559,39 @@ function forgetAccount(uid){
   return changed;
 }
 
-function leaderboard(days){
+// v4.49: szezonális (havi) ranglista — a hónapot budapesti idő szerint számoljuk
+const monthFmt = new Intl.DateTimeFormat('sv-SE', { timeZone:'Europe/Budapest', year:'numeric', month:'2-digit' });
+const monthKey = ts => monthFmt.format(new Date(ts)).slice(0, 7);
+function prevMonthKey(){ const [y, m] = monthKey(Date.now()).split('-').map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; }
+const HU_MONTHS = ['január','február','március','április','május','június','július','augusztus','szeptember','október','november','december'];
+const monthLabel = k => { const [y, m] = k.split('-'); return `${y}. ${HU_MONTHS[Number(m) - 1]}`; };
+/** A lezárt hónapok dobogósai: hónap -> [uid, uid, uid] (gyorsítótárazva, a lezárt hónap nem változik). */
+const podiumCache = new Map();
+function monthPodium(k){
+  if(k !== monthKey(Date.now()) && podiumCache.has(k)) return podiumCache.get(k);
+  const top = leaderboard(0, k).slice(0, 3).map(r => r.uid);
+  if(k !== monthKey(Date.now())) podiumCache.set(k, top);
+  return top;
+}
+function podiumsOf(uid){
+  const months = [...new Set(games.map(g => monthKey(g.at)))].filter(k => k !== monthKey(Date.now())).sort().reverse();
+  const out = [];
+  for(const k of months){ const i = monthPodium(k).indexOf(uid); if(i >= 0) out.push({ month: k, label: monthLabel(k), place: i + 1 }); }
+  return out;
+}
+
+function leaderboard(days, month){
   const since = days ? Date.now() - days * 86400_000 : 0;
   const by = new Map();
   for(const g of games){
     if(g.at < since) continue;
+    if(month && monthKey(g.at) !== month) continue;
     const top = Math.max(...g.players.map(p => p.score));
     for(const p of g.players){
       if(!p.u) continue;               // v4.40: csak regisztrált játékos (a régi, fiók előtti sorok sem)
       const k = p.u;
       let e = by.get(k);
-      if(!e){ e = { name: p.name, games: 0, wins: 0, total: 0, best: 0, last: 0 }; by.set(k, e); }
+      if(!e){ e = { name: p.name, uid: p.u, games: 0, wins: 0, total: 0, best: 0, last: 0 }; by.set(k, e); }
       e.games++; e.total += p.score; e.best = Math.max(e.best, p.score);
       if(p.score === top && top > 0) e.wins++;
       if(g.at >= e.last){ e.last = g.at; e.name = p.name; }
@@ -582,10 +604,12 @@ function leaderboard(days){
 
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
 
-function leaderboardPage(days){
-  const rows = leaderboard(days);
+function leaderboardPage(days, month){
+  const rows = leaderboard(days, month);
+  const prevTop = monthPodium(prevMonthKey());
   const recent = games.filter(g => g.players.some(p => p.u)).slice(-15).reverse();
-  const tab = (d, label) => `<a href="?napok=${d}" class="${(days||0) === d ? 'on' : ''}">${label}</a>`;
+  const tab = (d, label) => `<a href="?napok=${d}" class="${!month && (days||0) === d ? 'on' : ''}">${label}</a>`;
+  const mtab = (k, label) => `<a href="?honap=${k}" class="${month === k ? 'on' : ''}">${label}</a>`;
   const fmt = ts => new Date(ts).toLocaleString('hu-HU', { timeZone:'Europe/Budapest', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
   return `<!doctype html><html lang="hu"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -613,9 +637,10 @@ function leaderboardPage(days){
 </style></head><body><main>
 <h1>🏆 PIC-ASS-O ranglista</h1>
 <p class="sub">Minden befejezett, legalább kétfős játék számít, amelyben volt regisztrált játékos. A listán csak regisztrált (✔) játékosok szerepelnek. A sorrend: győzelmek, aztán átlagpont.</p>
-<nav class="tabs">${tab(0,'Mindig')}${tab(30,'Utolsó 30 nap')}${tab(7,'Utolsó 7 nap')}</nav>
+<nav class="tabs">${mtab(monthKey(Date.now()), '🏁 Ez a hónap')}${mtab(prevMonthKey(), 'Előző hónap')}${tab(0,'Mindig')}${tab(30,'Utolsó 30 nap')}${tab(7,'Utolsó 7 nap')}</nav>
+${month ? `<p class="sub">${month === monthKey(Date.now()) ? 'A havi szezon: minden hónap elején újraindul, és a hónap legjobb 3 játékosa 🏆 jelvényt kap a profiljára.' : monthLabel(month) + ' végeredménye.'}</p>` : ''}
 ${rows.length ? `<table><thead><tr><th class="rank">#</th><th>Név</th><th>Győzelem</th><th>Játék</th><th>Átlag</th><th class="hide-s">Legjobb</th></tr></thead><tbody>
-${rows.map((r, i) => `<tr><td class="rank">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td><td>${escapeHtml(r.name)} <span title="regisztrált játékos">✔</span></td><td>${r.wins}</td><td>${r.games}</td><td>${r.avg}</td><td class="hide-s">${r.best}</td></tr>`).join('')}
+${rows.map((r, i) => `<tr><td class="rank">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td><td>${escapeHtml(r.name)} <span title="regisztrált játékos">✔</span>${prevTop.includes(r.uid) ? ` <span title="${escapeHtml(monthLabel(prevMonthKey()))}: ${prevTop.indexOf(r.uid) + 1}. hely">🏆</span>` : ''}</td><td>${r.wins}</td><td>${r.games}</td><td>${r.avg}</td><td class="hide-s">${r.best}</td></tr>`).join('')}
 </tbody></table>` : `<p class="empty">Még nincs befejezett játék ebben az időszakban.</p>`}
 <h2>Legutóbbi játékok</h2>
 ${recent.length ? recent.map(g => { const s = [...g.players].sort((a,b)=>b.score-a.score); return `<div class="g"><time>${fmt(g.at)}${g.start ? ' · ⏱ a szoba ' + idotartam(g.at - g.start) + ' élt' : ''}</time>${s.map((p,i)=>`${i===0?'👑 ':''}${p.u ? `<b>${escapeHtml(p.name)}</b> ✔` : '<i>vendég</i>'} ${p.score}`).join(' · ')}</div>`; }).join('') : '<p class="empty">Még nincs.</p>'}
@@ -645,7 +670,7 @@ const server = http.createServer((req, res) => {
     directory.forEach(e => {
       if(now - e.at > DIR_TTL_MS || !e.d || e.d.removed || !e.d.code) return;
       list.push({ code: String(e.d.code).slice(0, 8), name: String(e.d.name || '').slice(0, 60),
-        hostName: String(e.d.hostName || '').slice(0, 24), firstAt: e.firstAt || e.at });
+        hostName: String(e.d.hostName || '').slice(0, 24), firstAt: e.firstAt || e.at, verified: !!e.d.verified });
     });
     res.writeHead(200, { 'content-type':'application/json', 'cache-control':'no-store' });
     res.end(JSON.stringify({ rooms: list }));
@@ -693,6 +718,13 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
+  // v4.49: egy játékos dobogós helyezései a lezárt havi szezonokban (a profilhoz)
+  if(url.pathname === '/api/dobogo'){
+    const pid = String(url.searchParams.get('pid') || '');
+    res.writeHead(200, { 'content-type':'application/json', 'cache-control':'public, max-age=300' });
+    res.end(JSON.stringify({ podiums: /^[A-Za-z0-9_-]{8,40}$/.test(pid) ? podiumsOf(pid) : [] }));
+    return;
+  }
   if(url.pathname === '/api/ranglista'){
     const days = Math.max(0, Math.min(3650, Number(url.searchParams.get('napok')) || 0));
     res.writeHead(200, { 'content-type':'application/json', 'cache-control':'no-store' });
@@ -701,9 +733,11 @@ const server = http.createServer((req, res) => {
   }
   if(url.pathname === '/ranglista' || url.pathname === '/'){
     const days = [0, 7, 30].includes(Number(url.searchParams.get('napok'))) ? Number(url.searchParams.get('napok')) : 0;
+    const hm = String(url.searchParams.get('honap') || '');
+    const month = /^\d{4}-\d{2}$/.test(hm) ? hm : (url.searchParams.has('napok') ? '' : monthKey(Date.now()));   // alapból a havi szezon
     res.writeHead(200, { 'content-type':'text/html; charset=utf-8', 'cache-control':'no-store',
       'x-content-type-options':'nosniff', 'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'" });
-    res.end(leaderboardPage(days));
+    res.end(leaderboardPage(days, month));
     return;
   }
   res.writeHead(404, { 'content-type':'text/plain; charset=utf-8' });
@@ -855,6 +889,8 @@ wss.on('connection', (ws, req) => {
           // az eszközről, se a fiókjával, se ugyanarról az IP-címről (más névvel, újratöltve sem)
           const inf = roomInfo.get(m.room);
           const ownerIp = inf && peers.get(inf.owner) ? peers.get(inf.owner).ip : '';
+          // v4.49: „csak regisztráltak” szoba — fiók (igazolt jegy) nélkül nem lehet belépni
+          if(inf && inf.regOnly && !peer.acct && inf.owner !== peer.id){ ws.send(JSON.stringify({ t:'error', e:'regonly' })); return; }
           if(isKicked(m.room, peer, ownerIp)){ ws.send(JSON.stringify({ t:'error', e:'kicked' })); log('kirúgott próbált visszalépni', peer.id.slice(0,6)); return; }
         }
         let set = rooms.get(m.room);
@@ -893,6 +929,14 @@ wss.on('connection', (ws, req) => {
         log('kirúgás', target.id.slice(0,6), target.ip !== peer.ip ? '(IP is tiltva)' : '(közös hálózat: eszköz/fiók tiltva)');
         try{ if(target.ws && target.ws.readyState === 1) target.ws.send(JSON.stringify({ t:'error', e:'kicked' })); }catch(e){}
         leaveRoom(target, 'kirúgva');
+        return;
+      }
+      case 'rflags': {
+        // v4.49: a szobanyitó beállításai, amiket a szerver is betart
+        const info = peer.room && roomInfo.get(peer.room);
+        if(!info || info.owner !== peer.id) return;
+        info.regOnly = !!m.regOnly;
+        if(info.regOnly) roomMembers(peer.room).forEach(id => { const p = peers.get(id); if(p && p.id !== peer.id && !p.acct){ try{ p.ws && p.ws.send(JSON.stringify({ t:'error', e:'regonly' })); }catch(e){} leaveRoom(p, 'csak regisztráltak'); } });
         return;
       }
       case 'auth': {

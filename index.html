@@ -222,6 +222,10 @@
         <button class="pill" data-visibility="public">🌐 Nyilvános (kód nélkül)</button>
       </div>
       <p class="center-note" style="margin:8px 0 0;">Mindkettő látszik a szobalistán: nyilvánosba bárki egy kattintással beléphet, zártba csak kóddal.</p>
+      <div id="create-acct-opts" class="hidden">
+        <label class="sub-consent"><input type="checkbox" id="opt-regonly"><span>✔ Csak regisztrált játékosok léphetnek be (a vendégek nem — a kirúgás így a fiókhoz kötött)</span></label>
+        <label class="sub-consent hidden" id="opt-owncode-wrap"><input type="checkbox" id="opt-owncode"><span>🏷️ Az állandó kódommal nyitom: <b id="opt-owncode-code"></b></span></label>
+      </div>
     </div>
     <!-- v4.30: a ritkábban állított beállítások lenyitható részben; a fejléc mutatja az aktuális értékeket -->
     <div class="setup-advanced collapsed" id="setup-advanced">
@@ -382,6 +386,11 @@
       <label class="field-label" for="lobby-words-input">Saját szavaid (nem kötelező)</label>
       <textarea id="lobby-words-input" rows="3" maxlength="1200" autocomplete="off" spellcheck="false" placeholder="Soronként vagy vesszővel elválasztva"></textarea>
       <div class="custom-words-count" id="lobby-words-count">0 / 15 szó</div>
+      <div class="wordlist-row hidden" id="wordlist-row">
+        <select id="wordlist-select" aria-label="Saját szólistáim"></select>
+        <button type="button" class="ghost small" id="wordlist-load">🎲 Betöltés</button>
+        <button type="button" class="ghost small" id="wordlist-save">💾 Mentés listába</button>
+      </div>
       <p class="setup-hint">Mindenki beküldhet legfeljebb 15 szót, a többiekét nem látod. A beküldött szavaidat csak te kaphatod rajzolásra. Ha ilyet választasz, a kitalálók megkapják a pontjukat (akkor is, ha ők is beküldték ugyanezt a szót), de te nem kapsz pontot érte. A mező tartalmát a játék nem jegyzi meg.</p>
       <p class="center-note" id="lobby-words-summary" style="margin:6px 0 0;"></p>
     </div>
@@ -442,6 +451,7 @@
       <button class="ghost small" id="btn-report-word" type="button" aria-pressed="false">🚩 Hibás vagy értelmetlen szó</button>
       <span id="report-status" aria-live="polite"></span>
     </div>
+    <div style="text-align:center;" id="gallery-save-wrap" class="hidden"><button type="button" class="ghost small" id="btn-gallery-save">💾 Mentés a galériámba</button> <span id="gallery-save-status" class="center-note" aria-live="polite"></span></div>
     <table class="scores" id="roundend-scores"></table>
     <div style="text-align:center;margin-top:10px;">
       <button class="big" id="btn-next-round-mine" style="background:var(--green-fill);">Én jövök — kezdem! 🎨</button>
@@ -580,7 +590,7 @@
       <h2 id="privacy-title">🔒 Adatvédelem</h2>
       <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
     </div>
-    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. november 14-től · v4.45</p>
+    <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. november 14-től · v4.49</p>
     <h3 class="pv-h">Ki kezeli az adatokat?</h3>
     <p><b>Adatkezelő:</b> Ádám, magánszemély, a PIC-ASS-O hobbiprojekt fejlesztője és üzemeltetője.<br>
     <b>Kapcsolat:</b> <a href="mailto:picasso.ertesito@gmail.com" style="color:var(--blue);">picasso.ertesito@gmail.com</a> — minden adatvédelmi kérdéssel és kéréssel ide írhatsz.</p>
@@ -597,7 +607,12 @@
           <li><b>Jelkulcs (csak ha hozzáadod):</b> a jelkulcs a telefonodon vagy gépeden jön létre, és ott is marad; az ujjlenyomatod, az arcod vagy a képernyőzár-kódod soha nem kerül hozzánk, azt csak az eszközöd ellenőrzi. Mi a jelkulcs nyilvános felét, az azonosítóját, egy számlálót, a létrehozás és az utolsó használat idejét, valamint az eszköz típusát (pl. „Android · Chrome”) tároljuk. A fiókodban bármikor törölheted.</li>
           <li><b>Névvédelem:</b> hogy a regisztrált neveddel más ne játszhasson, játék közben a böngésződ egy rövid életű, aláírt „névigazoló jegyet” mutat be a játékszervernek és a szobában lévő többi játékosnak. A jegyben a neved, egy belső fiókazonosító és a pillanatnyi kapcsolat-azonosítód van — az e-mail címed nincs benne. Azt, hogy egy név regisztrált-e, bárki lekérdezheti (e nélkül a védelem nem működne).</li>
           <li><b>Statisztika és beállítások a fiókban:</b> belépve a saját statisztikád (játékok, győzelmek, pontok, a leggyakoribb játékostársaid beceneve) és az összes beállításod (avatar, téma és a hozzá tartozó színek, hangok, a chat helye stb.) a fiókodban, a Netlify-on is tárolódnak, hogy a többi eszközödön is ugyanazok legyenek. Az első belépéskor az eszközön addig gyűjtött statisztika hozzáadódik a fiókéhoz; kilépéskor a fiók statisztikája lekerül az eszközről.</li>
-          <li><b>Fiók törlése:</b> a fiókodban („Fiók törlése…”) bármikor, azonnal törölheted. Ekkor töröljük a nevedet, az e-mail címedet, a jelkulcsaidat, a fiókban tárolt statisztikát és beállításokat, az értesítő feliratkozásaidat, és a közös ranglistáról is lekerülsz. A neved felszabadul.</li>
+          <li><b>Profil (v4.49):</b> ha a profilod nyilvános (ez az alapbeállítás, a fiókodban kikapcsolhatod), bárki, aki a ✔ jelvényes nevedre koppint, látja a játékosnevedet, a regisztráció napját, az avatarodat, a statisztikád összesítőit (játékok, győzelmek, pontok), a szintedet, a jelvényeidet, a havi dobogós helyezéseidet, a követőid számát, az állandó szobakódodat és a galériádba mentett rajzokat. Az e-mail címed soha nem látszik. Nem nyilvános profilnál csak a név, a regisztráció napja és a követők száma látszik.</li>
+          <li><b>Követés:</b> ha követsz valakit, a fiókodban tároljuk a nevét és a belső azonosítóját, nála pedig a követőid listáján a te belső azonosítódat (más ebből csak a követők számát látja). Ha akit követsz, szobát nyit, push értesítést és — ha nem kapcsoltad ki — e-mailt kapsz. A követést bármikor leállíthatod.</li>
+          <li><b>Galéria és szólisták:</b> a galériába mentett rajzaidat (legfeljebb 50) és a mentett szólistáidat a fiókodban, a Netlify-on tároljuk; bármikor törölheted őket.</li>
+          <li><b>Névváltoztatás, e-mail csere, eszközök:</b> a korábbi neveidet (legfeljebb 10) a fiókodban megjegyezzük, a régi név 30 napig foglalt marad. E-mail cserénél a régi címedre is küldünk egy tájékoztatót. Az „Eszközeim” listához belépésenként a böngésző típusát (pl. „Android · Chrome”), a belépés és az utolsó használat idejét tároljuk.</li>
+          <li><b>Adataid letöltése:</b> a fiókodban az „Adataim letöltése” gombbal egy fájlban letöltheted mindazt, amit a fiókodról tárolunk (adathordozhatóság, GDPR 20. cikk).</li>
+          <li><b>Fiók törlése:</b> a fiókodban („Fiók törlése…”) bármikor, azonnal törölheted. Ekkor töröljük a nevedet, az e-mail címedet, a jelkulcsaidat, a galériádat, a szólistáidat, a követéseidet és az állandó szobakódodat, a fiókban tárolt statisztikát és beállításokat, az értesítő feliratkozásaidat, és a közös ranglistáról is lekerülsz. A neved felszabadul.</li>
         </ul>
       </li>
       <li><b>Nyilvános szobák listája:</b> a szoba neve, a szobanyitó beceneve és a létszám, amíg a szoba nyitva van. Zárt szoba nem jelenik meg névvel. <i>Jogalap: 6. cikk (1) b.</i></li>
@@ -705,13 +720,69 @@
         <p class="acct-why" style="margin-top:4px">Jelkulccsal jelszó nélkül léphetsz be: a telefonod vagy géped ujjlenyomattal, arccal vagy a képernyőzár kódjával igazol. A kulcs az eszközödön marad, mi csak a nyilvános felét tároljuk.</p>
         <ul id="acct-pk-list" class="acct-pk-list"></ul>
       </div>
+      <div class="acct-sec">
+        <div class="acct-sec-h"><b>✏️ Játékosnév</b><button type="button" class="ghost small" id="acct-btn-rename">Módosítás</button></div>
+        <form id="acct-f-rename" class="hidden">
+          <input type="text" id="acct-rename-input" name="name" maxlength="16" minlength="3" autocomplete="off" required>
+          <p class="acct-why">30 naponta egyszer változtathatsz. A régi neved még 30 napig a tiéd marad, senki más nem veheti fel.</p>
+          <p class="acct-msg" id="acct-m-rename" role="status"></p>
+          <button type="submit" class="small">Mentés</button>
+        </form>
+        <div class="acct-sec-h"><b>📧 E-mail cím</b><button type="button" class="ghost small" id="acct-btn-email">Módosítás</button></div>
+        <form id="acct-f-email" class="hidden">
+          <input type="email" id="acct-email-input" name="email" maxlength="120" autocomplete="email" required placeholder="új e-mail címed">
+          <p class="acct-why">Az új címre megerősítő levelet küldünk; a csere csak akkor történik meg, ha ott rákattintasz. A régi címedre is szólunk.</p>
+          <p class="acct-msg" id="acct-m-email" role="status"></p>
+          <button type="submit" class="small">Megerősítő levél küldése</button>
+        </form>
+      </div>
+      <div class="acct-sec">
+        <div class="acct-sec-h"><b>🏷️ Állandó szobakódom</b></div>
+        <form id="acct-f-roomcode" class="acct-inline">
+          <input type="text" id="acct-roomcode-input" name="code" maxlength="5" autocomplete="off" autocapitalize="characters" placeholder="pl. ADAM5" spellcheck="false">
+          <button type="submit" class="small">Mentés</button>
+        </form>
+        <p class="acct-why">5 karakter (betűk és számok, O, I, 0 és 1 nélkül). Szobanyitáskor választhatod ezt a kódot, így a barátaid mindig ugyanazzal a kóddal / linkkel találnak meg. Más nem foglalhatja el.</p>
+        <p class="acct-msg" id="acct-m-roomcode" role="status"></p>
+      </div>
+      <div class="acct-sec">
+        <div class="acct-sec-h"><b>👥 Akiket követek</b></div>
+        <ul id="acct-friends" class="acct-pk-list"></ul>
+        <form id="acct-f-follow" class="acct-inline">
+          <input type="text" id="acct-follow-input" name="name" maxlength="16" autocomplete="off" placeholder="regisztrált játékos neve">
+          <button type="submit" class="small">+ Követés</button>
+        </form>
+        <p class="acct-msg" id="acct-m-follow" role="status"></p>
+        <label class="sub-consent"><input type="checkbox" id="acct-p-followmail"><span>Szóljatok (push és e-mail), ha valaki, akit követek, szobát nyit</span></label>
+      </div>
+      <label class="sub-consent"><input type="checkbox" id="acct-p-public"><span>A profilom nyilvános (statisztika, jelvények, szint és a galériám — mások a nevemre koppintva látják)</span></label>
       <label class="sub-consent"><input type="checkbox" id="acct-p-notify"><span>E-mail értesítés, ha valaki nyilvános szobát nyit</span></label>
+      <div class="acct-actions acct-actions-sm">
+        <button type="button" class="ghost small" id="acct-btn-myprofile">👤 Profilom</button>
+        <button type="button" class="ghost small" id="acct-btn-gallery">🖼️ Galériám</button>
+        <button type="button" class="ghost small" id="acct-btn-devices">💻 Eszközeim</button>
+        <button type="button" class="ghost small" id="acct-btn-export">⬇️ Adataim letöltése</button>
+      </div>
       <p class="acct-why">A statisztikád és a beállításaid (avatar, téma, hang) a fiókoddal együtt minden eszközödön ugyanazok.</p>
       <div class="acct-actions">
         <button type="button" class="secondary" id="acct-btn-logout-all">📵 Kiléptetés a többi eszközről</button>
         <button type="button" class="secondary" id="acct-btn-logout">🚪 Kilépés</button>
         <button type="button" class="ghost small acct-danger" data-acct-go="delete">Fiók törlése…</button>
       </div>
+    </section>
+
+    <section id="acct-v-devices" class="hidden">
+      <p><b>💻 Ahol be vagy lépve</b></p>
+      <ul id="acct-devices" class="acct-pk-list"></ul>
+      <p class="acct-msg" id="acct-m-devices" role="status"></p>
+      <p class="acct-links"><a href="#" data-acct-go="profile">Vissza</a></p>
+    </section>
+    <section id="acct-v-gallery" class="hidden">
+      <p><b>🖼️ A galériám</b> <span class="acct-why" id="acct-gallery-count"></span></p>
+      <p class="acct-why">A kör végén, rajzolóként a „💾 Mentés a galériámba” gombbal kerül ide egy rajz (legfeljebb 50, a legrégebbi kiesik).</p>
+      <div id="acct-gallery" class="gallery-grid"></div>
+      <p class="acct-msg" id="acct-m-gallery" role="status"></p>
+      <p class="acct-links"><a href="#" data-acct-go="profile">Vissza</a></p>
     </section>
 
     <section id="acct-v-delete" class="hidden">
@@ -725,6 +796,17 @@
       </form>
       <p class="acct-links"><a href="#" data-acct-go="profile">Mégsem</a></p>
     </section>
+  </div>
+</div>
+
+<!-- v4.49: játékos profilja -->
+<div id="profile-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+  <div class="admin-box acct-box">
+    <div class="admin-panel-header">
+      <h2 id="profile-title">👤 Profil</h2>
+      <button class="ghost small" id="profile-close-btn" aria-label="Profil bezárása">Bezárás ✕</button>
+    </div>
+    <div id="profile-body"><p class="center-note">Betöltés…</p></div>
   </div>
 </div>
 
