@@ -2,6 +2,10 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.41', changes:[
+    'Javítva: telefonon a „vissza” gomb (vagy gesztus) a nyitott chatből kiléptetett a játékból. Mostantól először a chatet (vagy a nyitott ablakot) zárja be, és a szobából csak megerősítés után lép ki.',
+    'Javítva: ha a rajzoló kiesett vagy újratöltődött az oldala, előfordult, hogy két játékos egyszerre kapta meg a rajzolást, és nem látták egymás rajzát. Mostantól mindig a szobanyitó dönti el, ki veszi át a kört, és ezt mindenki ugyanúgy látja.'
+  ]},
   { version:'4.40', changes:[
     'Új: regisztráció és fiók (önkéntes — fiók nélkül ugyanúgy játszhatsz). A főmenüben a neved fölött a „👤 Belépés / Regisztráció” gombbal éred el. A regisztrációt e-mailben kell megerősíteni.',
     'Névvédelem: a regisztrált nevet csak a gazdája használhatja — más (ékezet vagy kis-nagybetű eltéréssel sem) nem léphet be vele. A regisztrált játékosok neve mellett ✔ jelvény látszik a szobában, a szobalistán és a ranglistán.',

@@ -1,7 +1,7 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 import { Account } from './account.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.40';
+const APP_VERSION = '4.41';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -3716,6 +3716,7 @@ try{
       unknownBeacons = 0;
       const nextBefore = currentRound ? meta.turnOrder[currentRound.idx + 1] : null;
       meta.turnOrder = order;
+      if(isPlainObject(data.handoff)) applyHostHandoff(data.handoff);
       if(Array.isArray(data.done)) noteUsedWords(data.done.slice(0, 80));
       // v3.54: the room owner also tells which drawing the game is at. If I
       // am still on an earlier one (I missed a round start — typical right
@@ -4177,7 +4178,7 @@ try{
       const sameRound = !!currentRound && currentRound.idx === idx;
       // A takeover is only legitimate while the scheduled drawer is gone
       // (that is exactly the mid-round handoff case).
-      const takeover = sameRound && currentRound.drawerId !== peerId && !activePlayerIds.has(currentRound.drawerId);
+      const takeover = sameRound && currentRound.drawerId !== peerId && (!activePlayerIds.has(currentRound.drawerId) || currentRound.drawerId === '__gone__');
       const continuing = sameRound && currentRound.drawerId === peerId;   // prepare -> drawing
       // v2.52 safety net: if my copy of the turn order disagrees about who
       // draws the NEXT round, but a player who is really here has already
@@ -4563,12 +4564,41 @@ try{
   // page that no longer knows the word): the next active player takes the
   // pencil with a new word. Runs on every device with the same inputs, so
   // everyone picks the same person.
+  // v4.41: ONLY the room owner decides who takes over, and tells everyone.
+  // Before, every device picked on its own — and when two devices saw the
+  // drop differently (one as "left", the other as "reloaded"), two players
+  // were told to draw the same round at once, each refusing the other's.
+  const pendingHandoffs = new Map();   // round idx -> fallback timer (guests waiting for the owner's decision)
+  function hostAlive(){
+    return !!hostPeerId && hostPeerId !== selfId && (activePlayerIds.has(hostPeerId) || !!lobbyPlayers[hostPeerId]) && !peerLooksGone(hostPeerId);
+  }
   function handOffAbandonedRound(goneId, name, why){
     if(!meta || gameEnded) return;
     if(currentRound && currentRound.drawerId === goneId && !processedResultRounds.has(roundKey(currentRound))){
       processedResultRounds.add(roundKey(currentRound));
       stopTicker();
       try{ clog('K11', `félbemaradt kör átadva — ${why === 'reload' ? 'a rajzoló oldala újratöltődött' : 'a rajzoló kilépett'}: ${name}`); }catch(e){}
+      const idx = currentRound.idx;
+      if(!isHost && hostAlive()){
+        // a guest waits for the owner's decision (applyHostHandoff); if it never comes, it decides itself
+        showHandoffNotice(why === 'reload'
+          ? `🔄 ${escapeHtml(name)} oldala rajzolás közben újratöltődött.<br>⏳ Mindjárt kiderül, ki veszi át…`
+          : `🔌 ${escapeHtml(name)} kilépett rajzolás közben.<br>⏳ Mindjárt kiderül, ki veszi át…`, 2200);
+        clearTimeout(pendingHandoffs.get(idx));
+        pendingHandoffs.set(idx, laterInRoom(()=>{
+          pendingHandoffs.delete(idx);
+          if(!meta || gameEnded || !currentRound || currentRound.idx !== idx || currentRound.drawerId !== goneId) return;
+          if(hostAlive()){ requestResync('a szobanyitó nem jelezte, ki rajzol'); return; }
+          decideHandoff(goneId, name, why, idx);
+        }, 7000));
+        return;
+      }
+      decideHandoff(goneId, name, why, idx);
+    }
+    hostSyncTurnOrder();
+  }
+  function decideHandoff(goneId, name, why, idx){
+    {
       const { id: takeoverId, borrowedPos } = pickNextActiveDrawer(currentRound.idx);
       const takeoverName = meta.playerNames[takeoverId] || 'Valaki';
       // The takeover person is "spending" one of their own future turns to
@@ -4586,6 +4616,7 @@ try{
         ? `🔄 ${escapeHtml(name)} oldala rajzolás közben újratöltődött.<br>🎨 ${escapeHtml(takeoverName)} veszi át, új szóval folytatjuk!`
         : `🔌 ${escapeHtml(name)} kilépett rajzolás közben.<br>🎨 ${escapeHtml(takeoverName)} veszi át, új szóval folytatjuk!`, HANDOFF_DELAY);
       addSystemChatMessage(`🎨 ${takeoverName} veszi át a rajzolást — új szóval folytatjuk!`);
+      if(isHost){ try{ turnSyncAction.send({ turnOrder: meta.turnOrder, handoff: { idx, gone: goneId, id: takeoverId, why: why === 'reload' ? 'reload' : 'left' } }); }catch(e){} }
       if(takeoverId === selfId){
         const takeoverIdx = currentRound.idx;
         // Guarded: if I leave the room (or the game moves on) during the
@@ -4598,6 +4629,39 @@ try{
       }
     }
     hostSyncTurnOrder();
+  }
+  // GUEST: the owner's decision about a dropped drawer's round
+  function applyHostHandoff(h){
+    if(!meta || gameEnded || !isPlainObject(h)) return;
+    const idx = clampNum(h.idx, 0, 500, -1), id = cleanPeerId(h.id), gone = cleanPeerId(h.gone);
+    if(idx < 0 || !id || !meta.playerNames[id]) return;
+    if(!currentRound || currentRound.idx !== idx) return;
+    clearTimeout(pendingHandoffs.get(idx)); pendingHandoffs.delete(idx);
+    const already = processedResultRounds.has(roundKey(currentRound));
+    if(currentRound.drawerId === id) return;                       // already following the right drawer
+    const mineWrong = currentRound.drawerId === selfId && id !== selfId;
+    if(!already && !mineWrong && currentRound.drawerId !== gone) return;   // a different, live round — not ours to touch
+    if(mineWrong){
+      // my device picked me on its own (the owner's message was late): I step back
+      clog('K11', `átadás: a szobanyitó szerint ${String(id).slice(0,5)} rajzol, nem én — visszalépek`);
+      try{ stopTicker(); }catch(e){}
+      try{ addSystemChatMessage('↩️ Mégsem te rajzolsz most — a szobanyitó másnak adta át a kört.'); }catch(e){}
+    }
+    processedResultRounds.add(roundKey(currentRound));
+    const takeoverName = meta.playerNames[id] || 'Valaki';
+    if(!mineWrong){
+      showHandoffNotice(`🎨 ${escapeHtml(takeoverName)} veszi át a rajzolást, új szóval folytatjuk!`, 2200);
+      addSystemChatMessage(`🎨 ${takeoverName} veszi át a rajzolást — új szóval folytatjuk!`);
+    }
+    // the takeover's round must be accepted as a takeover: the old drawer counts as gone here too
+    if(gone && gone !== id && gone !== selfId) activePlayerIds.delete(gone);
+    if(mineWrong) currentRound.drawerId = '__gone__';
+    if(id === selfId){
+      laterInRoom(()=>{
+        if(!meta || gameEnded || !currentRound || currentRound.idx !== idx) return;
+        startRoundAsDrawer(idx);
+      }, 2200);
+    }
   }
 
   function showHandoffNotice(html, durationMs){
@@ -12586,6 +12650,32 @@ try{
   }, 3000);
   window.addEventListener('beforeunload', (e)=>{
     if(room && meta && !gameEnded){ e.preventDefault(); e.returnValue = ''; }
+  });
+  // v4.41: the phone's Back button / back gesture. On a phone the chat is a
+  // full-screen panel, and "back" from it used to leave the page — the player
+  // dropped out of the game, and the others saw them as reloaded. While in a
+  // room, one extra history entry catches Back: it closes the chat (or any
+  // open panel) first, and only asks about leaving when nothing is open.
+  let backGuard = false;
+  setInterval(()=>{
+    if(room && !backGuard){ try{ history.pushState({ picassoGuard:1 }, ''); backGuard = true; }catch(e){} }
+  }, 800);
+  window.addEventListener('popstate', async ()=>{
+    if(!backGuard) return;
+    backGuard = false;
+    if(!room) return;
+    const rearm = ()=>{ try{ history.pushState({ picassoGuard:1 }, ''); backGuard = true; }catch(e){} };
+    const chat = document.getElementById('chat-panel');
+    if(chat && !chat.classList.contains('hidden')){ chat.classList.add('hidden'); rearm(); return; }
+    const picker = document.getElementById('reaction-picker');
+    if(picker && !picker.classList.contains('hidden')){ picker.classList.add('hidden'); rearm(); return; }
+    const ov = ['ingame-menu-overlay','stats-overlay','privacy-overlay','account-overlay','feedback-overlay'].map(id=>document.getElementById(id)).find(el=>el && !el.classList.contains('hidden'));
+    if(ov){ ov.classList.add('hidden'); rearm(); return; }
+    rearm();
+    const playing = meta && !gameEnded;
+    if(await askConfirm(playing ? 'Biztosan kilépsz a játékból? A többiek nélküled folytatják.' : 'Biztosan kilépsz a szobából?', { ok:'Kilépek' })){
+      try{ leaveRoomAndGoHome(); }catch(e){}
+    }
   });
   // Called from the page-level 'pagehide' hook: closing the tab must not
   // leave the microphone running or a dead room advertised in the list.
