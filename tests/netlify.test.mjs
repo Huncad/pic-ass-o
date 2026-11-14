@@ -361,9 +361,9 @@ test('fiók: statisztika és beállítások szinkronja, ütközéskezelés', asy
   assert.equal((await accPost({ action: 'stats-put', stats: [1, 2], rev: 2 }, c)).status, 400);
   assert.equal((await accPost({ action: 'stats-put', stats: { x: 'y'.repeat(70000) }, rev: 2 }, c)).status, 400);
   // beállítások: csak az ismert kulcsok maradnak meg
-  const st = await accPost({ action: 'settings-put', settings: { avatar: '#ff0000', theme: 'tabla', gonosz: '<script>', dark: '<img>' } }, c);
-  assert.deepEqual(st.body.settings, { avatar: '#ff0000', theme: 'tabla' });
-  assert.deepEqual((await accGet('', c)).user.settings, { avatar: '#ff0000', theme: 'tabla' });
+  const st = await accPost({ action: 'settings-put', settings: { 'avatar-color': '#ff0000', theme: 'tabla', gonosz: '<script>', 'chat-pos': '{"x":0.5}', 'sfx-vol': 'x'.repeat(5000) } }, c);
+  assert.deepEqual(st.body.settings, { 'avatar-color': '#ff0000', theme: 'tabla', 'chat-pos': '{"x":0.5}' }, 'ismeretlen kulcs és túl hosszú érték nem megy át');
+  assert.deepEqual((await accGet('', c)).user.settings, { 'avatar-color': '#ff0000', theme: 'tabla', 'chat-pos': '{"x":0.5}' });
 });
 
 test('subscribe: csak fiókkal; régi feliratkozók tájékoztatása és türelmi ideje; értesítés sorból; leiratkozás', async () => {

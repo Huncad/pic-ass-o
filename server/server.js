@@ -72,7 +72,7 @@ const HEARTBEAT_MS = 5_000;
 // v4.32: játékon belüli akciók korlátja (üzenet / időablak / küldő). A böngészők
 // maguk is korlátoznak (szigorúbban), ide csak egy módosított kliens áradata jut el:
 // a felesleget a szerver eldobja, és naplózza (a tartalmat nem).
-const ACTION_LIMITS = { chat: [10, 10_000], chatreact: [15, 10_000], reaction: [6, 10_000], guess: [20, 8_000], typing: [30, 10_000] };          // ilyen sűrűn nézzük, él-e a kapcsolat (régen 20 mp volt)
+const ACTION_LIMITS = { chat: [10, 10_000], chatreact: [15, 10_000], greact: [15, 10_000], reaction: [6, 10_000], guess: [20, 8_000], typing: [30, 10_000] };          // ilyen sűrűn nézzük, él-e a kapcsolat (régen 20 mp volt)
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 

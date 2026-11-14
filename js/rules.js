@@ -122,5 +122,7 @@ export function makeSpamGuard({ max = 5, windowMs = 10000, dupMs = 0, maxKeys = 
     return { ok:true };
   }
   function reset(key){ if(key === undefined) seen.clear(); else seen.delete(key); }
-  return { check, reset };
+  /** v4.42: a szöveg kivétele az ismétlés-figyelőből (pl. ha a tipp nem ért célba, újra küldhető) */
+  function forget(key, text){ const s = seen.get(key); if(s) s.texts.delete(norm(text)); }
+  return { check, reset, forget };
 }

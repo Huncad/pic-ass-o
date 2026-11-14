@@ -1,7 +1,7 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 import { Account } from './account.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.41';
+const APP_VERSION = '4.42';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -469,8 +469,10 @@ try{
   function noteAccountTicket(data, peerId){
     const tk = isPlainObject(data) && typeof data.tk === 'string' ? data.tk : '';
     if(!tk){ return; }
+    ticketPending.add(peerId);
     Account.verifyTicket(tk, peerId).then(c=>{
-      if(!c) return;
+      ticketPending.delete(peerId);
+      if(!c){ try{ renderRosters(); }catch(e){} return; }
       const had = accountNames.get(peerId);
       accountNames.set(peerId, c.name);
       if(had !== c.name){ try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){} try{ renderRosters(); }catch(e){} }
@@ -482,7 +484,20 @@ try{
     const n = accountNames.get(peerId);
     return !!n && nameKey(n) === nameKey(roomNameOf(peerId));
   }
-  const acctBadgeHtml = (peerId)=> accountVerified(peerId) ? '<span class="acct-badge" title="Regisztrált játékos — a név igazoltan az övé" aria-label="regisztrált játékos">✔</span>' : '';
+  // v4.42: a guest is marked too, so registered and guest players can be told apart at a glance
+  const ticketPending = new Set();
+  function acctState(peerId){
+    if(accountVerified(peerId)) return 'reg';
+    if(peerId !== selfId && ticketPending.has(peerId)) return '';       // still checking: no mark yet (no flicker)
+    if(Account.accountsOff) return '';
+    return 'guest';
+  }
+  const acctBadgeHtml = (peerId)=>{
+    const st = acctState(peerId);
+    if(st === 'reg') return '<span class="acct-badge" title="Regisztrált játékos — a név igazoltan az övé" aria-label="regisztrált játékos">✔</span>';
+    if(st === 'guest') return '<span class="guest-badge" title="Vendég — nem regisztrált játékos, a neve nem védett" aria-label="vendég">vendég</span>';
+    return '';
+  };
   function approveHelloName(data, peerId){
     const name = cleanName(isPlainObject(data) ? data.name : ''), k = nameKey(name), pk = peerId + '|' + k;
     if(namePending.has(pk)) return;
@@ -2736,6 +2751,7 @@ try{
   let roomIsPublic = false;
 
   let room = null;
+  let guessReactAction = null;   // v4.42: emoji reaction to someone's guess
   let helloAction, settingsAction, roundAction, strokeAction, guessAction, feedAction, resultAction, scoreAction, chatAction, typingAction, kickAction, hintAction, reactionAction, byeAction, chatReactAction, lateJoinAction, lateSyncAction, rematchVoteAction, turnSyncAction, closeMarkAction;
 
   let knownRooms = new Map();          // key -> {key, code (public only), fp (closed only), isPrivate, name, hostName, players, max, lastSeen}
@@ -3583,6 +3599,14 @@ try{
     reactionAction = room.makeAction('reaction');
     byeAction = room.makeAction('bye');
     chatReactAction = room.makeAction('chatreact');   // emoji reaction to one chat message
+    guessReactAction = room.makeAction('greact');     // v4.42: emoji reaction to one guess
+    guessReactAction.onMessage = (data, {peerId})=>{
+      if(!isPlainObject(data) || !meta || !meta.playerNames[peerId]) return;
+      const gid = clampNum(data.gid, 1, 1e6, 0), emoji = String(data.emoji || '');
+      if(!gid || !CHAT_QUICK_REACTIONS.includes(emoji) || !currentRound || data.r !== roundKey(currentRound)) return;
+      if(!peerChatReactGuard.check(peerId).ok) return;
+      setGuessReaction(gid, emoji, peerId, !!data.on);
+    };
     cwordsAction = room.makeAction('cwords');          // v3.25: guest -> host: own words; host -> all: summary
     cwordsAction.onMessage = (data, {peerId})=>handleCwordsMessage(data, peerId);
     wflagAction = room.makeAction('wflag');            // v3.27: "this word is broken" marks
@@ -4232,8 +4256,20 @@ try{
     // 'feed' action (with the verdict) and, for the first correct one, ends the round.
     guessAction.onMessage = (data, {peerId})=>{
       const iAmReferee = !!currentRound && currentRound.drawerId === selfId && currentRound.phase === 'drawing' &&
-        !processedResultRounds.has(roundKey(currentRound)) && fdLastModAt !== null;   // v3.35: nothing drawn yet = no guessing
-      if(!iAmReferee || !meta || !meta.playerNames[peerId]) return;
+        !processedResultRounds.has(roundKey(currentRound)) && (fdLastModAt !== null || fdStrokes.length > 0);   // v3.35: nothing drawn yet = no guessing (v4.42: a restored drawing counts too)
+      if(!iAmReferee || !meta || !meta.playerNames[peerId]){
+        // v4.42: the guesser thinks I draw — tell them why it did not count, and what is on
+        if(meta && isPlainObject(data) && !tooOften(peerId, 'guessnack', 1500)){
+          const t = cleanText(data.text, 80);
+          const mine = !!currentRound && currentRound.drawerId === selfId && !processedResultRounds.has(roundKey(currentRound));
+          const why = mine && currentRound.phase === 'drawing' && fdLastModAt === null ? 'empty' : (!meta.playerNames[peerId] ? 'unknown' : 'notdrawer');
+          // v4.42: why the drawer refused — goes into the connection log, so a copied log shows the cause
+          clog('K21', `tipp elutasítva (${why}) ${String(peerId).slice(0,5)}: kör=${currentRound ? currentRound.idx + '/' + (currentRound.drawerId === selfId ? 'én' : String(currentRound.drawerId).slice(0,5)) + '/' + currentRound.phase : '-'}, lezárt=${currentRound ? processedResultRounds.has(roundKey(currentRound)) : '-'}, vonalak=${fdStrokes.length}`);
+          try{ feedAction.send({ nack: why, text: t }, { target: peerId }); }catch(e){}
+          if(mine){ try{ roundAction.send(publicRound(currentRound), { target: peerId }); }catch(e){} }
+        }
+        return;
+      }
       if(!isPlainObject(data)) return;
       if(tooOften(peerId, 'guess', 250)) return;           // no guess flooding
       let text = cleanText(data.text, 80);
@@ -4302,11 +4338,21 @@ try{
         pointsForGuesser: roundPoints(elapsedMs/1000), elapsedMs });
     };
     feedAction.onMessage = (data, {peerId})=>{
+      // v4.42: the drawer could not take my guess — say so instead of silence
+      if(isPlainObject(data) && typeof data.nack === 'string' && meta && meta.playerNames[peerId]){
+        const t = cleanText(data.text, 80);
+        if(currentRound) myGuessGuard.forget(roundKey(currentRound), t);
+        guessDelivered(t);
+        if(data.nack === 'empty'){ const i = document.getElementById('watch-guess-input'); if(i && !i.value.trim()) i.value = t; try{ addSystemChatMessage('✏️ Még nincs semmi a lapon — várd meg, hogy rajzoljon valamit, aztán tippelj újra.'); }catch(e){} }
+        else guessUndelivered(t, 'A rajzoló nem tudta fogadni a tippedet');
+        return;
+      }
       // only the current drawer may put entries into the guess feed
       if(!currentRound || !isPlainObject(data)) return;
       if(peerId !== currentRound.drawerId){ if(meta && meta.playerNames[peerId] && !wasDrawerJustNow(peerId)) suspect(peerId, 'forged', 'tipp-eredményt küldött, pedig nem ő a rajzoló'); return; }
       drawerSeenAt.set(peerId, Date.now());
       const pid = cleanPeerId(data.pid);
+      if(pid === selfId) guessDelivered(cleanText(data.text, 80));
       const gid = data.r === roundKey(currentRound) ? clampNum(data.gid, 1, 1e6, 0) : 0;
       const text = cleanText(data.text, 80);
       if(data.correct && pid === selfId && data.own === true){
@@ -5382,7 +5428,7 @@ try{
   function clearRoomActions(){
     helloAction = settingsAction = roundAction = strokeAction = guessAction = feedAction =
       resultAction = scoreAction = chatAction = typingAction = kickAction = hintAction =
-      reactionAction = byeAction = chatReactAction = lateJoinAction = lateSyncAction =
+      reactionAction = byeAction = chatReactAction = guessReactAction = lateJoinAction = lateSyncAction =
       rematchVoteAction = turnSyncAction = closeMarkAction = voteKickAction = null;
       cwordsAction = null; lobbyCustom = {}; wflagAction = null;
       { const lw = document.getElementById('lobby-words-input'); if(lw){ lw.value = ''; try{ updateMyWordsCount(); }catch(e){} } }
@@ -10199,7 +10245,8 @@ try{
     const color = (typeof raw === 'string' && SAFE_COLOR_RE.test(raw)) ? raw : '#8c9a94';
     const initial = Array.from((name || '?').trim())[0] || '?';
     const em = avatarEmoji(color);   // v4.18: the chosen avatar, if the colour is one of ours
-    return `<span class="rav ${em ? 'rav-emoji ' : ''}${extraClass||''}" style="--c:${color};">${em || escapeHtml(initial)}</span>`;
+    const st = acctState(peerId);   // v4.42: ✔ corner for registered, dashed ring for guests
+    return `<span class="rav ${em ? 'rav-emoji ' : ''}${st ? 'acct-' + st + ' ' : ''}${extraClass||''}" style="--c:${color};"${st === 'guest' ? ' title="Vendég (nem regisztrált)"' : st === 'reg' ? ' title="Regisztrált játékos"' : ''}>${em || escapeHtml(initial)}</span>`;
   }
   function displayNameFor(peerId, fallback){
     return (meta && meta.playerNames[peerId]) || fallback || 'Valaki';
@@ -10331,7 +10378,9 @@ try{
       <div class="gbody" style="flex:1;min-width:0;">
         <div class="gname" style="display:flex;gap:6px;align-items:center;">${escapeHtml(who)}${mine ? ' (Te)' : ''}</div>
         <div class="gtext">${correct ? '✅ ' : ''}${escapeHtml(text)}${correct ? (text ? ' — eltalálta!' : 'kitalálta!') : ''}</div>
+        <div class="greacts"></div>
       </div>${closeControlHtml(gid, peerId, correct)}`;
+    if(gid) renderGuessReactions(gid, div);
     document.getElementById('watch-guess-feed').prepend(div);
     pulseRosterChip(peerId);
     if(!correct){ sndWrong(); flash('red'); if(mine) shakeEl(div); }
@@ -10346,7 +10395,8 @@ try{
     const div = document.createElement('div');
     div.className = 'fd-guess-line' + (correct ? ' correct' : '');
     if(gid){ div.dataset.gid = gid; div.dataset.pid = peerId; }
-    div.innerHTML = `${avatarHtml(peerId, who, 'sm')}<b>${escapeHtml(who)}</b><span class="gt">${correct ? '✅ ' : ''}${escapeHtml(text || (correct ? 'kitalálta!' : ''))}</span>${closeControlHtml(gid, peerId, correct)}`;
+    div.innerHTML = `${avatarHtml(peerId, who, 'sm')}<b>${escapeHtml(who)}</b><span class="gt">${correct ? '✅ ' : ''}${escapeHtml(text || (correct ? 'kitalálta!' : ''))}</span><span class="greacts"></span>${closeControlHtml(gid, peerId, correct)}`;
+    if(gid) renderGuessReactions(gid, div);
     feed.appendChild(div);
     const keep = (window.matchMedia && window.matchMedia('(min-width:860px)').matches) ? 40 : 4;
     while(feed.children.length > keep) feed.removeChild(feed.firstChild);
@@ -10413,6 +10463,74 @@ try{
     }
     if(list.length < 80) list.push({ name, text: String(text || '').slice(0, 60), correct: !!correct, close:false, gid: gid || 0 });
   }
+  // ---- v4.42: emoji reactions on a guess (long press on someone else's guess) ----
+  const guessReactions = new Map();   // roundKey|gid -> Map(emoji -> Set(pid))
+  const greactKey = gid => (currentRound ? roundKey(currentRound) : '') + '|' + gid;
+  function guessEntriesFor(gid){ return [...document.querySelectorAll(`#watch-guess-feed [data-gid="${gid}"], #fd-guess-feed [data-gid="${gid}"]`)]; }
+  function renderGuessReactions(gid, only){
+    const m = guessReactions.get(greactKey(gid));
+    const html = m ? [...m.entries()].map(([em, set])=>`<button type="button" class="greact-chip${set.has(selfId) ? ' mine' : ''}" data-emoji="${em}" title="${escapeHtml(chatReactionNames(set))}">${em} ${set.size}</button>`).join('') : '';
+    (only ? [only] : guessEntriesFor(gid)).forEach(el=>{ const box = el.querySelector('.greacts'); if(box) box.innerHTML = html; });
+  }
+  function setGuessReaction(gid, emoji, pid, on){
+    const k = greactKey(gid);
+    if(guessReactions.size > 400) guessReactions.clear();
+    let m = guessReactions.get(k); if(!m){ m = new Map(); guessReactions.set(k, m); }
+    let set = m.get(emoji); if(!set){ set = new Set(); m.set(emoji, set); }
+    if(on) set.add(pid); else set.delete(pid);
+    if(!set.size) m.delete(emoji);
+    renderGuessReactions(gid);
+    // someone reacted to MY guess: a little pop
+    if(on && pid !== selfId && guessEntriesFor(gid).some(el=>el.dataset.pid === selfId)){ try{ sndChatPing(); }catch(e){} }
+  }
+  function toggleMyGuessReaction(gid, emoji){
+    if(!guessReactAction || !currentRound || !CHAT_QUICK_REACTIONS.includes(emoji)) return;
+    const m = guessReactions.get(greactKey(gid));
+    const has = !!(m && m.get(emoji) && m.get(emoji).has(selfId));
+    const rl = myChatReactGuard.check('me');
+    if(!rl.ok){ slowNote('chat', rl); return; }
+    setGuessReaction(gid, emoji, selfId, !has);
+    try{ guessReactAction.send({ gid, emoji, on: !has, r: roundKey(currentRound) }); }catch(e){}
+  }
+  function closeGuessReactRows(){ document.querySelectorAll('.greact-row').forEach(r=>r.remove()); }
+  function openGuessReactRow(entry){
+    const had = entry.querySelector('.greact-row');
+    closeGuessReactRows();
+    if(had) return;
+    const row = document.createElement('div');
+    row.className = 'greact-row';
+    row.innerHTML = CHAT_QUICK_REACTIONS.map(em=>`<button type="button" data-emoji="${em}" aria-label="Reagálás: ${em}">${em}</button>`).join('');
+    (entry.querySelector('.gbody') || entry).appendChild(row);
+    try{ navigator.vibrate && navigator.vibrate(15); }catch(e){}
+  }
+  (function guessLongPress(){
+    let timer = 0, startEl = null, sx = 0, sy = 0, fired = false;
+    const target = e=>{ const el = e.target.closest && e.target.closest('#watch-guess-feed .gentry[data-gid], #fd-guess-feed .fd-guess-line[data-gid]'); return el && el.dataset.pid !== selfId ? el : null; };
+    const cancel = ()=>{ clearTimeout(timer); timer = 0; if(startEl) startEl.classList.remove('greact-pressing'); startEl = null; };
+    document.addEventListener('pointerdown', e=>{
+      if(e.target.closest && e.target.closest('.greact-row, .greact-chip, button')) return;
+      const el = target(e);
+      if(!el){ if(!(e.target.closest && e.target.closest('.greact-row'))) closeGuessReactRows(); return; }
+      fired = false; startEl = el; sx = e.clientX; sy = e.clientY;
+      el.classList.add('greact-pressing');
+      timer = setTimeout(()=>{ fired = true; const t = startEl; cancel(); if(t) openGuessReactRow(t); }, 450);
+    }, true);
+    document.addEventListener('pointermove', e=>{ if(timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) cancel(); }, true);
+    document.addEventListener('pointerup', cancel, true);
+    document.addEventListener('pointercancel', cancel, true);
+    document.addEventListener('contextmenu', e=>{ if(target(e) || fired){ e.preventDefault(); } }, true);
+    document.addEventListener('click', e=>{
+      const b = e.target.closest && e.target.closest('.greact-row button, .greact-chip');
+      if(!b) return;
+      const entry = b.closest('[data-gid]');
+      if(!entry) return;
+      e.preventDefault(); e.stopPropagation();
+      if(b.closest('.greact-chip') && entry.dataset.pid === selfId && !b.classList.contains('mine')) return;
+      toggleMyGuessReaction(clampNum(entry.dataset.gid, 1, 1e6, 0), b.dataset.emoji);
+      closeGuessReactRows();
+    }, true);
+  })();
+
   function routeGuessEntry(peerId, name, text, correct, gid){
     name = cleanName(name);
     try{ logRoundGuess(name, text, correct, gid); }catch(e){}
@@ -10657,7 +10775,38 @@ try{
     input.value = '';
     // This device doesn't know the word. The guess goes to the drawer, who
     // checks it and shows it to everyone (me included) with the verdict.
-    guessAction.send({ name:myName, text }, { target: currentRound.drawerId });
+    const rk = roundKey(currentRound);
+    guessAction.send({ name:myName, text, r: rk }, { target: currentRound.drawerId });
+    watchGuessDelivery(rk, text);
+  }
+  // v4.42: a guess that never comes back from the drawer used to vanish without a trace
+  // (while the chat still worked) — and the repeat-guard then refused to send it again.
+  // Now: no echo within a few seconds -> the text is given back, it may be sent again,
+  // and the game state is asked for again (my copy probably has the wrong drawer).
+  const pendingGuesses = new Map();   // normalized text -> { rk, text, timer }
+  const guessNorm = t=>normalize(String(t || '')).replace(/\s+/g, ' ');
+  function watchGuessDelivery(rk, text){
+    const k = guessNorm(text);
+    clearTimeout((pendingGuesses.get(k) || {}).timer);
+    const timer = laterInRoom(()=>{
+      pendingGuesses.delete(k);
+      if(!currentRound || roundKey(currentRound) !== rk || processedResultRounds.has(rk)) return;
+      myGuessGuard.forget(rk, text);
+      guessUndelivered(text, 'A tipped nem ért el a rajzolóhoz');
+    }, 4500);
+    pendingGuesses.set(k, { rk, text, timer });
+  }
+  function guessDelivered(text){
+    const k = guessNorm(text), p = pendingGuesses.get(k);
+    if(p){ clearTimeout(p.timer); pendingGuesses.delete(k); }
+  }
+  let lastUndeliveredAt = 0;
+  function guessUndelivered(text, why){
+    const input = document.getElementById('watch-guess-input');
+    if(input && !input.value.trim()) input.value = text;
+    try{ addSystemChatMessage(`⚠️ ${why} — a játék újraszinkronizál, utána küldd el újra.`); }catch(e){}
+    clog('K20', `tipp nem ért célba: ${why}`);
+    if(Date.now() - lastUndeliveredAt > 8000){ lastUndeliveredAt = Date.now(); try{ requestResync('a tipp nem ért célba'); }catch(e){} }
   }
 
   // =====================================================================
@@ -11542,10 +11691,12 @@ try{
     click: ()=>{ try{ sndClick(); }catch(e){} },
     onTicket: (tk)=>{ try{ SRV.setAuth(tk); }catch(e){} },
     tokenHash: ()=>SRV.tokenHash(),
+    inRoom: ()=>!!room,
     onStats: ()=>{ try{ renderHomeStats(); if(!document.getElementById('stats-overlay').classList.contains('hidden')){ renderStatsPage(); fitStatsBox(); } }catch(e){} },
     onSubCount: (n)=>{ try{ showSubCount(n); }catch(e){} }
   } });
   Account.onChange(()=>{ try{ renderHomeStats(); }catch(e){} });
+  Account.ready.then(()=>{ try{ renderRosters(); }catch(e){} try{ if(!document.getElementById('screen-lobby').classList.contains('hidden')) renderLobbyPlayers(); }catch(e){} });
   // v4.00: közös ranglista a játékszerveren (csak ha a szerver elérhető)
   function renderRanglistaLink(){
     const wrap = document.getElementById('home-ranglista-wrap');

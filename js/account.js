@@ -11,7 +11,8 @@ import { nameKey, isPlainObject } from './rules.js';
 const API = '/.netlify/functions/account';
 const SUBSCRIBE_URL = '/.netlify/functions/subscribe';
 const STATS_KEY = 'picasso-stats', BASE_KEY = 'picasso-stats-base', REV_KEY = 'picasso-stats-rev', OWNER_KEY = 'picasso-stats-owner';
-const SETTINGS_MAP = { avatar: 'picasso-avatar-color', dark: 'picasso-dark-mode', theme: 'picasso-theme', sound: 'picasso-master-sound', replay: 'picasso-replay-speed' };
+// v4.42: MINDEN beállítás a fiókkal megy (a localStorage-kulcs 'picasso-' előtag nélkül)
+const SETTINGS_KEYS = ['avatar-color','dark-mode','theme','master-sound','sfx-vol','sfx-muted','music-vol','music-muted','replay-speed','create-prefs','chat-size','chat-pos','chat-fs','chat-dock','fab-pos','whatis-noimg','tutorial-seen','setup-advanced-open','sub-open','notify-skip-own','phone-hint','announce-dismissed'];
 const SETTINGS_MARK = 'picasso-settings-synced';
 const $ = id => document.getElementById(id);
 const ls = {
@@ -223,7 +224,7 @@ document.addEventListener('visibilitychange', ()=>{
 // ---------- beállítások szinkronja ----------
 function localSettings(){
   const o = {};
-  for(const [k, key] of Object.entries(SETTINGS_MAP)){ const v = ls.get(key); if(typeof v === 'string' && v.length && v.length <= 40) o[k] = v; }
+  for(const k of SETTINGS_KEYS){ const v = ls.get('picasso-' + k); if(typeof v === 'string' && v.length && v.length <= 4000) o[k] = v; }
   return o;
 }
 const sj = o => JSON.stringify(Object.keys(o).sort().map(k=>[k, o[k]]));
@@ -236,19 +237,38 @@ async function pushSettings(opts = {}){
     if(r.ok){ ls.set(SETTINGS_MARK, sj(r.j.settings || cur)); if(user) user.settings = r.j.settings || cur; }
   }catch(e){}
 }
-/** Belépéskor / induláskor: ha a fiókban más beállítás van, és itt közben nem változott, azt vesszük át. */
+/**
+ * Belépéskor / induláskor / visszatéréskor: ha a fiókban más beállítás van, és itt az utolsó szinkron óta
+ * nem változott semmi, a fiókét vesszük át pontosan (ami ott nincs, az itt is törlődik).
+ * Visszaadja, kell-e újratölteni (a legtöbb beállítás betöltéskor lép életbe).
+ */
 function pullSettings(){
   if(!user) return false;
   const remote = isPlainObject(user.settings) ? user.settings : {};
   const cur = localSettings(), mark = ls.get(SETTINGS_MARK);
-  if(!Object.keys(remote).length || sj(remote) === sj(cur)){ if(Object.keys(remote).length) ls.set(SETTINGS_MARK, sj(remote)); else pushSettings(); return false; }
-  if(mark && mark !== sj(cur)){ pushSettings(); return false; }       // itt változott utoljára: ez megy fel
-  for(const [k, key] of Object.entries(SETTINGS_MAP)){ if(typeof remote[k] === 'string') ls.set(key, remote[k]); }
+  if(sj(remote) === sj(cur)){ ls.set(SETTINGS_MARK, sj(remote)); return false; }
+  if(!Object.keys(remote).length || (mark && mark !== sj(cur))){ pushSettings(); return false; }   // itt változott utoljára: ez megy fel
+  for(const k of SETTINGS_KEYS){ if(typeof remote[k] === 'string') ls.set('picasso-' + k, remote[k]); else ls.del('picasso-' + k); }
   ls.set(SETTINGS_MARK, sj(remote));
-  let once = false; try{ once = sessionStorage.getItem('picasso-settings-reload') === '1'; sessionStorage.setItem('picasso-settings-reload', '1'); }catch(e){ once = true; }
-  return !once;      // az új beállítások egy újratöltéssel lépnek életbe (legfeljebb egyszer)
+  // ugyanarra az állapotra legfeljebb egyszer töltünk újra (nincs újratöltési hurok)
+  let done = ''; try{ done = sessionStorage.getItem('picasso-settings-reload') || ''; sessionStorage.setItem('picasso-settings-reload', sj(remote)); }catch(e){ done = sj(remote); }
+  return done !== sj(remote);
 }
-setInterval(()=>pushSettings(), 30_000);
+/** Egy másik eszközön közben megváltozott beállítások átvétele (csak ha épp nem vagy szobában). */
+async function refreshFromServer(){
+  if(!user) return;
+  try{ if(hooks.inRoom && hooks.inRoom()) return; }catch(e){}
+  await pushSettings();
+  try{
+    const r = await fetch(API, { credentials:'same-origin', cache:'no-store' });
+    const j = r.ok ? await r.json() : null;
+    if(!j || !j.user) return;
+    user.settings = j.user.settings;
+    if(pullSettings()) location.reload();
+  }catch(e){}
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') refreshFromServer(); });
+setInterval(()=>pushSettings(), 15_000);
 
 // ---------- a kezdőképernyő ----------
 function paintHome(){
@@ -508,6 +528,7 @@ function handleUrl(){
   else if(f) open();
 }
 
+let accountsOn = false;   // v4.42: van-e fiókszolgáltatás (helyi próbánál nincs: ilyenkor senki sincs vendégnek jelölve)
 let readyResolve; const ready = new Promise(r=>{ readyResolve = r; });
 async function init(opts){
   selfId = String(opts.selfId || '');
@@ -516,7 +537,7 @@ async function init(opts){
   paintHome();
   try{
     const r = await fetch(API, { credentials:'same-origin', cache:'no-store' });
-    if(r.ok){ const j = await r.json(); if(j && j.user){ setUser(j.user); await fetchTicket(); if(pullSettings()){ location.reload(); return; } syncStats(); } }
+    if(r.ok){ accountsOn = true; const j = await r.json(); if(j && j.user){ setUser(j.user); await fetchTicket(); if(pullSettings()){ location.reload(); return; } syncStats(); } }
     else if(r.status === 404){ const b = $('btn-account'); if(b) b.classList.add('hidden'); }   // a fiókszolgáltatás nincs telepítve (pl. helyi próba)
   }catch(e){ if(location.protocol === 'file:'){ const b = $('btn-account'); if(b) b.classList.add('hidden'); } }
   readyResolve();
@@ -527,6 +548,7 @@ async function init(opts){
 export const Account = {
   init, ready, open, close,
   get user(){ return user; },
+  get accountsOff(){ return !accountsOn; },
   get ticket(){ return (user && ticket && ticketExp > Date.now()) ? ticket : ''; },
   onChange(f){ listeners.add(f); },
   verifyTicket, nameTaken, mayUse, nameProblem, syncStats, resetStats, fetchTicket

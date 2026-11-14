@@ -2653,3 +2653,19 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   .name-note.bad{ color:var(--red); font-weight:700; } .name-note.ok{ color:var(--green); }
   #home-name.name-locked{ opacity:.85; cursor:default; }
   #sub-loggedout{ text-align:center; }
+  /* v4.42: regisztrált és vendég játékosok megkülönböztetése */
+  .guest-badge{ display:inline-block; font-size:.62em; font-weight:800; letter-spacing:.02em; text-transform:uppercase; color:var(--chalk-dim); border:1px dashed currentColor; border-radius:6px; padding:0 .35em; margin-right:.35em; line-height:1.5; vertical-align:.12em; opacity:.85; }
+  .rav{ position:relative; }
+  .rav.acct-guest{ outline:2px dashed rgba(var(--line-rgb),.45); outline-offset:1px; filter:saturate(.75); }
+  .rav.acct-reg::after{ content:'✔'; position:absolute; right:-3px; bottom:-3px; width:13px; height:13px; border-radius:50%; background:var(--blue-fill, #3d9bd1); color:#fff; font-size:8px; font-weight:900; line-height:13px; text-align:center; box-shadow:0 0 0 1.5px var(--panel, #222); font-style:normal; }
+  /* v4.42: gyorsreakció a tippekre (hosszan nyomva) */
+  .greacts{ display:flex; flex-wrap:wrap; gap:4px; margin-top:3px; }
+  .greacts:empty{ display:none; }
+  .greact-chip{ font-size:.8rem; padding:1px 7px; border-radius:999px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); color:var(--chalk); min-height:0; box-shadow:none; line-height:1.5; }
+  .greact-chip.mine{ border-color:var(--yellow); }
+  .greact-row{ display:flex; gap:4px; padding:4px; margin-top:4px; background:var(--panel, #25262a); border:1px solid rgba(255,255,255,.15); border-radius:12px; width:max-content; max-width:100%; flex-wrap:wrap; animation:greactIn .12s ease-out; }
+  .greact-row button{ font-size:1.25rem; padding:3px 6px; background:transparent; border:0; box-shadow:none; min-height:0; cursor:pointer; border-radius:8px; }
+  .greact-row button:hover{ background:rgba(255,255,255,.1); }
+  @keyframes greactIn{ from{ transform:scale(.85); opacity:0; } to{ transform:none; opacity:1; } }
+  .gentry.greact-pressing, .fd-guess-line.greact-pressing{ transform:scale(.98); transition:transform .3s; }
+  .gentry, .fd-guess-line{ -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }

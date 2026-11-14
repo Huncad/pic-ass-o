@@ -32,7 +32,7 @@ const RESET_MS = 3600_000;
 const MAX_STATS_BYTES = 60_000;
 const MAIL_DAY_CAP = Math.max(1, Number(process.env.ACCOUNT_MAIL_DAILY_CAP) || 200);
 const RESERVED = new Set(['valaki', 'vendeg', 'admin', 'adminisztrator', 'moderator', 'picasso', 'pic-ass-o', 'pic ass o', 'rendszer', 'szerver', 'huncraft', 'teged', 'te', 'en']);
-const SETTING_KEYS = ['avatar', 'dark', 'theme', 'sound', 'replay'];
+const SETTING_KEYS = ['avatar-color','dark-mode','theme','master-sound','sfx-vol','sfx-muted','music-vol','music-muted','replay-speed','create-prefs','chat-size','chat-pos','chat-fs','chat-dock','fab-pos','whatis-noimg','tutorial-seen','setup-advanced-open','sub-open','notify-skip-own','phone-hint','announce-dismissed'];
 const GAME_SERVER_URL = String(process.env.GAME_SERVER_URL || 'https://picasso.taile8c93.ts.net').replace(/\/+$/, '');
 const softLimit = makeLimiter();
 
@@ -70,7 +70,13 @@ function cleanStats(v) {
 function cleanSettings(v) {
   const out = {};
   if (!isPlainObject(v)) return out;
-  for (const k of SETTING_KEYS) if (typeof v[k] === 'string' && v[k].length <= 40 && /^[\w#.,:() %-]*$/.test(v[k])) out[k] = v[k];
+  let total = 0;
+  for (const k of SETTING_KEYS) {
+    if (typeof v[k] !== 'string' || !v[k].length || v[k].length > 4000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v[k])) continue;
+    total += v[k].length;
+    if (total > 30000) break;
+    out[k] = v[k];
+  }
   return out;
 }
 
