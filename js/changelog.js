@@ -2,6 +2,9 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.46', changes:[
+    'Javítva: gépen a jelkulcs „Ezen az eszközön” gombja is QR-kódot mutatott (mintha telefonra kérted volna). Mostantól a gép saját tárolóját használja (Windows Hello, Touch ID); ha a gépen nincs ilyen beállítva, megmondja, mit tegyél.'
+  ]},
   { version:'4.45', changes:[
     'Nincs többé jelszó: a regisztráció csak név és e-mail cím, a belépés jelkulccsal (ujjlenyomat, arc vagy a képernyőzár kódja) vagy egy e-mailben küldött, egyszer használható belépőlinkkel történik. A korábbi jelszavakat és a kétfaktoros kulcsokat véglegesen töröltük.',
     'A regisztráció megerősítése egyben belépés is, utána a játék felajánlja a jelkulcs hozzáadását.',

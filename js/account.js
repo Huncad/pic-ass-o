@@ -446,11 +446,20 @@ async function addPasskey(phone){
   msg('acct-m-profile', phone === true ? '📱 Olvasd be a megjelenő QR-kódot a telefonoddal, és erősítsd meg ott…' : 'Kövesd a telefonod / géped utasításait…');
   try{
     const W = await loadWebAuthn();
+    // v4.46: van-e a gépnek saját jelkulcs-tárolója (Windows Hello, Touch ID) — ha nincs, megmondjuk, mit tegyen
+    if(phone !== true){
+      let local = true;
+      try{ local = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); }catch(e){}
+      if(!local && !isPhone()){
+        msg('acct-m-profile', 'Ezen a gépen nincs beállítva Windows Hello (PIN, ujjlenyomat vagy arc), ezért ide nem lehet jelkulcsot tenni. Állítsd be a Windows Beállítások → Fiókok → Bejelentkezési lehetőségek alatt, vagy használd a „📱 A telefonomra” gombot.', 'bad');
+        return;
+      }
+    }
     const b = await call({ action:'pk-reg-begin', phone: phone === true });
     if(!b.ok){ msg('acct-m-profile', b.j.error || 'Nem sikerült.', 'bad'); return; }
     let resp;
     try{ resp = await W.startRegistration({ optionsJSON: b.j.options }); }
-    catch(e){ msg('acct-m-profile', pkCancelled(e) ? 'Megszakítva.' : (e && e.name === 'InvalidStateError' ? 'Ezen az eszközön már van jelkulcsod ehhez a fiókhoz.' : 'Ez az eszköz most nem tudott jelkulcsot létrehozni.'), pkCancelled(e) ? '' : 'bad'); return; }
+    catch(e){ msg('acct-m-profile', pkCancelled(e) ? (phone === true ? 'Megszakítva.' : 'Megszakítva. (Ha a gép QR-kódot mutatott, az a telefonos út — ehhez inkább a „📱 A telefonomra” gombot használd.)') : (e && e.name === 'InvalidStateError' ? 'Ezen az eszközön már van jelkulcsod ehhez a fiókhoz.' : 'Ez az eszköz most nem tudott jelkulcsot létrehozni.'), pkCancelled(e) ? '' : 'bad'); return; }
     const f = await call({ action:'pk-reg-finish', response: resp });
     if(!f.ok){ msg('acct-m-profile', f.j.error || 'Nem sikerült.', 'bad'); return; }
     user.passkeys = f.j.user.passkeys;

@@ -39,6 +39,8 @@ const ready = p => p.waitForFunction(() => !document.body.classList.contains('bo
     check('gépen ott a „📱 A telefonomra (QR-kóddal)” gomb', await p.isVisible('#acct-pk-add-phone'));
     const hints = await p.evaluate(async () => (await (await fetch('/.netlify/functions/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'pk-reg-begin', phone: true }) })).json()).options.hints);
     check('a telefonos gomb a QR-kódos (hybrid) utat kéri a böngészőtől', Array.isArray(hints) && hints.includes('hybrid'), JSON.stringify(hints));
+    const local = await p.evaluate(async () => (await (await fetch('/.netlify/functions/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'pk-reg-begin' }) })).json()).options);
+    check('az „Ezen az eszközön” gomb a gép saját tárolóját kéri (nem QR-kódot)', (local.hints || []).includes('client-device') && !(local.hints || []).includes('hybrid') && local.authenticatorSelection.authenticatorAttachment === 'platform', JSON.stringify([local.hints, local.authenticatorSelection]));
     check('a profilban látszik a jelkulcs rész', await p.isVisible('#acct-pk-box'));
     await p.click('#acct-pk-add');
     await p.waitForFunction(() => /Jelkulcs hozzáadva/.test(document.getElementById('acct-m-profile').textContent), null, { timeout: 15000 }).catch(() => {});

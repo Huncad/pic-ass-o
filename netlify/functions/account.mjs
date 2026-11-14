@@ -388,10 +388,13 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     const options = await generateRegistrationOptions({
       rpName: 'PIC-ASS-O', rpID, userName: user.email, userDisplayName: user.name,
       userID: new TextEncoder().encode(user.uid), attestationType: 'none', timeout: 120_000,
-      excludeCredentials: (user.pk || []).map(k => ({ id: k.id, transports: k.transports })),
+      // v4.46: a már meglévő jelkulcsok kizárása — a gépi hozzáadásnál a telefonos (QR-kódos) kulcsot NEM soroljuk fel,
+      // különben a böngésző a telefont is ellenőrizni akarja, és QR-kódot mutat
+      excludeCredentials: (user.pk || []).filter(k => body.phone === true || !(k.transports || []).includes('hybrid')).map(k => ({ id: k.id, transports: k.transports })),
       authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
       // v4.45: gépen „telefonra” kérve a böngésző QR-kódot mutat, a jelkulcs a telefonon jön létre
-      ...(body.phone === true ? { preferredAuthenticatorType: 'remoteDevice' } : {})
+      // „ezen az eszközön”: a gép saját tárolója (Windows Hello, Touch ID, Android / iPhone); „telefonra”: QR-kód
+      preferredAuthenticatorType: body.phone === true ? 'remoteDevice' : 'localDevice'
     });
     await updateJSON(store, uk, raw => raw ? { value: Object.assign(raw, { pkChal: { c: options.challenge, exp: Date.now() + PK_CHALLENGE_MS, phone: body.phone === true } }) } : { write: false });
     return json({ ok: true, options });
