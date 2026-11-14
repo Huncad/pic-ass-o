@@ -21,3 +21,9 @@ A kétfaktoros belépés beállításakor a hitelesítő alkalmazásnak szóló 
 rajzolja ki — helyben, a böngészőben, hogy a titkos kulcs soha ne kerüljön külső
 szolgáltatáshoz. Változatlan másolat: `qrcode-generator@1.4.4` (Kazuhiko Arase, MIT licenc),
 az npm-csomag `qrcode.js` fájlja. Csak akkor töltődik be, amikor valaki a 2FA beállítását megnyitja.
+
+## simplewebauthn-browser.js (v4.43)
+
+A jelkulcsos (passkey) belépés böngészős fele: `@simplewebauthn/browser@13.3.0` (Matthew Miller, MIT licenc),
+az npm-csomag `dist/bundle/index.umd.min.js` fájlja, változatlanul. Csak a jelkulcs hozzáadásakor / a jelkulcsos
+belépéskor töltődik be. A szerveroldali ellenőrzést a `@simplewebauthn/server` csomag végzi (package.json).

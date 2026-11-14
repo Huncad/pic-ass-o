@@ -1,7 +1,7 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 import { Account } from './account.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.42';
+const APP_VERSION = '4.43';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -241,6 +241,7 @@ const SRV = (function(){
   const DEAD_MS = 11000;
   function ackOut(n){ if(typeof n !== 'number') return; while(unacked.length && unacked[0].s <= n) unacked.shift(); }
   function wsUrl(){ return base.replace(/^http/, 'ws') + '/ws'; }
+  function devId(){ try{ return localStorage.getItem('picasso-device') || undefined; }catch(e){ return undefined; } }
   function setUp(v){
     api.up = v;
     if(v){ api.everUp = true; waiters.splice(0).forEach(f=>f(true)); try{ api.onUp && api.onUp(); }catch(e){} try{ window.dispatchEvent(new Event('picasso-srv-up')); }catch(e){} }
@@ -254,7 +255,7 @@ const SRV = (function(){
     clearTimeout(retryTimer);
     let me;
     try{ me = ws = new WebSocket(wsUrl()); }catch(e){ ws = null; schedule(); return; }
-    me.onopen = ()=>{ lastRx = Date.now(); try{ me.send(JSON.stringify({ t:'hello', v:2, r: recvQ, id:selfId, token, dir:true, room: cur && cur.rid })); }catch(e){} };
+    me.onopen = ()=>{ lastRx = Date.now(); try{ me.send(JSON.stringify({ t:'hello', v:2, r: recvQ, id:selfId, token, dir:true, room: cur && cur.rid, dev: (()=>{ try{ return localStorage.getItem('picasso-device') || undefined; }catch(e){ return undefined; } })() })); }catch(e){} };
     me.onmessage = (ev)=>{
       if(me !== ws) return;
       lastRx = Date.now();
@@ -281,7 +282,7 @@ const SRV = (function(){
           clog('S01', `kapcsolódva a játékszerverhez${m.resumed ? ' — a szobabeli hely megmaradt' : ''}`);
           if(cur && cur.rid){
             if(m.resumed){ clog('S03', `visszatérés a szobába, ${(m.peers||[]).length} társ`); cur._sync(m.peers || []); }
-            else raw({ t:'join', room: cur.rid });
+            else raw({ t:'join', room: cur.rid, dev: devId() });
           }
           pending.splice(0).forEach(raw);
           unacked.forEach(x=>{ if((srvV2 || !x._sent) && raw(x)) x._sent = true; });
@@ -6137,7 +6138,7 @@ try{
       if(r.closed) return;
       r.rid = 'v2:' + Array.from(new Uint8Array(t)).map(b=>b.toString(16).padStart(2,'0')).join('');
       SRV.attach(r);
-      SRV.send({ t:'join', room: r.rid });
+      SRV.send({ t:'join', room: r.rid, dev: (()=>{ try{ return deviceId(); }catch(e){ return undefined; } })() });
       pre.splice(0).forEach(o=>SRV.send(o));
     })().catch(e=>{ try{ console.warn('[PIC-ASS-O] server room failed:', e && e.message); }catch(err){} });
     return {

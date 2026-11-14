@@ -44,7 +44,7 @@ let csp = '';
 try { csp = /Content-Security-Policy:\s*(.+)/.exec(fs.readFileSync(path.join(ROOT, '_headers'), 'utf8'))[1].trim().replace("connect-src 'self'", `connect-src 'self' http://127.0.0.1:${SRV_PORT} ws://127.0.0.1:${SRV_PORT}`); } catch (e) {}
 
 http.createServer(async (req, res) => {
-  const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
+  const u = new URL(req.url, `http://${/^(127\.0\.0\.1|localhost):\d+$/.test(req.headers.host || "") ? req.headers.host : "127.0.0.1:" + PORT}`);
   if (u.pathname === '/__test/mails') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(mails)); return; }
   const fm = /^\/\.netlify\/functions\/(\w+)$/.exec(u.pathname);
   if (fm && fns[fm[1]]) {

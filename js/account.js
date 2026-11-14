@@ -12,7 +12,7 @@ const API = '/.netlify/functions/account';
 const SUBSCRIBE_URL = '/.netlify/functions/subscribe';
 const STATS_KEY = 'picasso-stats', BASE_KEY = 'picasso-stats-base', REV_KEY = 'picasso-stats-rev', OWNER_KEY = 'picasso-stats-owner';
 // v4.42: MINDEN beállítás a fiókkal megy (a localStorage-kulcs 'picasso-' előtag nélkül)
-const SETTINGS_KEYS = ['avatar-color','dark-mode','theme','master-sound','sfx-vol','sfx-muted','music-vol','music-muted','replay-speed','create-prefs','chat-size','chat-pos','chat-fs','chat-dock','fab-pos','whatis-noimg','tutorial-seen','setup-advanced-open','sub-open','notify-skip-own','phone-hint','announce-dismissed'];
+const SETTINGS_KEYS = ['mail-colors', 'avatar-color','dark-mode','theme','master-sound','sfx-vol','sfx-muted','music-vol','music-muted','replay-speed','create-prefs','chat-size','chat-pos','chat-fs','chat-dock','fab-pos','whatis-noimg','tutorial-seen','setup-advanced-open','sub-open','notify-skip-own','phone-hint','announce-dismissed'];
 const SETTINGS_MARK = 'picasso-settings-synced';
 const $ = id => document.getElementById(id);
 const ls = {
@@ -29,7 +29,34 @@ let hooks = {};
 const listeners = new Set();
 const N = v => Number(v) || 0;
 
+// ---------- v4.43: a játékban látott színek a levelekhez ----------
+// A téma és a sötét mód tényleges színeit egy pixelre festve olvassuk ki (így a color-mix() is pontos hexa lesz).
+function readPalette(){
+  try{
+    const cs = getComputedStyle(document.documentElement);
+    const cv = document.createElement('canvas'); cv.width = cv.height = 1;
+    const ctx = cv.getContext('2d', { willReadFrequently:true });
+    const hex = v=>{
+      ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = '#000'; ctx.fillStyle = String(v || '').trim() || '#000'; ctx.fillRect(0, 0, 1, 1);
+      const d = ctx.getImageData(0, 0, 1, 1).data;
+      return '#' + [d[0], d[1], d[2]].map(x=>x.toString(16).padStart(2, '0')).join('');
+    };
+    const g = n=>cs.getPropertyValue(n);
+    return { bg: hex(g('--bg')), panel: hex(g('--panel')), text: hex(g('--chalk')), dim: hex(g('--chalk-dim')),
+      accent: hex(g('--yellow')), link: hex(g('--blue')), btn: hex(g('--green')), btnText: hex(g('--bg')) };
+  }catch(e){ return null; }
+}
+function storePalette(){
+  const p = readPalette();
+  if(p){ const v = JSON.stringify(p); if(ls.get('picasso-mail-colors') !== v) ls.set('picasso-mail-colors', v); }
+  return p;
+}
+try{
+  new MutationObserver(()=>setTimeout(storePalette, 50)).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme', 'class'] });
+}catch(e){}
+
 async function call(body, opts = {}){
+  if(body && ['register', 'forgot'].includes(body.action)){ const p = storePalette(); if(p) body = Object.assign({}, body, { pal: p }); }
   const r = await fetch(API, { method:'POST', headers:{ 'Content-Type':'application/json' }, credentials:'same-origin', cache:'no-store',
     keepalive: !!opts.keepalive, body: JSON.stringify(body) });
   let j = {}; try{ j = await r.json(); }catch(e){}
@@ -336,7 +363,7 @@ function show(v){
   document.querySelectorAll('#account-overlay .acct-msg').forEach(el=>{ el.textContent = ''; el.className = 'acct-msg'; });
   document.querySelectorAll('#account-overlay input[type=password], #account-overlay input[inputmode=numeric]').forEach(el=>{ el.value = ''; });
   if(v === 'profile') paintProfile();
-  if(v === 'login'){ const c = $('acct-login-code-row'); if(c) c.classList.add('hidden'); }
+  if(v === 'login'){ const c = $('acct-login-code-row'); if(c) c.classList.add('hidden'); const w = $('acct-pk-login-wrap'); if(w) w.classList.toggle('hidden', !pkSupported()); }
   const first = $('acct-v-' + v) && $('acct-v-' + v).querySelector('input:not([type=checkbox]),button');
   if(first){ try{ first.focus(); }catch(e){} }
 }
@@ -356,6 +383,7 @@ function paintProfile(){
   $('acct-p-2fa').textContent = user.twofa ? `✅ Bekapcsolva (${N(user.backupLeft)} tartalék kód maradt)` : 'Nincs bekapcsolva';
   $('acct-btn-2fa').textContent = user.twofa ? 'Kikapcsolás' : 'Bekapcsolás';
   const n = $('acct-p-notify'); if(n) n.checked = !!user.notifyEmail;
+  paintPasskeys();
 }
 /** Űrlap bekötése: a gombot a kérés idejére letiltja, a hibát az űrlap üzenetsorába írja. */
 function form(id, msgId, fn){
@@ -379,6 +407,79 @@ async function afterLogin(u){
   if(pullSettings()){ location.reload(); return; }
   try{ hooks.onLogin && hooks.onLogin(); }catch(e){}
 }
+// ---------- v4.43: jelkulcs (passkey) ----------
+const pkSupported = ()=> typeof window.PublicKeyCredential === 'function' && !!navigator.credentials && window.isSecureContext;
+function loadWebAuthn(){
+  return new Promise((res, rej)=>{
+    if(window.SimpleWebAuthnBrowser) return res(window.SimpleWebAuthnBrowser);
+    const s = document.createElement('script');
+    s.src = 'vendor/simplewebauthn-browser.js';
+    s.onload = ()=>window.SimpleWebAuthnBrowser ? res(window.SimpleWebAuthnBrowser) : rej(new Error('webauthn'));
+    s.onerror = ()=>rej(new Error('webauthn'));
+    document.head.appendChild(s);
+  });
+}
+const pkCancelled = e => e && (e.name === 'NotAllowedError' || e.name === 'AbortError' || /cancel|abort|not allowed/i.test(String(e.message || '')));
+function paintPasskeys(){
+  const box = $('acct-pk-box'), list = $('acct-pk-list');
+  if(!box || !list) return;
+  box.classList.toggle('hidden', !pkSupported());
+  list.textContent = '';
+  const keys = (user && Array.isArray(user.passkeys)) ? user.passkeys : [];
+  if(!keys.length){ const li = document.createElement('li'); li.className = 'acct-why'; li.textContent = 'Még nincs jelkulcsod.'; list.appendChild(li); return; }
+  keys.forEach(k=>{
+    const li = document.createElement('li');
+    const t = document.createElement('span');
+    t.textContent = `${k.name || 'jelkulcs'} · ${new Date(k.at).toLocaleDateString('hu-HU')}${k.used ? ' · utoljára: ' + new Date(k.used).toLocaleDateString('hu-HU') : ''}`;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost small'; b.textContent = 'Törlés';
+    b.addEventListener('click', async ()=>{
+      b.disabled = true;
+      const r = await call({ action:'pk-delete', id: k.id }).catch(()=>({ ok:false, j:{} }));
+      if(r.ok && r.j.user){ user.passkeys = r.j.user.passkeys; paintPasskeys(); msg('acct-m-profile', 'A jelkulcsot töröltük. (A telefonodon a jelszókezelőből külön törölheted.)', 'ok'); }
+      else { b.disabled = false; msg('acct-m-profile', r.j.error || 'Nem sikerült törölni.', 'bad'); }
+    });
+    li.append(t, b); list.appendChild(li);
+  });
+}
+async function addPasskey(){
+  const btn = $('acct-pk-add');
+  btn.disabled = true;
+  msg('acct-m-profile', 'Kövesd a telefonod / géped utasításait…');
+  try{
+    const W = await loadWebAuthn();
+    const b = await call({ action:'pk-reg-begin' });
+    if(!b.ok){ msg('acct-m-profile', b.j.error || 'Nem sikerült.', 'bad'); return; }
+    let resp;
+    try{ resp = await W.startRegistration({ optionsJSON: b.j.options }); }
+    catch(e){ msg('acct-m-profile', pkCancelled(e) ? 'Megszakítva.' : (e && e.name === 'InvalidStateError' ? 'Ezen az eszközön már van jelkulcsod ehhez a fiókhoz.' : 'Ez az eszköz most nem tudott jelkulcsot létrehozni.'), pkCancelled(e) ? '' : 'bad'); return; }
+    const f = await call({ action:'pk-reg-finish', response: resp });
+    if(!f.ok){ msg('acct-m-profile', f.j.error || 'Nem sikerült.', 'bad'); return; }
+    user.passkeys = f.j.user.passkeys;
+    paintPasskeys();
+    msg('acct-m-profile', '✅ Jelkulcs hozzáadva! Legközelebb a „Belépés jelkulccsal” gombbal jelszó nélkül beléphetsz.', 'ok');
+  }catch(e){ msg('acct-m-profile', 'Nem sikerült kapcsolódni. Próbáld újra.', 'bad'); }
+  finally{ btn.disabled = false; }
+}
+async function loginWithPasskey(){
+  const btn = $('acct-pk-login');
+  btn.disabled = true;
+  msg('acct-m-login', 'Kövesd a telefonod / géped utasításait…');
+  try{
+    const W = await loadWebAuthn();
+    const b = await call({ action:'pk-login-begin' });
+    if(!b.ok){ msg('acct-m-login', b.j.error || 'Nem sikerült.', 'bad'); return; }
+    let resp;
+    try{ resp = await W.startAuthentication({ optionsJSON: b.j.options }); }
+    catch(e){ msg('acct-m-login', pkCancelled(e) ? 'Megszakítva. Ha még nincs jelkulcsod, lépj be jelszóval, és a fiókodban add hozzá.' : 'Ez az eszköz most nem tudott jelkulccsal belépni.', pkCancelled(e) ? '' : 'bad'); return; }
+    const f = await call({ action:'pk-login-finish', response: resp });
+    if(!f.ok){ msg('acct-m-login', f.j.error || 'Nem sikerült belépni.', 'bad'); return; }
+    await afterLogin(f.j.user);
+    show('profile');
+    msg('acct-m-profile', `Szia, ${user.name}! Beléptél a jelkulcsoddal.`, 'ok');
+  }catch(e){ msg('acct-m-login', 'Nem sikerült kapcsolódni. Próbáld újra.', 'bad'); }
+  finally{ btn.disabled = false; }
+}
+
 function loadQr(){
   return new Promise((res, rej)=>{
     if(window.qrcode) return res(window.qrcode);
@@ -468,6 +569,8 @@ function wire(){
     if(!r.ok){ msg('acct-m-password', r.j.error || 'Nem sikerült.', 'bad'); return; }
     show('profile'); msg('acct-m-profile', '✅ A jelszavad megváltozott. A többi eszközödről kiléptettünk.', 'ok');
   });
+  $('acct-pk-add') && $('acct-pk-add').addEventListener('click', addPasskey);
+  $('acct-pk-login') && $('acct-pk-login').addEventListener('click', loginWithPasskey);
   $('acct-btn-2fa').addEventListener('click', ()=>show(user && user.twofa ? 'totp-off' : 'totp-pw'));
   form('acct-f-totp-pw', 'acct-m-totp-pw', async fd=>{
     const r = await call({ action:'totp-begin', password: String(fd.get('password') || '') });
@@ -531,6 +634,7 @@ function handleUrl(){
 let accountsOn = false;   // v4.42: van-e fiókszolgáltatás (helyi próbánál nincs: ilyenkor senki sincs vendégnek jelölve)
 let readyResolve; const ready = new Promise(r=>{ readyResolve = r; });
 async function init(opts){
+  storePalette();
   selfId = String(opts.selfId || '');
   hooks = opts.hooks || {};
   wire();

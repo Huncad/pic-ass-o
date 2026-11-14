@@ -225,6 +225,36 @@ test('névvédelem: regisztrált névvel csak érvényes jeggyel lehet bemutatko
   await Promise.all([host.close(), fake.close(), real.close(), guest.close()]);
 });
 
+test('kirúgás: más kapcsolattal, más névvel sem jöhet vissza ugyanarról az eszközről / fiókkal', async () => {
+  const host = client('kick0host'), bad = client('kick0bad1');
+  await Promise.all([host.connect(), bad.connect()]);
+  await host.join('v2:szoba-kick'); 
+  bad.ws.send(JSON.stringify({ t: 'join', room: 'v2:szoba-kick', dev: 'eszkoz0123456789abc' })); bad.room = 'v2:szoba-kick'; await sleep(100);
+  host.ws.send(JSON.stringify({ t: 'kick', id: 'kick0bad1' }));
+  await sleep(150);
+  assert.equal(bad.errors.at(-1) && bad.errors.at(-1).e, 'kicked');
+  // új kapcsolat (újratöltés / más név), ugyanaz az eszköz
+  const again = client('kick0bad2');
+  await again.connect();
+  again.ws.send(JSON.stringify({ t: 'join', room: 'v2:szoba-kick', dev: 'eszkoz0123456789abc' }));
+  await sleep(150);
+  assert.equal(again.errors.at(-1) && again.errors.at(-1).e, 'kicked', 'ugyanarról az eszközről nem jöhet vissza');
+  // a szoba egy pillanatra kiürül: a tiltás akkor is marad
+  await host.close(); await sleep(100);
+  const again2 = client('kick0bad3');
+  await again2.connect();
+  again2.ws.send(JSON.stringify({ t: 'join', room: 'v2:szoba-kick', dev: 'eszkoz0123456789abc' }));
+  await sleep(150);
+  assert.equal(again2.errors.at(-1) && again2.errors.at(-1).e, 'kicked', 'kiürült szobába sem');
+  // egy másik eszköz beléphet
+  const other = client('kick0oth1');
+  await other.connect();
+  other.ws.send(JSON.stringify({ t: 'join', room: 'v2:szoba-kick', dev: 'masikeszkoz0123456789' }));
+  await sleep(150);
+  assert.ok(!other.errors.some(e => e.e === 'kicked'));
+  await Promise.all([bad.close(), again.close(), again2.close(), other.close()]);
+});
+
 test('ranglista: regisztrált játékos nélkül a játék nem kerül fel', async () => {
   const a = client('mmmm0001'), b = client('nnnn0001');
   await Promise.all([a.connect(), b.connect()]);

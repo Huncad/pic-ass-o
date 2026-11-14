@@ -16,25 +16,28 @@
 // karakteres titok, ami a jelszó-lenyomatokba keveredik — ha egyszer beállítod,
 // ne változtasd meg, mert a vele készült lenyomatok érvénytelenné válnak).
 import { json, updateJSON, makeLimiter } from '../lib/util.mjs';
-import { esc, cleanEmail, page, sendMail, mailWrap, btn } from '../lib/mail.mjs';
+import { esc, cleanEmail, page as basePage, sendMail as baseSendMail, mailWrap, btn, cleanPalette } from '../lib/mail.mjs';
 import {
   accountStore, sha, newToken, asObj, safeEqual, hashPassword, verifyPassword, needsRehash, passwordProblem,
   newTotpSecret, totpCheck, totpUri, newBackupCodes, backupHash, publicKey, makeTicket, signPayload, overLimit,
   lockState, lockFail, lockClear, sessionCookie, clearCookie, getUser, createSession, sessionUser,
   revokeSessions, sameOrigin, ipOf, SESSION_RENEW_MS, SESSION_MS
 } from '../lib/account.mjs';
-import { setAccountSub, accountSubOn, claimLegacySub, removeSubsOf } from '../lib/subs.mjs';
+import { setAccountSub, accountSubOn, claimLegacySub, removeSubsOf, setSubPalette } from '../lib/subs.mjs';
 import { removePushOf } from '../lib/push.mjs';
 import { cleanName, nameKey, isPlainObject } from '../../js/rules.js';
+import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
 
 const PENDING_MS = 24 * 3600_000;
 const RESET_MS = 3600_000;
 const MAX_STATS_BYTES = 60_000;
 const MAIL_DAY_CAP = Math.max(1, Number(process.env.ACCOUNT_MAIL_DAILY_CAP) || 200);
 const RESERVED = new Set(['valaki', 'vendeg', 'admin', 'adminisztrator', 'moderator', 'picasso', 'pic-ass-o', 'pic ass o', 'rendszer', 'szerver', 'huncraft', 'teged', 'te', 'en']);
-const SETTING_KEYS = ['avatar-color','dark-mode','theme','master-sound','sfx-vol','sfx-muted','music-vol','music-muted','replay-speed','create-prefs','chat-size','chat-pos','chat-fs','chat-dock','fab-pos','whatis-noimg','tutorial-seen','setup-advanced-open','sub-open','notify-skip-own','phone-hint','announce-dismissed'];
+const SETTING_KEYS = ['mail-colors', 'avatar-color','dark-mode','theme','master-sound','sfx-vol','sfx-muted','music-vol','music-muted','replay-speed','create-prefs','chat-size','chat-pos','chat-fs','chat-dock','fab-pos','whatis-noimg','tutorial-seen','setup-advanced-open','sub-open','notify-skip-own','phone-hint','announce-dismissed'];
 const GAME_SERVER_URL = String(process.env.GAME_SERVER_URL || 'https://picasso.taile8c93.ts.net').replace(/\/+$/, '');
 const softLimit = makeLimiter();
+/** v4.43: a fiók tulajdonosának színvilága (a játékban látott színek, a beállításokkal szinkronizálva) */
+const palOf = u => cleanPalette(u && u.settings && u.settings['mail-colors']) || cleanPalette(u && u.regPal);
 
 const nameBlob = key => 'n/' + Buffer.from(key).toString('hex');
 const GENERIC_LOGIN = 'Hibás e-mail cím vagy jelszó.';
@@ -56,8 +59,19 @@ async function nameTaken(store, key) {
 }
 const publicUser = async (u) => ({
   name: u.name, email: u.email, twofa: !!(u.totp && u.totp.on), backupLeft: Array.isArray(u.backup) ? u.backup.length : 0,
-  createdAt: u.createdAt, notifyEmail: await accountSubOn(u).catch(() => false), settings: asObj(u.settings)
+  createdAt: u.createdAt, notifyEmail: await accountSubOn(u).catch(() => false), settings: asObj(u.settings),
+  passkeys: (Array.isArray(u.pk) ? u.pk : []).map(k => ({ id: k.id, name: k.name, at: k.at, used: k.used || 0 }))
 });
+const MAX_PASSKEYS = 10;
+const PK_CHALLENGE_MS = 5 * 60_000;
+const pkBlob = id => 'pk/' + sha('pk|' + id);
+/** A jelkulcs eszközének emberi neve a böngészőből (csak tájékoztató). */
+function deviceLabel(req) {
+  const ua = String(req.headers.get('user-agent') || '');
+  const os = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : 'eszköz';
+  const br = /Edg\//.test(ua) ? 'Edge' : /SamsungBrowser/.test(ua) ? 'Samsung' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
+  return (os + (br ? ' · ' + br : '')).slice(0, 40);
+}
 async function mailAllowed(store) {
   return !(await overLimit(store, 'mailday|' + new Date().toISOString().slice(0, 10), MAIL_DAY_CAP, 86400_000));
 }
@@ -86,6 +100,9 @@ export default async (req) => {
   const site = url.origin;
   const store = accountStore();
   const ip = ipOf(req);
+  let reqPal = null;   // v4.43: a levél / oldal színei
+  const sendMail = (to, subject, html, unsub) => baseSendMail(to, subject, html, unsub, reqPal);
+  const page = (title, inner, status, headers) => basePage(title, inner, status, headers, reqPal);
 
   // ---------- nyilvános lekérdezések ----------
   if (req.method === 'GET' && url.searchParams.has('pubkey')) {
@@ -108,6 +125,7 @@ export default async (req) => {
 <p style="font-size:.85rem">Ha nem te regisztráltál, egyszerűen zárd be ezt az oldalt — fiók nem jön létre.</p>`);
     }
     const p = await store.get(pk, { type: 'json' }).catch(() => null);
+    reqPal = cleanPalette(p && p.pal);
     if (!p || Date.now() - (p.at || 0) > PENDING_MS) {
       return page('A link lejárt', `<p>Ez a megerősítő link már nem érvényes (24 óráig él, és csak egyszer használható). Ha a fiókod már kész, lépj be; ha nem, regisztrálj újra.</p><a class="b" href="${esc(site)}/?fiok=1">Irány a játék</a>`, 404);
     }
@@ -124,7 +142,7 @@ export default async (req) => {
       await store.delete(pk).catch(() => {});
       return page('A név közben elkelt', `<p>Sajnos ezt a nevet időközben más regisztrálta. Kérlek, regisztrálj újra egy másik névvel.</p><a class="b" href="${esc(site)}/?fiok=1">Vissza a játékhoz</a>`, 409);
     }
-    const user = { uid, name: p.name, key: p.key, email: p.email, eh: p.eh, pw: p.pw, createdAt: Date.now(), sess: [], settings: {},
+    const user = { uid, name: p.name, key: p.key, email: p.email, eh: p.eh, pw: p.pw, createdAt: Date.now(), sess: [], settings: {}, regPal: reqPal || undefined,
       consent: 'v4.40: elmúlt 16 éves, és elfogadta az adatkezelési tájékoztatót (' + new Date(p.at).toISOString() + ')' };
     await store.setJSON('u/' + uid, user);
     await store.setJSON(nameBlob(p.key), { uid });
@@ -151,6 +169,7 @@ export default async (req) => {
   try { body = await req.json(); } catch (e) { return err('bad json', 400); }
   if (!isPlainObject(body)) return err('bad json', 400);
   const action = String(body.action || '');
+  reqPal = cleanPalette(body.pal);
 
   // ---------- regisztráció ----------
   if (action === 'register') {
@@ -187,7 +206,7 @@ export default async (req) => {
       return { value: { eh, until: Date.now() + PENDING_MS }, result: true };
     }).catch(() => false);
     if (!reserved) return err('Ez a név már foglalt, válassz másikat.', 409, { field: 'name' });
-    await store.setJSON('p/' + sha(token), { name: vn.name, key: vn.key, email, eh, pw, at: Date.now() });
+    await store.setJSON('p/' + sha(token), { name: vn.name, key: vn.key, email, eh, pw, at: Date.now(), pal: reqPal });
     try {
       await sendMail(email, 'Erősítsd meg a regisztrációt — PIC-ASS-O', mailWrap(`<p>Szia! Valaki (remélhetőleg te) fiókot kért a PIC-ASS-O rajzjátékban <b>${esc(vn.name)}</b> néven, ezzel az e-mail címmel.</p>
 ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
@@ -238,6 +257,47 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     return json({ ok: true, user: await publicUser(u2) }, 200, { 'set-cookie': sessionCookie(token) });
   }
 
+  // ---------- v4.43: belépés jelkulccsal (passkey, WebAuthn) ----------
+  // A jelkulcs a telefonon / gépen él (ujjlenyomat, arc vagy a képernyőzár kódja védi); a szerver csak a
+  // nyilvános felét ismeri. Egy jelkulcsos belépés a kétfaktoros kódot is kiváltja (eszköz + biometria).
+  const rpID = url.hostname, origin = url.origin;
+  if (action === 'pk-login-begin') {
+    if (await overLimit(store, 'pklb|' + ip, 30, 600_000)) return err('Túl sok próbálkozás, próbáld újra később.', 429);
+    const options = await generateAuthenticationOptions({ rpID, userVerification: 'preferred', timeout: 120_000 });
+    await store.setJSON('pc/' + sha(options.challenge), { exp: Date.now() + PK_CHALLENGE_MS });
+    return json({ ok: true, options });
+  }
+  if (action === 'pk-login-finish') {
+    if (await overLimit(store, 'pklf|' + ip, 30, 600_000)) return err('Túl sok próbálkozás, próbáld újra később.', 429);
+    const resp = asObj(body.response);
+    const credId = String(resp.id || '');
+    if (!/^[A-Za-z0-9_-]{16,1400}$/.test(credId)) return err('Hibás jelkulcs.', 400);
+    let challenge = '';
+    try { challenge = String(JSON.parse(Buffer.from(String(asObj(resp.response).clientDataJSON || ''), 'base64url').toString()).challenge || ''); } catch (e) {}
+    const ck = 'pc/' + sha(challenge);
+    const ch = challenge ? await store.get(ck, { type: 'json' }).catch(() => null) : null;
+    await store.delete(ck).catch(() => {});          // egy kihívás csak egyszer használható
+    if (!ch || Number(ch.exp) < Date.now()) return err('A belépés lejárt, próbáld újra.', 400);
+    const idx = await store.get(pkBlob(credId), { type: 'json' }).catch(() => null);
+    const owner = idx && idx.uid ? await getUser(store, idx.uid) : null;
+    const cred = owner && (owner.pk || []).find(k => k.id === credId);
+    if (!cred) return err('Ezt a jelkulcsot nem ismerjük — lehet, hogy törölted a fiókodból. Lépj be jelszóval.', 401);
+    let v;
+    try {
+      v = await verifyAuthenticationResponse({ response: resp, expectedChallenge: challenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: false,
+        credential: { id: cred.id, publicKey: Buffer.from(cred.pub, 'base64url'), counter: Number(cred.counter) || 0, transports: cred.transports } });
+    } catch (e) { return err('A jelkulcsot nem sikerült ellenőrizni.', 401); }
+    if (!v.verified) return err('A jelkulcsot nem sikerült ellenőrizni.', 401);
+    await updateJSON(store, 'u/' + owner.uid, raw => {
+      if (!raw) return { write: false };
+      raw.pk = (raw.pk || []).map(k => k.id === credId ? Object.assign(k, { counter: v.authenticationInfo.newCounter, used: Date.now() }) : k);
+      return { value: raw };
+    });
+    await lockClear(store, owner.eh);
+    const token = await createSession(store, owner.uid, req);
+    return json({ ok: true, user: await publicUser(await getUser(store, owner.uid)) }, 200, { 'set-cookie': sessionCookie(token) });
+  }
+
   // ---------- elfelejtett jelszó ----------
   if (action === 'forgot') {
     if (await overLimit(store, 'forgot|' + ip, 6, 3600_000)) return err('Túl sok próbálkozás, próbáld újra később.', 429);
@@ -248,6 +308,7 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     const idx = await store.get('e/' + eh, { type: 'json' }).catch(() => null);
     if (!idx || !idx.uid) return done;
     if (await overLimit(store, 'forgotmail|' + eh, 3, 3600_000) || !(await mailAllowed(store))) return done;
+    { const owner = await getUser(store, idx.uid); if (palOf(owner)) reqPal = palOf(owner); }
     const token = newToken(32), rh = sha(token);
     const old = await updateJSON(store, 'u/' + idx.uid, raw => {
       if (!raw) return { write: false, result: null };
@@ -273,6 +334,7 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     const pw = await hashPassword(body.password);
     await store.delete('r/' + rh).catch(() => {});
     await updateJSON(store, 'u/' + user.uid, raw => raw ? { value: Object.assign(raw, { pw, reset: '' }) } : { write: false });
+    if (palOf(user)) reqPal = palOf(user);
     await revokeSessions(store, user.uid);          // minden eszközről kiléptetjük
     await lockClear(store, user.eh);
     if (await mailAllowed(store)) await sendMail(user.email, 'Megváltozott a jelszavad — PIC-ASS-O', mailWrap(`<p>A PIC-ASS-O fiókod jelszava most megváltozott, és minden eszközről kiléptettünk.</p><p>Ha nem te voltál, azonnal kérj új jelszót a belépésnél, és nézd meg az e-mail fiókod biztonságát.</p>`)).catch(e => console.error(e));
@@ -290,6 +352,7 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
   }
   if (!s) return err('Ehhez be kell lépned.', 401, { login: true });
   const user = s.user;
+  if (palOf(user)) reqPal = palOf(user);
   const uk = 'u/' + user.uid;
   /** érzékeny műveletekhez újra kell a jelszó (és a hibás próbálkozás ugyanúgy számít, mint belépésnél) */
   const confirmPassword = async () => {
@@ -335,6 +398,7 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     if (softLimit('se|' + user.uid, 60, 600_000)) return err('Lassabban!', 429);
     const settings = cleanSettings(body.settings);
     await updateJSON(store, uk, raw => raw ? { value: Object.assign(raw, { settings }) } : { write: false });
+    if (settings['mail-colors'] !== (user.settings || {})['mail-colors']) await setSubPalette(user, cleanPalette(settings['mail-colors'])).catch(() => {});
     return json({ ok: true, settings });
   }
 
@@ -378,6 +442,44 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     return json({ ok: true });
   }
 
+  // ---------- v4.43: jelkulcs hozzáadása / törlése ----------
+  if (action === 'pk-reg-begin') {
+    if (softLimit('pkr|' + user.uid, 20, 600_000)) return err('Lassabban!', 429);
+    if ((user.pk || []).length >= MAX_PASSKEYS) return err(`Legfeljebb ${MAX_PASSKEYS} jelkulcsod lehet. Törölj egyet a régiek közül.`, 409);
+    const options = await generateRegistrationOptions({
+      rpName: 'PIC-ASS-O', rpID, userName: user.email, userDisplayName: user.name,
+      userID: new TextEncoder().encode(user.uid), attestationType: 'none', timeout: 120_000,
+      excludeCredentials: (user.pk || []).map(k => ({ id: k.id, transports: k.transports })),
+      authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' }
+    });
+    await updateJSON(store, uk, raw => raw ? { value: Object.assign(raw, { pkChal: { c: options.challenge, exp: Date.now() + PK_CHALLENGE_MS } }) } : { write: false });
+    return json({ ok: true, options });
+  }
+  if (action === 'pk-reg-finish') {
+    const chal = asObj(user.pkChal);
+    if (!chal.c || Number(chal.exp) < Date.now()) return err('A hozzáadás lejárt, kezdd újra.', 400);
+    await updateJSON(store, uk, raw => { if (!raw) return { write: false }; delete raw.pkChal; return { value: raw }; });
+    let v;
+    try { v = await verifyRegistrationResponse({ response: asObj(body.response), expectedChallenge: chal.c, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: false }); }
+    catch (e) { return err('A jelkulcsot nem sikerült ellenőrizni.', 400); }
+    if (!v.verified || !v.registrationInfo) return err('A jelkulcsot nem sikerült ellenőrizni.', 400);
+    const c = v.registrationInfo.credential;
+    const rec = { id: c.id, pub: Buffer.from(c.publicKey).toString('base64url'), counter: c.counter || 0,
+      transports: Array.isArray(c.transports) ? c.transports.slice(0, 6) : undefined, at: Date.now(), name: deviceLabel(req) };
+    const w = await store.setJSON(pkBlob(c.id), { uid: user.uid }, { onlyIfNew: true }).catch(() => null);
+    if (!w || w.modified === false) return err('Ez a jelkulcs már egy fiókhoz tartozik.', 409);
+    await updateJSON(store, uk, raw => raw ? { value: Object.assign(raw, { pk: (raw.pk || []).concat(rec).slice(-MAX_PASSKEYS) }) } : { write: false });
+    if (await mailAllowed(store)) await sendMail(user.email, 'Új jelkulcs a fiókodon — PIC-ASS-O', mailWrap(`<p>A PIC-ASS-O fiókodhoz most egy új jelkulcsot adtak hozzá (${esc(rec.name)}). Ezzel jelszó nélkül be lehet lépni.</p><p>Ha nem te voltál, azonnal lépj be, töröld a jelkulcsot a fiókodban, és változtass jelszót.</p>`)).catch(e => console.error(e));
+    return json({ ok: true, user: await publicUser(await getUser(store, user.uid)) });
+  }
+  if (action === 'pk-delete') {
+    const id = String(body.id || '');
+    if (!(user.pk || []).some(k => k.id === id)) return err('Nincs ilyen jelkulcs.', 404);
+    await updateJSON(store, uk, raw => raw ? { value: Object.assign(raw, { pk: (raw.pk || []).filter(k => k.id !== id) }) } : { write: false });
+    await store.delete(pkBlob(id)).catch(() => {});
+    return json({ ok: true, user: await publicUser(await getUser(store, user.uid)) });
+  }
+
   // ---------- jelszócsere ----------
   if (action === 'password') {
     const bad = await confirmPassword();
@@ -401,6 +503,7 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     await removePushOf(user.uid).catch(() => {});
     if (user.reset) await store.delete('r/' + user.reset).catch(() => {});
     await store.delete('st/' + user.uid).catch(() => {});
+    await Promise.all((user.pk || []).map(k => store.delete(pkBlob(k.id)).catch(() => {})));
     await store.delete(uk).catch(() => {});
     await store.delete('e/' + user.eh).catch(() => {});
     await store.delete(nameBlob(user.key)).catch(() => {});

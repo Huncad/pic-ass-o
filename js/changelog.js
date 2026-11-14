@@ -2,6 +2,11 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.43', changes:[
+    'Új: belépés jelkulccsal (passkey) — jelszó helyett ujjlenyomattal, arcfelismeréssel vagy a telefonod képernyőzár-kódjával. A fiókodban add hozzá („🔑 Jelkulcsok” → Hozzáadás), utána a belépésnél a „Belépés jelkulccsal” gomb elég.',
+    'A játék levelei (megerősítés, értesítő, biztonsági levelek) a játékban beállított színvilágodban érkeznek — ha nálad szürke a téma, a levél is szürke.',
+    'A kirúgott játékos 24 óráig nem léphet vissza abba a szobába: más névvel, újratöltve, másik böngészőfülből sem. A tiltás az eszközére, a fiókjára és az IP-címére is vonatkozik (ha nem ugyanazon a wifin van, mint a szobanyitó).'
+  ]},
   { version:'4.42', changes:[
     'Javítva: előfordult, hogy a tippek „beragadtak” — a chat működött, de a tippek nem jelentek meg, a jó tippet sem fogadta el a játék, újraküldésnél pedig azt írta, hogy már elküldted. Mostantól a játék figyeli, hogy a tipp célba ért-e: ha nem, szól, visszaadja a tippet, újraszinkronizál, és a tipp újra elküldhető. A rajzoló a visszaállított rajz után is fogadja a tippeket, és ha mégsem tud, megmondja, miért.',
     'Regisztrált játékosnál MINDEN beállítás (téma, sötét mód, avatar, hangerők, zene, chat helye és mérete, a szobanyitás beállításai stb.) a fiókkal megy: más eszközön belépve pontosan ugyanazok lesznek. Ha egy másik eszközön változtatsz, ide visszatérve átveszi.',

@@ -92,7 +92,7 @@ async function drainQueue(store, self, budgetMs) {
 ${btn(it.joinUrl, '✏️ Regisztrálok')}`, unsub), unsub);
       }
       return sendMail(it.to, `🎨 Új szoba nyílt: ${it.name}`,
-        mailWrap(`<p><b>${esc(it.host)}</b> most nyitotta meg a(z) <b>„${esc(it.name)}”</b> szobát. Gyere rajzolni!</p>${btn(it.joinUrl, '🚀 Csatlakozás')}`, unsub), unsub);
+        mailWrap(`<p><b>${esc(it.host)}</b> most nyitotta meg a(z) <b>„${esc(it.name)}”</b> szobát. Gyere rajzolni!</p>${btn(it.joinUrl, '🚀 Csatlakozás')}`, unsub), unsub, it.pal);   // v4.43: a játékos saját színeivel
     }));
     sent += res.filter(r => r.status === 'fulfilled').length;
     res.forEach(r => { if (r.status === 'rejected') console.error('levélküldési hiba', r.reason && r.reason.message); });
@@ -243,7 +243,7 @@ export default async (req) => {
       if (d.notified[code]) return { write: false, result: { skipped: 'already' } };
       d.notified[code] = Date.now();
       d.lastNotifyAt = Date.now();
-      return { value: d, result: { legacyOver: Number(d.legacyUntil) > 0 && Date.now() > Number(d.legacyUntil), list: Object.values(d.subs).filter(s => s.status === 'ok').map(s => ({ to: s.email, ut: s.ut })) } };
+      return { value: d, result: { legacyOver: Number(d.legacyUntil) > 0 && Date.now() > Number(d.legacyUntil), list: Object.values(d.subs).filter(s => s.status === 'ok').map(s => ({ to: s.email, ut: s.ut, pal: s.pal })) } };
     });
     if (res.skipped) return json({ ok: true, skipped: res.skipped });
     const joinUrl = `${site}/?join=${encodeURIComponent(code)}`;

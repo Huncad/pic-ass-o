@@ -67,7 +67,25 @@ const MAX_WS_BUFFER = 8 * 1024 * 1024;           // ha egy lassú kliens kimenő
 const MAX_CONN_PER_IP = 40;                      // egyszerre ennyi kapcsolat egy IP-ről (egy család bőven elfér)
 const MAX_RING_BYTES = 16 * 1024 * 1024; // játékosonként ennyi megőrzött üzenet fér el
 const MAX_RING_TOTAL = 96 * 1024 * 1024; // audit: az összes megőrzött üzenet együtt (a konténer 512 MB)
-const KICK_IP_BLOCK_MS = 10 * 60_000;    // audit: kirúgás után ennyi ideig az IP sem léphet vissza abba a szobába
+const KICK_BAN_MS = 24 * 3600_000;      // v4.43: a kirúgott ennyi ideig nem léphet vissza abba a szobába — más névvel, újratöltve, másik böngészőből sem
+// v4.43: szoba -> kitiltások. Külön a szoba adataitól, mert a szoba üresen egy pillanatra megszűnhet (a tiltás akkor is marad).
+const kickBans = new Map();   // roomId -> { ips: Map(ip -> lejárat), devs: Map, uids: Map, peers: Set, ownerIps: Set }
+function kickBanOf(roomId, create){
+  let b = kickBans.get(roomId);
+  if(!b && create){
+    if(kickBans.size > 2000){ const now = Date.now(); for(const [k, v] of kickBans) if(v.until < now) kickBans.delete(k); }
+    b = { ips: new Map(), devs: new Map(), uids: new Map(), peers: new Set(), until: 0 }; kickBans.set(roomId, b);
+  }
+  return b || null;
+}
+function isKicked(roomId, peer, ownerIp){
+  const b = kickBans.get(roomId), now = Date.now();
+  if(!b) return false;
+  if(b.until < now){ kickBans.delete(roomId); return false; }
+  const hit = (map, k) => k && (map.get(k) || 0) > now;
+  // az IP-tiltás nem vonatkozik arra, aki a szobanyitóval egy hálózaton van (különben a szobanyitó sem jöhetne vissza egy újratöltés után)
+  return b.peers.has(peer.id) || hit(b.devs, peer.dev) || (peer.acct && hit(b.uids, peer.acct.uid)) || (peer.ip !== ownerIp && hit(b.ips, peer.ip));
+}
 const HEARTBEAT_MS = 5_000;
 // v4.32: játékon belüli akciók korlátja (üzenet / időablak / küldő). A böngészők
 // maguk is korlátoznak (szigorúbban), ide csak egy módosított kliens áradata jut el:
@@ -745,6 +763,7 @@ wss.on('connection', (ws, req) => {
         clearTimeout(old.dropTimer);
         if(old.ws && old.ws !== ws){ try{ old.ws.close(4002, 'átvéve'); }catch(e){} }
         old.ws = ws; old.ip = ip; old.dirSub = !!m.dir; old.v2 = v2;
+        if(/^[A-Za-z0-9]{16,40}$/.test(String(m.dev || ''))) old.dev = String(m.dev);
         peer = old;
         const resumedRoom = peer.room && m.room === peer.room;
         ws.send(JSON.stringify({ t:'welcome', v:2, resumed: !!resumedRoom, online: peers.size, s: peer.inSeq,
@@ -756,7 +775,7 @@ wss.on('connection', (ws, req) => {
         again.forEach(x => { ws.send(x.str); x.sent = true; });
         log('visszatért', peer.id.slice(0,6), resumedRoom ? `(${again.length} üzenet újra)` : '');
       } else {
-        peer = { id: m.id, token: m.token, ws, room: null, ring: [], ringBytes: 0, outQ: 0, inSeq: 0, v2, dropTimer: null, ip, dirSub: !!m.dir };
+        peer = { id: m.id, token: m.token, dev: /^[A-Za-z0-9]{16,40}$/.test(String(m.dev || '')) ? String(m.dev) : '', ws, room: null, ring: [], ringBytes: 0, outQ: 0, inSeq: 0, v2, dropTimer: null, ip, dirSub: !!m.dir };
         peers.set(peer.id, peer);
         ws.send(JSON.stringify({ t:'welcome', v:2, fresh:true, resumed:false, peers: [], online: peers.size, s: 0 }));
       }
@@ -773,11 +792,14 @@ wss.on('connection', (ws, req) => {
       case 'join': {
         if(!isStr(m.room, 128)) return;
         if(peer.room === m.room) return;
+        if(/^[A-Za-z0-9]{16,40}$/.test(String(m.dev || ''))) peer.dev = String(m.dev);
         if(peer.room) leaveRoom(peer, 'új szoba');
         {
-          // audit: akit a szobanyitó kirúgott, az (és rövid ideig az IP-je) nem léphet vissza
+          // v4.43: akit a szobanyitó kirúgott, az 24 óráig nem léphet vissza: se ugyanazzal a kapcsolattal, se ugyanarról
+          // az eszközről, se a fiókjával, se ugyanarról az IP-címről (más névvel, újratöltve sem)
           const inf = roomInfo.get(m.room);
-          if(inf && inf.banned && (inf.banned.has(peer.id) || (inf.ipBlock.get(peer.ip) || 0) > Date.now())){ ws.send(JSON.stringify({ t:'error', e:'kicked' })); return; }
+          const ownerIp = inf && peers.get(inf.owner) ? peers.get(inf.owner).ip : '';
+          if(isKicked(m.room, peer, ownerIp)){ ws.send(JSON.stringify({ t:'error', e:'kicked' })); log('kirúgott próbált visszalépni', peer.id.slice(0,6)); return; }
         }
         let set = rooms.get(m.room);
         if(!set){
@@ -789,7 +811,7 @@ wss.on('connection', (ws, req) => {
         set.add(peer.id);
         peer.room = m.room;
         let info = roomInfo.get(m.room);
-        if(!info){ info = { createdAt: Date.now(), ever: new Set(), ips: new Set(), owner: peer.id, banned: new Set(), ipBlock: new Map() }; roomInfo.set(m.room, info); }
+        if(!info){ info = { createdAt: Date.now(), ever: new Set(), ips: new Set(), owner: peer.id }; roomInfo.set(m.room, info); }
         info.ever.add(peer.id); if(info.ips.size < 50) info.ips.add(peer.ip);
         if(peer.acct){ info.accts = info.accts || new Map(); info.accts.set(peer.acct.key, peer.acct); }
         ws.send(JSON.stringify({ t:'joined', room: m.room, peers: others, owner: info.owner }));
@@ -806,8 +828,13 @@ wss.on('connection', (ws, req) => {
         if(!info || info.owner !== peer.id || !isStr(m.id, 64) || m.id === peer.id) return;
         const target = peers.get(m.id);
         if(!target || target.room !== peer.room) return;
-        if(info.banned.size < 500) info.banned.add(target.id);
-        if(target.ip !== peer.ip && info.ipBlock.size < 500) info.ipBlock.set(target.ip, Date.now() + KICK_IP_BLOCK_MS);   // közös wifin (ugyanaz az IP) nem tiltunk IP-t
+        const b = kickBanOf(peer.room, true), until = Date.now() + KICK_BAN_MS;
+        b.until = until;
+        if(b.peers.size < 500) b.peers.add(target.id);
+        if(target.dev && b.devs.size < 500) b.devs.set(target.dev, until);
+        if(target.acct && b.uids.size < 500) b.uids.set(target.acct.uid, until);
+        if(target.ip !== peer.ip && b.ips.size < 500) b.ips.set(target.ip, until);   // közös wifin (a szobanyitóval egy IP) az IP-t nem, csak az eszközt és a fiókot tiltjuk
+        log('kirúgás', target.id.slice(0,6), target.ip !== peer.ip ? '(IP is tiltva)' : '(közös hálózat: eszköz/fiók tiltva)');
         try{ if(target.ws && target.ws.readyState === 1) target.ws.send(JSON.stringify({ t:'error', e:'kicked' })); }catch(e){}
         leaveRoom(target, 'kirúgva');
         return;

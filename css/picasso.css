@@ -2669,3 +2669,11 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   @keyframes greactIn{ from{ transform:scale(.85); opacity:0; } to{ transform:none; opacity:1; } }
   .gentry.greact-pressing, .fd-guess-line.greact-pressing{ transform:scale(.98); transition:transform .3s; }
   .gentry, .fd-guess-line{ -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  /* v4.43: jelkulcs */
+  .acct-or{ text-align:center; margin-top:14px; }
+  .acct-or > span{ display:block; color:var(--chalk-dim); font-size:.85rem; margin-bottom:6px; }
+  .acct-or button{ width:100%; }
+  .acct-pk{ margin:6px 0 12px; padding:10px 12px; border-radius:12px; background:rgba(0,0,0,.16); }
+  .acct-pk-h{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  .acct-pk-list{ list-style:none; margin:6px 0 0; padding:0; display:grid; gap:6px; }
+  .acct-pk-list li{ display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:.86rem; }

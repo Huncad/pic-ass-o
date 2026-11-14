@@ -42,7 +42,8 @@ export async function setAccountSub(user, on, store = subsStore()) {
     }
     if (cur && cur.status === 'ok' && cur.uid === user.uid) return { write: false, result: { ok: true, on: true } };
     if (!cur && Object.keys(d.subs).length >= MAX_SUBS) return { write: false, result: { error: 'full' } };
-    d.subs[h] = { email: user.email, status: 'ok', ut: (cur && cur.ut) || randomBytes(24).toString('base64url'), uid: user.uid,
+    const pal = (user.settings && user.settings['mail-colors']) || (user.regPal ? JSON.stringify(user.regPal) : undefined);
+    d.subs[h] = { email: user.email, status: 'ok', pal: typeof pal === 'string' ? pal.slice(0, 400) : undefined, ut: (cur && cur.ut) || randomBytes(24).toString('base64url'), uid: user.uid,
       at: (cur && cur.at) || Date.now(), okAt: Date.now(), consent: 'v4.40: fiókhoz kötött értesítés új szobákról (16+, a fiókban bekapcsolva)' };
     return { value: d, result: { ok: true, on: true } };
   });
@@ -72,4 +73,16 @@ export async function removeSubsOf(uid, store = subsStore()) {
     hit.forEach(([h]) => delete d.subs[h]);
     return { value: d };
   }).catch(() => {});
+}
+
+/** v4.43: a játékos színvilága a feliratkozásnál is (az értesítő levél ezekkel a színekkel megy). */
+export async function setSubPalette(user, pal, store = subsStore()) {
+  const h = subHash(user.email);
+  return updateJSON(store, SUBS_KEY, raw => {
+    const d = tidySubs(raw);
+    const cur = d.subs[h];
+    if (!cur || cur.uid !== user.uid) return { write: false };
+    cur.pal = pal ? JSON.stringify(pal) : undefined;
+    return { value: d };
+  });
 }
