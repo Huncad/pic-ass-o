@@ -2147,8 +2147,8 @@
   .tile-ico{ width:32px; height:32px; font-size:1.05rem; }
   .tile-emoji{ font-size:1.3rem; }
   .home-foot{ margin-top:10px; padding-top:10px; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 14px; }
-  .home-foot .home-stats{ margin:0; }
-  .home-foot .stats-open-btn{ padding:6px 14px; }
+  .home-foot .home-stats{ margin:0; flex-basis:100%; text-align:center; }
+  .home-foot .stats-open-btn{ padding:6px 14px; margin:0; }
 
   /* v4.16: a fő művelet a játékoskártyában, a név alatt */
   #player-card .create-wrap{ animation:none; }
