@@ -1,7 +1,7 @@
 import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 import { Account } from './account.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.38';
+const APP_VERSION = '4.40';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -226,7 +226,7 @@ const SRV = (function(){
   try{ const o = localStorage.getItem('picasso-server-url'); if(o) base = o; }catch(e){}
   base = String(base || '').trim().replace(/\/+$/, '');
   const api = { enabled: /^https?:\/\//.test(base), base, up:false, everUp:false, onDir:null, onUp:null };
-  if(!api.enabled) { api.ready = ()=>Promise.resolve(false); api.send = ()=>false; api.attach = ()=>{}; api.detach = ()=>{}; api.setAuth = ()=>{}; return api; }
+  if(!api.enabled) { api.ready = ()=>Promise.resolve(false); api.send = ()=>false; api.attach = ()=>{}; api.detach = ()=>{}; api.setAuth = ()=>{}; api.tokenHash = async ()=>''; return api; }
   const rnd = new Uint8Array(24); crypto.getRandomValues(rnd);
   const token = Array.from(rnd, b=>b.toString(16).padStart(2,'0')).join('');
   let ws = null, backoff = 800, retryTimer = 0, cur = null, gone = false;
@@ -357,6 +357,8 @@ const SRV = (function(){
   // v4.40: a fiók névigazoló jegye — a szerver ezzel tudja, hogy a regisztrált név tényleg a miénk
   let authTicket = '';
   api.setAuth = (k)=>{ authTicket = String(k || ''); if(authTicket && api.up) raw({ t:'auth', k: authTicket }); };
+  // a jegyet a Netlify ennek a kapcsolatnak a titkos kulcsához köti (csak a lenyomatát kapja meg)
+  api.tokenHash = async ()=>{ const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)); return Array.from(new Uint8Array(d), b=>b.toString(16).padStart(2,'0')).join(''); };
   api.attach = (r)=>{ cur = r; };
   api.detach = (r)=>{ if(cur === r) cur = null; };
   open();
@@ -11475,6 +11477,7 @@ try{
   Account.init({ selfId, hooks: {
     click: ()=>{ try{ sndClick(); }catch(e){} },
     onTicket: (tk)=>{ try{ SRV.setAuth(tk); }catch(e){} },
+    tokenHash: ()=>SRV.tokenHash(),
     onStats: ()=>{ try{ renderHomeStats(); if(!document.getElementById('stats-overlay').classList.contains('hidden')){ renderStatsPage(); fitStatsBox(); } }catch(e){} },
     onSubCount: (n)=>{ try{ showSubCount(n); }catch(e){} }
   } });

@@ -19,7 +19,7 @@ export const accountStore = () => getStore({ name: 'picasso-accounts', consisten
 
 export const SESSION_MS = 30 * 86400_000;
 export const SESSION_RENEW_MS = 15 * 86400_000;
-export const TICKET_MS = 12 * 3600_000;
+export const TICKET_MS = 15 * 60_000;          // rövid életű: a böngésző pár percenként újat kér
 export const COOKIE = '__Host-picasso_s';
 const MAX_SESSIONS = 10;
 
@@ -141,10 +141,14 @@ export async function signPayload(obj, store) {
   const sig = sign('sha256', Buffer.from(body), { key: k.priv, dsaEncoding: 'ieee-p1363' }).toString('base64url');
   return `${body}.${sig}`;
 }
-/** Jegy: a név + a játékos kapcsolat-azonosítója (pid) + lejárat, aláírva. */
-export async function makeTicket(user, pid, store) {
+/**
+ * Jegy: a név + a játékos kapcsolat-azonosítója (pid) + lejárat, aláírva.
+ * `th`: a játékszerver-kapcsolat titkos kulcsának lenyomata — a szerver csak attól fogadja el a jegyet,
+ * aki a kulcsot ismeri, így egy szobatárs által látott jegyet más nem tud a szervernél felhasználni.
+ */
+export async function makeTicket(user, pid, th, store) {
   const exp = Date.now() + TICKET_MS;
-  return { ticket: await signPayload({ u: user.uid, n: user.name, p: String(pid), e: exp }, store), exp };
+  return { ticket: await signPayload({ u: user.uid, n: user.name, p: String(pid), h: String(th || ''), e: exp }, store), exp };
 }
 
 // ---------- tartós sebességkorlát (a tárolóban, így példányok között is él) ----------

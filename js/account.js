@@ -49,7 +49,8 @@ async function fetchTicket(){
   if(ticketBusy) return ticketBusy;
   ticketBusy = (async ()=>{
     try{
-      const r = await call({ action:'ticket', pid: selfId });
+      let th = ''; try{ th = hooks.tokenHash ? await hooks.tokenHash() : ''; }catch(e){}
+      const r = await call({ action:'ticket', pid: selfId, th });
       if(r.ok && r.j.ticket){ ticket = r.j.ticket; ticketExp = N(r.j.exp); try{ hooks.onTicket && hooks.onTicket(ticket); }catch(e){} }
     }catch(e){}
     ticketBusy = null;
@@ -57,7 +58,9 @@ async function fetchTicket(){
   })();
   return ticketBusy;
 }
-setInterval(()=>{ if(user && (!ticket || ticketExp - Date.now() < 3 * 3600_000)) fetchTicket(); }, 10 * 60_000);
+// a jegy 15 percig él: pár percenként frissítjük, hogy egy újonnan belépő szobatárs mindig érvényeset lásson
+setInterval(()=>{ if(user && (!ticket || ticketExp - Date.now() < 9 * 60_000)) fetchTicket(); }, 60_000);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible' && user && ticketExp - Date.now() < 9 * 60_000) fetchTicket(); });
 
 let pubKeyP = null;
 function pubKey(){

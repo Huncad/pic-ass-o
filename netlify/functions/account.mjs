@@ -301,10 +301,11 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
 
   // névigazoló jegy az aktuális játék-kapcsolathoz
   if (action === 'ticket') {
-    if (softLimit('t|' + user.uid, 60, 600_000)) return err('Lassabban!', 429);
+    if (softLimit('t|' + user.uid, 120, 600_000)) return err('Lassabban!', 429);
     const pid = String(body.pid || '');
     if (!/^[A-Za-z0-9_-]{8,64}$/.test(pid)) return err('bad pid');
-    return json(Object.assign({ ok: true, name: user.name }, await makeTicket(user, pid, store)));
+    const th = /^[0-9a-f]{64}$/.test(String(body.th || '')) ? String(body.th) : '';
+    return json(Object.assign({ ok: true, name: user.name }, await makeTicket(user, pid, th, store)));
   }
 
   // statisztika: verziózott, hogy két eszköz ne írja felül egymást

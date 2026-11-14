@@ -23,7 +23,8 @@ const signed = obj => {
   const body = Buffer.from(JSON.stringify(obj)).toString('base64url');
   return body + '.' + crypto.sign('sha256', Buffer.from(body), { key: acctKeys.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
 };
-const ticketFor = (pid, name = 'Péter', uid = 'uid-peter') => signed({ u: uid, n: name, p: pid, e: Date.now() + 60000 });
+const th = token => crypto.createHash('sha256').update(token).digest('hex');
+const ticketFor = (pid, name = 'Péter', uid = 'uid-peter', token = 'tok-' + pid) => signed({ u: uid, n: name, p: pid, h: th(token), e: Date.now() + 60000 });
 const acctSrv = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   res.setHeader('content-type', 'application/json');
@@ -184,7 +185,12 @@ test('névvédelem: regisztrált névvel csak érvényes jeggyel lehet bemutatko
   fake.ws.send(JSON.stringify({ t: 'auth', k: ticketFor('real0001') }));
   await sleep(100);
   assert.equal(fake.authed.ok, false);
-  const forged = ticketFor('fake0001').replace(/.$/, c => c === 'A' ? 'B' : 'A');
+  // jó azonosítóra szóló, de más kapcsolat-kulcsához kötött jegy (pl. a tulajdonos régi azonosítóját átvevő támadó)
+  fake.ws.send(JSON.stringify({ t: 'auth', k: ticketFor('fake0001', 'Péter', 'uid-peter', 'a-tulajdonos-kulcsa') }));
+  await sleep(100);
+  assert.equal(fake.authed.ok, false);
+  const good = ticketFor('fake0001'), mid = good.length - 40;   // az aláírás közepén egy karakter megváltoztatva
+  const forged = good.slice(0, mid) + (good[mid] === 'A' ? 'B' : 'A') + good.slice(mid + 1);
   fake.ws.send(JSON.stringify({ t: 'auth', k: forged }));
   await sleep(100);
   assert.equal(fake.authed.ok, false);

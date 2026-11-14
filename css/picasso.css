@@ -2642,7 +2642,7 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   .acct-danger-btn{ background:var(--red) !important; }
   .acct-qr{ display:flex; justify-content:center; margin:8px 0; }
   .acct-qr canvas{ border-radius:10px; max-width:100%; height:auto; }
-  #acct-totp-secret{ font-size:1rem; letter-spacing:.06em; word-break:break-all; user-select:all; }
+  #acct-totp-secret{ font-size:1rem; letter-spacing:.04em; display:block; margin-top:4px; user-select:all; }
   .acct-codes{ list-style:none; padding:12px; margin:8px 0; display:grid; grid-template-columns:1fr 1fr; gap:6px 16px; background:rgba(0,0,0,.2); border-radius:12px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:1.02rem; user-select:all; }
   .acct-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
   .acct-btn{ padding:6px 12px; border-radius:10px; }

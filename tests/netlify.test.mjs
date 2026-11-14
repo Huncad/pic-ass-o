@@ -266,13 +266,14 @@ test('fiók: regisztráció, megerősítés, belépés, névvédelem', async () 
   assert.equal((await accPost({ action: 'ticket', pid: 'abcdefgh12345678' }, cookie, { origin: 'https://evil.example' })).status, 403);
   assert.equal((await accPost({ action: 'ticket', pid: 'abcdefgh12345678' })).status, 401);
   // névigazoló jegy: a nyilvános kulccsal ellenőrizhető, a kapcsolat-azonosítóhoz kötött
-  const t = await accPost({ action: 'ticket', pid: 'abcdefgh12345678' }, cookie);
+  const t = await accPost({ action: 'ticket', pid: 'abcdefgh12345678', th: 'ab'.repeat(32) }, cookie);
   const { key } = await accGet('?pubkey=1');
   const { createPublicKey, verify } = await import('node:crypto');
   const [bodyB64, sig] = t.body.ticket.split('.');
   assert.ok(verify('sha256', Buffer.from(bodyB64), { key: createPublicKey({ key, format: 'jwk' }), dsaEncoding: 'ieee-p1363' }, Buffer.from(sig, 'base64url')));
   const claims = JSON.parse(Buffer.from(bodyB64, 'base64url').toString());
-  assert.equal(claims.n, 'Péter'); assert.equal(claims.p, 'abcdefgh12345678'); assert.ok(claims.e > Date.now());
+  assert.equal(claims.n, 'Péter'); assert.equal(claims.p, 'abcdefgh12345678'); assert.equal(claims.h, 'ab'.repeat(32));
+  assert.ok(claims.e > Date.now() && claims.e < Date.now() + 20 * 60000, 'a jegy rövid életű');
   assert.ok(!JSON.stringify(await accGet('?pubkey=1')).includes('"d"'), 'a titkos kulcs nem szivárog');
   // kilépés után a süti már nem ér semmit
   await accPost({ action: 'logout' }, cookie);

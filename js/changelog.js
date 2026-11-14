@@ -2,6 +2,16 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.40', changes:[
+    'Új: regisztráció és fiók (önkéntes — fiók nélkül ugyanúgy játszhatsz). A főmenüben a neved fölött a „👤 Belépés / Regisztráció” gombbal éred el. A regisztrációt e-mailben kell megerősíteni.',
+    'Névvédelem: a regisztrált nevet csak a gazdája használhatja — más (ékezet vagy kis-nagybetű eltéréssel sem) nem léphet be vele. A regisztrált játékosok neve mellett ✔ jelvény látszik a szobában, a szobalistán és a ranglistán.',
+    'Kétfaktoros belépés (választható): a fiókodban bekapcsolhatod, hogy belépéskor a jelszó mellé a telefonod hitelesítő alkalmazásának kódja is kelljen. Tartalék kódokat is kapsz.',
+    'A statisztikád és a beállításaid (avatar, téma, hang) belépve minden eszközödön ugyanazok. Az eszközön addig gyűjtött statisztika az első belépéskor hozzáadódik a fiókodhoz.',
+    'A közös ranglistán mostantól csak regisztrált játékosok szerepelnek; a vendégek neve nem tárolódik.',
+    'Értesítést új szobákról (push és e-mail) mostantól csak regisztrált játékos kérhet — belépve egy koppintás, külön megerősítő levél nélkül. A korábbi feliratkozók levelet kaptak: 30 napjuk van ugyanazzal a címmel regisztrálni, különben a feliratkozásuk megszűnik.',
+    'A fiókodban van jelszócsere, elfelejtett jelszó, kiléptetés a többi eszközről és a fiók azonnali, végleges törlése. Az adatvédelmi tájékoztató kibővült a fiókokkal.',
+    'A főmenü alján a „Közös ranglista” link és a két gomb rendezetten, egy vonalban jelenik meg.'
+  ]},
   { version:'4.38', changes:[
     'Bizonyos ablakméreteknél (főleg Windowson) az avatarok megnyúlva jelentek meg — most mindig négyzetesek, az emoji a csempe méretéhez igazodik.',
     'A főmenü csempéinek felirata (pl. „Adatvédelem”) szűk panelben sem lóg ki.'

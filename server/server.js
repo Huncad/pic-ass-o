@@ -815,7 +815,9 @@ wss.on('connection', (ws, req) => {
       case 'auth': {
         // v4.40: névigazoló jegy — a Netlify írta alá, és ehhez a kapcsolat-azonosítóhoz szól
         const c = verifySigned(m.k);
-        if(!c || c.p !== peer.id || !isStr(c.u, 64) || !isStr(c.n, 16) || !nameKey(c.n)){ ws.send(JSON.stringify({ t:'authed', ok:false })); return; }
+        // a jegy a kapcsolat titkos kulcsához is kötött: aki csak látta a jegyet (pl. szobatársként), nem tudja felhasználni
+        const th = crypto.createHash('sha256').update(String(peer.token)).digest('hex');
+        if(!c || c.p !== peer.id || c.h !== th || !isStr(c.u, 64) || !isStr(c.n, 16) || !nameKey(c.n)){ ws.send(JSON.stringify({ t:'authed', ok:false })); return; }
         peer.acct = { uid: c.u, name: c.n, key: nameKey(c.n) };
         const info = peer.room && roomInfo.get(peer.room);
         if(info){ info.accts = info.accts || new Map(); info.accts.set(peer.acct.key, peer.acct); }
