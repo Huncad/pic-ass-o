@@ -424,8 +424,7 @@ function paintPasskeys(){
   { const ph = $('acct-pk-add-phone'), hint = $('acct-pk-phone-hint'); const show = pkSupported() && !isPhone(); if(ph) ph.classList.toggle('hidden', !show); if(hint) hint.classList.toggle('hidden', !show); }
   // v4.47: ahol a gép maga nem tud jelkulcsot tárolni (pl. Linux), a gépi gomb helyett egy rövid magyarázat
   if(!isPhone()) localPasskeyOk().then(ok=>{
-    const loc = $('acct-pk-add'), why = $('acct-pk-nolocal');
-    if(loc) loc.classList.toggle('hidden', !ok);
+    const why = $('acct-pk-nolocal');
     if(why){ why.textContent = ok ? '' : noLocalText(); why.classList.toggle('hidden', ok); }
   });
   list.textContent = '';
@@ -459,7 +458,7 @@ function osName(){
 function noLocalText(){
   const os = osName();
   if(os === 'windows') return 'Ezen a gépen nincs beállítva Windows Hello, ezért ide nem lehet jelkulcsot tenni. Állítsd be (Beállítások → Fiókok → Bejelentkezési lehetőségek → PIN), vagy használd a telefonodat.';
-  if(os === 'linux') return 'Linuxon a böngészők nem tudnak jelkulcsot a gépen tárolni — használd a telefonodat: a „📱 A telefonomra” gombbal hozz létre jelkulcsot, és a gépen a belépésnél a QR-kódot olvasd be vele.';
+  if(os === 'linux') return 'Linuxon a rendszer maga nem tárol jelkulcsot, de egy jelszókezelő igen: a Chrome bejelentkezve a Google Jelszókezelőbe teszi, vagy egy bővítmény (Bitwarden, KeePassXC, 1Password, Proton Pass). Ha ilyened van, próbáld az „Ezen az eszközön” gombot; ha nincs, a „📱 A telefonomra” gombbal a telefonodra tehetsz jelkulcsot.';
   return 'Ez a gép / böngésző nem tud jelkulcsot tárolni — használd a telefonodat a „📱 A telefonomra” gombbal.';
 }
 const isPhone = ()=> /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -469,13 +468,14 @@ async function addPasskey(phone){
   msg('acct-m-profile', phone === true ? '📱 Olvasd be a megjelenő QR-kódot a telefonoddal, és erősítsd meg ott…' : 'Kövesd a telefonod / géped utasításait…');
   try{
     const W = await loadWebAuthn();
-    // v4.47: ha a gépnek nincs saját jelkulcs-tárolója, a gomb el sem látszik (lásd paintPasskeys) — itt csak biztosra megyünk
-    if(phone !== true && !isPhone() && !(await localPasskeyOk())){ msg('acct-m-profile', noLocalText(), 'bad'); paintPasskeys(); return; }
+    // v4.48: a gombot akkor is megpróbáljuk, ha a rendszernek nincs saját tárolója — egy jelszókezelő (Google Jelszókezelő,
+    // Bitwarden, KeePassXC, 1Password…) ilyenkor is el tudja menteni. Ha nem sikerül, a hibaüzenet elmondja a lehetőségeket.
+    const noLocal = phone !== true && !isPhone() && !(await localPasskeyOk());
     const b = await call({ action:'pk-reg-begin', phone: phone === true });
     if(!b.ok){ msg('acct-m-profile', b.j.error || 'Nem sikerült.', 'bad'); return; }
     let resp;
     try{ resp = await W.startRegistration({ optionsJSON: b.j.options }); }
-    catch(e){ msg('acct-m-profile', pkCancelled(e) ? (phone === true ? 'Megszakítva.' : 'Megszakítva. (Ha a gép QR-kódot mutatott, az a telefonos út — ehhez inkább a „📱 A telefonomra” gombot használd.)') : (e && e.name === 'InvalidStateError' ? 'Ezen az eszközön már van jelkulcsod ehhez a fiókhoz.' : 'Ez az eszköz most nem tudott jelkulcsot létrehozni.'), pkCancelled(e) ? '' : 'bad'); return; }
+    catch(e){ msg('acct-m-profile', noLocal ? noLocalText() : pkCancelled(e) ? (phone === true ? 'Megszakítva.' : 'Megszakítva. (Ha a gép QR-kódot mutatott, az a telefonos út — ehhez inkább a „📱 A telefonomra” gombot használd.)') : (e && e.name === 'InvalidStateError' ? 'Ezen az eszközön már van jelkulcsod ehhez a fiókhoz.' : 'Ez az eszköz most nem tudott jelkulcsot létrehozni.'), pkCancelled(e) ? '' : 'bad'); return; }
     const f = await call({ action:'pk-reg-finish', response: resp });
     if(!f.ok){ msg('acct-m-profile', f.j.error || 'Nem sikerült.', 'bad'); return; }
     user.passkeys = f.j.user.passkeys;

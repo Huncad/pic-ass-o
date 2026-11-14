@@ -2,6 +2,9 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.48', changes:[
+    'Jelkulcs Linuxon: az „Ezen az eszközön” gomb újra látszik — a rendszer maga nem tárol jelkulcsot, de egy jelszókezelő (Google Jelszókezelő a Chrome-ban, Bitwarden, KeePassXC, 1Password, Proton Pass) igen. Ha nincs ilyen, a játék elmagyarázza, hogy a telefonoddal (QR-kóddal) tudsz belépni.'
+  ]},
   { version:'4.47', changes:[
     'Jelkulcs: ahol a gép maga nem tud jelkulcsot tárolni (például Linuxon), a játék nem kínálja fel az „Ezen az eszközön” gombot, hanem elmagyarázza, hogy a telefonoddal (QR-kóddal) tudsz belépni. A tájékoztató szöveg a gép rendszeréhez igazodik (Windows, Linux, Mac).'
   ]},
