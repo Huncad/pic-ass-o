@@ -150,6 +150,20 @@ Environment=ACCOUNT_API_BASE=https://a-jatek-cime.netlify.app
 
 (ugyanúgy egy `/etc/systemd/system/picasso.service.d/*.conf` fájlban, mint a szójelentések kulcsát, utána `systemctl daemon-reload && systemctl restart picasso`).
 
+## Memória (v4.52-től)
+
+A konténernek **1024 MB** memóriát érdemes adni (Proxmox → a konténer → Resources → Memory). A szerver egy határ
+fölött nem fogad új kapcsolatot (ilyenkor a játékosok a közvetlen, P2P útra váltanak) — így nem omlik össze. Ezt a
+határt a memóriához kell igazítani, egy külön fájlban: `/etc/systemd/system/picasso.service.d/memory.conf`
+
+```
+[Service]
+Environment=MAX_RSS_MB=850
+Environment=NODE_OPTIONS=--max-old-space-size=700
+```
+
+Utána: `systemctl daemon-reload && systemctl restart picasso`. (512 MB-os konténernél a `MAX_RSS_MB` maradjon az alapértelmezett 400.)
+
 ## Hasznos parancsok (a konténer konzoljában)
 
 | Mit | Parancs |
