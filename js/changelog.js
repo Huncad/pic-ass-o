@@ -2,6 +2,13 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.52', changes:[
+    'A játékszerver sok egyidejű játékosnál is gyors marad: a szobalistát csak a kezdőképernyőn lévők kapják (és csak ha változott), a kapcsolatonkénti tömörítés sokkal kevesebb memóriát használ. Teszt: 960 egyidejű játékosnál az üzenetek átlagos késése 11,6 másodpercről 1 ezredmásodpercre csökkent; 4800 játékost is elvisz, üzenetvesztés nélkül.',
+    'Ha a szerver memóriája fogyóban van, nem omlik össze: az új játékosok automatikusan a közvetlen kapcsolatra váltanak, a már játszók zavartalanul folytatják.',
+    'Egy IP-címről (pl. mobilnetről, ahol sok idegen osztozik egy címen) 40 helyett 150 játékos csatlakozhat egyszerre.',
+    'Javítva: terhelt böngészőben a gyanús esetek jelentése és a szobanyitás értesítése elveszhetett — most a játék újraküldi.',
+    'Telefonon, nagy váróban a lebegő chat- és reakciógombok már nem takarják el az utolsó játékosokat.'
+  ]},
   { version:'4.51', changes:[
     'Új: 86 trófea négy fokozatban (🥉 bronz, 🥈 ezüst, 🥇 arany, 💎 gyémánt) — játékok, győzelmek, rajzok, tippek, sorozatok, játékidő, különleges teljesítmények. Játék közben felugró értesítés jelzi, ha szereztél egyet; mindet a Statisztikáim ablakban és a profilodon látod, a még hiányzóknál a haladással együtt.',
     'Új: trófea-ranglista — a regisztrált játékosok a trófeapontjaik alapján versenyeznek (a Statisztikáimból és bármelyik profilról elérhető).',

@@ -72,6 +72,18 @@ node tests/tools/css-imp-trial.mjs elotte-menu elotte-jatek munka   # !important
 
 Új verziónál a `js/changelog.js` elejére kerül a bejegyzés, és a `js/picasso.js` `APP_VERSION` értéke is átírandó (teszt ellenőrzi).
 
+### Terhelés és tömeg (v4.52)
+
+```
+npm run test:load      # 100 szoba × 8 játékos + 160 nézelődő a szobalistán, 45 mp (paraméterezhető: node tests/load/load.mjs szobák játékos/szoba mp)
+npm run test:crowd     # valódi böngészők: 20 fős szoba, 4 párhuzamos szoba, 40 szobás szobalista (SHOTS=mappa: képernyőképek)
+```
+
+Mért eredmények (4 magos gép, egy Node-folyamat): 960 kapcsolat → 1 ms átlag / 11 ms p99 késleltetés, 140 MB, 16% CPU;
+2400 kapcsolat → 1 ms / 105 ms, 266 MB, 33% CPU; 4800 kapcsolat → 11 ms / 0,7 mp, 420 MB, 65% CPU, elveszett üzenet nélkül.
+A szerver `MAX_RSS_MB` (alapból 400) fölött nem fogad új kapcsolatot (a böngésző ilyenkor a közvetlen, P2P útra vált).
+Beállítható még: `MAX_CONN_PER_IP` (alapból 150), `MAX_ROOMS` (500), `WS_DEFLATE` (`regi` / `ki`).
+
 ## Netlify környezeti változók
 
 | Név | Kötelező? | Mire |

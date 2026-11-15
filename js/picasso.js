@@ -2,7 +2,7 @@ import { badNameReason, normalize, squash, editDistance, guessVerdict, isPlainOb
 import { Account } from './account.js';
 import { initProfile, openProfile, openTrophyBoard, levelOf, levelTitle, achievementsOf, TIERS } from './profile.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.51';
+const APP_VERSION = '4.52';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -722,6 +722,14 @@ try{
   const drawerSeenAt = new Map();      // peerId -> last time a message was accepted from them as drawer
   function wasDrawerJustNow(peerId){ return Date.now() - (drawerSeenAt.get(peerId) || 0) < 20000; }
   const SUSPECT_URL = '/.netlify/functions/report';
+  // v4.52: „keepalive” kérés (az oldal bezárásakor is kimegy) — de a böngésző ezeknek kis keretet ad, és ha
+  // az épp tele van, a kérés csendben elvész. Ilyenkor sima kéréssel újra próbáljuk.
+  function sendBeaconish(url, body){
+    const opts = { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify(body) };
+    let p;
+    try{ p = fetch(url, Object.assign({ keepalive:true }, opts)); }catch(e){ p = Promise.reject(e); }
+    return p.catch(()=>fetch(url, opts)).catch(()=>{});
+  }
   const SUSPECT_LABELS = {
     'chat-flood':'túl sok chatüzenet egyszerre', 'chat-dup':'ugyanaz az üzenet újra és újra',
     'voice-flood':'túl sok hangüzenet', 'guess-flood':'túl sok tipp egyszerre',
@@ -750,9 +758,8 @@ try{
     }
     // and it goes to the admin's log on the server
     try{
-      fetch(SUSPECT_URL, { method:'POST', keepalive:true, headers:{ 'content-type':'application/json' },
-        body: JSON.stringify({ action:'report', room: roomCode || '', roomName: currentRoomName || '', subject: name,
-          subjectDev: (typeof peerDev !== 'undefined' && peerDev[peerId]) || '', kind, detail: d, reporter: myName || '', v: APP_VERSION }) }).catch(()=>{});
+      sendBeaconish(SUSPECT_URL, { action:'report', room: roomCode || '', roomName: currentRoomName || '', subject: name,
+          subjectDev: (typeof peerDev !== 'undefined' && peerDev[peerId]) || '', kind, detail: d, reporter: myName || '', v: APP_VERSION });
     }catch(e){}
   }
   // v4.33: the game's own yes/no window instead of the browser's confirm() —
@@ -1884,16 +1891,14 @@ try{
     // the server, and only after the server has seen the announcement
     if(isPublic && currentRoomMode === 'srv'){
       setTimeout(()=>{
-        try{ fetch(SUBSCRIBE_URL, { method:'POST', keepalive:true, headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ action:'notify', code, skipPush: myPushEndpoint || '' }) }).catch(()=>{}); }catch(e){}
+        sendBeaconish(SUBSCRIBE_URL, { action:'notify', code, skipPush: myPushEndpoint || '' });
       }, 4000);
     }
     try{ if(localStorage.getItem(NOTIFY_SKIP_OWN_KEY) === '1') return; }catch(e){}
     // v4.15: the server decides whether notifications are on, and sends them
     // (the code of a closed room is not sent at all)
-    try{ fetch(ROOMNOTIFY_URL, { method:'POST', keepalive:true, headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'notify', name: String(roomName).slice(0, 60), host: String(hostName).slice(0, 20),
-        public: !!isPublic, code: isPublic ? code : '' }) }).catch(()=>{}); }catch(e){}
+    sendBeaconish(ROOMNOTIFY_URL, { action:'notify', name: String(roomName).slice(0, 60), host: String(hostName).slice(0, 20),
+        public: !!isPublic, code: isPublic ? code : '' });
   }
   function fillAdminNotifyForm(force){
     const on = document.getElementById('admin-notify-on');

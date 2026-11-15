@@ -21,6 +21,8 @@ const check = (name, ok, info = '') => { results.push(ok); console.log(`  ${ok ?
     const code = await H.createRoom(host, servers, { roomName: 'Védelem', name: 'Anna' });
     await H.joinRoom(guest, servers, code, 'Bence');
     await host.waitForFunction(() => document.querySelectorAll('#lobby-players .player-chip:not(.pending)').length >= 2, null, { timeout: 20000 });
+    // a jelentés hálózati kérés: terhelt gépen később indulhat — fix várakozás helyett figyeljük (legfeljebb 6 mp)
+    const reportArrives = async (kind) => { for (let i = 0; i < 60; i++) { if (reports.some(r => r.subject === 'Bence' && r.kind === kind)) return true; await host.waitForTimeout(100); } return false; };
     const chatCount = (p, text) => p.evaluate(t => [...document.querySelectorAll('#chat-messages .chat-body')].filter(e => e.textContent.includes(t)).length, text);
 
     // 1. chat — rendes felületen
@@ -59,13 +61,13 @@ const check = (name, ok, info = '') => { results.push(ok); console.log(`  ${ok ?
     check('a nyers áradatból a szobanyitónál legfeljebb 7 jelenik meg', raw <= 7, `${raw} jelent meg`);
     const warned = await host.evaluate(() => [...document.querySelectorAll('#chat-messages .chat-msg')].some(e => /⚠️ Bence/.test(e.textContent)));
     check('a szobanyitó diszkrét figyelmeztetést kap', warned);
-    check('jelentés megy a naplóba (chat-áradat)', reports.some(r => r.subject === 'Bence' && r.kind === 'chat-flood'));
+    check('jelentés megy a naplóba (chat-áradat)', await reportArrives('chat-flood'));
 
     // hamisított kör: a vendég a szobanyitó nevében hirdet kört
     const hostId = await host.evaluate(() => window.__picassoSrv && window.__picassoSelfId);
     await guest.evaluate((hid) => window.__picassoSrv.send({ t: 'send', a: 'round', d: { idx: 0, drawerId: hid || 'valaki-mas', drawerName: 'Anna', tier: 'konnyu', phase: 'drawing' } }), hostId);
     await host.waitForTimeout(800);
-    check('más nevében hirdetett kör: jelentés', reports.some(r => r.subject === 'Bence' && r.kind === 'forged'));
+    check('más nevében hirdetett kör: jelentés', await reportArrives('forged'));
 
     // 4. hangüzenet: a lejátszóból nem menthető le
     console.log('Hangüzenet:');

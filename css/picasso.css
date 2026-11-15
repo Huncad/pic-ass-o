@@ -2741,3 +2741,5 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   .trophy-board li .rk{ width:2em; text-align:center; color:var(--chalk-dim); }
   .trophy-board li .nm{ flex:1; }
   .trophy-board li.me{ outline:2px solid var(--yellow); }
+  /* v4.52: nagy váróban a lebegő chat / reakció gombok ne takarják az utolsó játékosokat */
+  @media (max-width: 720px){ #lobby-players{ padding-bottom: 96px; } }

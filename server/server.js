@@ -53,7 +53,7 @@ const RESUME_GRACE_MS = 60_000;      // ennyi ideig tartjuk meg egy megszakadt j
 const MAX_BUFFERED = 600;            // ennyi üzenetet tárolunk el neki közben
 const MAX_PAYLOAD = 2 * 1024 * 1024; // egy üzenet max. mérete (a késői belépő teljes rajzot kap)
 const MAX_ROOM_PEERS = 40;
-const MAX_ROOMS = 500;
+const MAX_ROOMS = Number(process.env.MAX_ROOMS || 500);
 const DIR_TTL_MS = 30_000;           // ennyi ideig él egy szoba-hirdetés frissítés nélkül
 const RATE_PER_SEC = 200;            // üzenet / mp / kapcsolat (rajzolásnál sok kicsi jön)
 const RATE_BURST = 600;              // v4.30: egyszeri löket (újracsatlakozáskor a böngésző akár 400 üzenetet küld újra)
@@ -64,7 +64,10 @@ const BYTES_BURST = 6 * 1024 * 1024; // egyszeri löket (pl. teljes rajz egy ké
 const FANOUT_BYTES_PER_SEC = 4 * 1024 * 1024;   // ennyit továbbíthat a szerver egy küldő nevében mp-enként
 const FANOUT_BURST = 24 * 1024 * 1024;
 const MAX_WS_BUFFER = 8 * 1024 * 1024;           // ha egy lassú kliens kimenő puffere ennél nagyobb, várunk
-const MAX_CONN_PER_IP = 40;                      // egyszerre ennyi kapcsolat egy IP-ről (egy család bőven elfér)
+const MAX_CONN_PER_IP = Number(process.env.MAX_CONN_PER_IP || 150);   // v4.52: 40 helyett — mobilneten (CGNAT) sok idegen játékos osztozik egy IP-n
+// v4.52: memóriavédelem — e fölött nem fogadunk új kapcsolatot (a böngésző ilyenkor a közvetlen, P2P útra vált),
+// így a szerver nem omlik össze, és a már játszók zavartalanul folytatják. A konténer 512 MB-jához igazítva.
+const MAX_RSS_MB = Number(process.env.MAX_RSS_MB || 400);                      // egyszerre ennyi kapcsolat egy IP-ről (egy család bőven elfér)
 const MAX_RING_BYTES = 16 * 1024 * 1024; // játékosonként ennyi megőrzött üzenet fér el
 const MAX_RING_TOTAL = 96 * 1024 * 1024; // audit: az összes megőrzött üzenet együtt (a konténer 512 MB)
 const KICK_BAN_MS = 24 * 3600_000;      // v4.43: a kirúgott ennyi ideig nem léphet vissza abba a szobába — más névvel, újratöltve, másik böngészőből sem
@@ -184,6 +187,7 @@ function leaveRoom(peer, why){
     if(set.size === 0){ rooms.delete(roomId); roomInfo.delete(roomId); pendingResults.delete(roomId); wordReps.delete(roomId); }
     else set.forEach(id => { const p = peers.get(id); if(p) sendRaw(p, { t:'pleave', id: peer.id }); });
   }
+  sendDirSnapshot(peer);   // v4.52: vissza a kezdőképernyőre — a friss szobalistával
   log('kilépés', peer.id.slice(0,6), why || '', 'szoba', roomId.slice(0,8), 'maradt', set ? set.size : 0);
 }
 
@@ -278,8 +282,11 @@ async function handleDir(peer, d){
   }
   if(peer.acct && nameKey(clean.hostName) === peer.acct.key) clean.verified = true;
   if(code) clean.code = code; else { clean.id = fp; clean.isPrivate = true; }
-  directory.set(key, { d: clean, from: peer.id, room: roomId, ip: peer.ip, at: Date.now(), firstAt: prev && prev.from === peer.id ? (prev.firstAt || prev.at) : Date.now() });
-  broadcastDir(clean, peer.id);
+  const json = JSON.stringify(clean), now = Date.now();
+  const same = prev && prev.from === peer.id && prev.json === json;
+  const bcastAt = same && now - (prev.bcastAt || 0) < DIR_REBROADCAST_MS ? prev.bcastAt : now;
+  directory.set(key, { d: clean, json, from: peer.id, room: roomId, ip: peer.ip, at: now, bcastAt, firstAt: prev && prev.from === peer.id ? (prev.firstAt || prev.at) : now });
+  if(bcastAt === now) broadcastDir(clean, peer.id);   // v4.52: csak ha változott, vagy rég ment ki
 }
 
 // ---------------------------------------------------------------------
@@ -335,10 +342,19 @@ function handleWordRep(peer, m){
   }).then(r => log('szójelentés', kind, r.status)).catch(err => log('szójelentés hiba', kind, err && err.message));
 }
 
+// v4.52: a szobalista csak azoknak megy, akik épp NINCSENEK szobában (a kezdőképernyőn nézik a listát) —
+// sok szobánál és sok játékosnál ez volt a forgalom nagyobbik része
 function broadcastDir(d, fromId){
   const str = JSON.stringify({ t:'dir', d });
-  peers.forEach(p => { if(p.id !== fromId && p.dirSub && canSend(p.ws)) p.ws.send(str); });
+  peers.forEach(p => { if(p.id !== fromId && p.dirSub && !p.room && canSend(p.ws)) p.ws.send(str); });
 }
+/** A teljes, friss szobalista egy játékosnak (belépéskor és amikor kilép egy szobából). */
+function sendDirSnapshot(peer){
+  if(!peer || !peer.dirSub || !canSend(peer.ws)) return;
+  const now = Date.now();
+  directory.forEach(e => { if(now - e.at <= DIR_TTL_MS && e.from !== peer.id) peer.ws.send(JSON.stringify({ t:'dir', d: e.d })); });
+}
+const DIR_REBROADCAST_MS = 12_000;   // változatlan hirdetést legfeljebb ennyi időnként küldünk újra (a böngésző 17 mp után felejt)
 
 // ---------------------------------------------------------------------
 // Ranglista (egyszerű JSON fájl — egy családi játékhoz bőven elég)
@@ -748,13 +764,23 @@ const server = http.createServer((req, res) => {
 // ---------------------------------------------------------------------
 // WebSocket
 // ---------------------------------------------------------------------
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_PAYLOAD, perMessageDeflate: { threshold: 2048 } });
+// v4.52: takarékos tömörítés — a kapcsolatonkénti zlib-állapot volt a memória nagyobbik része (sok játékosnál
+// a konténer 512 MB-ja elfogyott volna). Kis ablak, kontextus-megtartás nélkül: a nagy üzenetek (teljes rajz)
+// így is jól tömörödnek. WS_DEFLATE=regi: a korábbi beállítás, WS_DEFLATE=ki: nincs tömörítés.
+const DEFLATE = process.env.WS_DEFLATE === 'ki' ? false : process.env.WS_DEFLATE === 'regi' ? { threshold: 2048 } : {
+  threshold: 2048, serverNoContextTakeover: true, clientNoContextTakeover: true, serverMaxWindowBits: 10, clientMaxWindowBits: 10,
+  zlibDeflateOptions: { level: 4, memLevel: 4 }, concurrencyLimit: 4
+};
+let memWarned = false;
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_PAYLOAD, perMessageDeflate: DEFLATE });
 
 wss.on('connection', (ws, req) => {
   if(!originAllowed(req.headers.origin, true)){ ws.close(4003, 'origin'); return; }
   const ip = clientIp(req);
   const nConn = (connPerIp.get(ip) || 0) + 1;
   if(nConn > MAX_CONN_PER_IP){ ws.close(4029, 'túl sok kapcsolat'); return; }
+  if(process.memoryUsage().rss > MAX_RSS_MB * 1048576 && !memWarned){ memWarned = true; log('a memória fogyóban — új kapcsolatot most nem fogadunk'); setTimeout(() => { memWarned = false; }, 60_000).unref?.(); }
+  if(process.memoryUsage().rss > MAX_RSS_MB * 1048576){ ws.close(4013, 'a szerver tele van'); return; }
   connPerIp.set(ip, nConn);
   ws.on('close', () => { const n = (connPerIp.get(ip) || 1) - 1; if(n <= 0) connPerIp.delete(ip); else connPerIp.set(ip, n); });
   let peer = null;
@@ -873,7 +899,7 @@ wss.on('connection', (ws, req) => {
       }
       noteDevIp(peer.dev, peer.ip);
       if(permBanned(peer)){ dropBanned(peer); return; }
-      if(peer.dirSub){
+      if(peer.dirSub && !peer.room){   // v4.52: szobában lévőnek nem kell a lista
         const now2 = Date.now();
         directory.forEach((e, k) => { if(now2 - e.at > DIR_TTL_MS) directory.delete(k); else if(e.from !== peer.id) ws.send(JSON.stringify({ t:'dir', d: e.d })); });
       }
@@ -992,8 +1018,7 @@ wss.on('connection', (ws, req) => {
         handleWordRep(peer, m);
         return;
       case 'dirsync': {
-        const now2 = Date.now();
-        directory.forEach((e) => { if(now2 - e.at <= DIR_TTL_MS && e.from !== peer.id) ws.send(JSON.stringify({ t:'dir', d: e.d })); });
+        sendDirSnapshot(peer);
         return;
       }
       case 'result': {
