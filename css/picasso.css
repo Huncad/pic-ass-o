@@ -2725,3 +2725,19 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   .reg-why{ margin:0 0 10px; padding:8px 12px; border-radius:12px; background:rgba(0,0,0,.16); }
   .reg-why summary{ cursor:pointer; font-weight:800; color:var(--yellow); }
   .reg-nudge{ text-align:center; margin:10px auto; max-width:520px; font-size:.9rem; color:var(--chalk-dim); }
+  /* v4.51: trófeák */
+  .trophy-toast{ position:fixed; z-index:1300; left:50%; top:14px; transform:translateX(-50%); width:min(440px, calc(100vw - 24px)); background:var(--panel); color:var(--chalk); border:2px solid var(--yellow); border-radius:16px; padding:10px 14px; box-shadow:0 12px 32px rgba(0,0,0,.5); animation:trophyIn .35s cubic-bezier(.2,1.4,.4,1); pointer-events:none; }
+  .trophy-toast.t-d{ border-color:#7fd8ff; } .trophy-toast.t-s{ border-color:#c9d1d9; } .trophy-toast.t-b{ border-color:#d29a5b; }
+  .trophy-toast > div{ display:flex; gap:12px; align-items:center; }
+  .trophy-toast .tt-em{ font-size:2rem; }
+  .trophy-toast b{ display:block; } .trophy-toast small{ display:block; color:var(--chalk-dim); font-size:.8rem; margin-top:2px; }
+  .trophy-toast.out{ opacity:0; transform:translate(-50%, -20px); transition:all .3s; }
+  @keyframes trophyIn{ from{ opacity:0; transform:translate(-50%, -30px) scale(.9); } to{ opacity:1; transform:translate(-50%, 0) scale(1); } }
+  .pf-badge.t-d{ border-color:#7fd8ff88; } .pf-badge.t-g{ border-color:#ffd16688; } .pf-badge.t-s{ border-color:#c9d1d988; } .pf-badge.t-b{ border-color:#d29a5b88; }
+  .pf-badge small{ color:var(--chalk-dim); font-size:.72rem; }
+  .trophy-list summary{ cursor:pointer; margin-top:8px; }
+  .trophy-board{ list-style:none; padding:0; margin:8px 0; display:grid; gap:4px; }
+  .trophy-board li{ display:flex; gap:10px; align-items:center; padding:6px 10px; border-radius:10px; background:rgba(0,0,0,.16); }
+  .trophy-board li .rk{ width:2em; text-align:center; color:var(--chalk-dim); }
+  .trophy-board li .nm{ flex:1; }
+  .trophy-board li.me{ outline:2px solid var(--yellow); }

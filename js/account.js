@@ -5,7 +5,7 @@
 // Biztonság: a munkamenet-kulcs HttpOnly sütiben van, ez a kód soha nem látja.
 // v4.45: jelszó nincs — belépés jelkulccsal vagy e-mailes belépőlinkkel. Minden szerverválasz szövegként (textContent)
 // kerül a lapra, soha nem HTML-ként.
-import { nameKey, isPlainObject } from './rules.js';
+import { nameKey, isPlainObject, badNameReason, BAD_NAME_TEXT } from './rules.js';
 
 const API = '/.netlify/functions/account';
 const SUBSCRIBE_URL = '/.netlify/functions/subscribe';
@@ -148,6 +148,7 @@ async function mayUse(name, tk, peerId){
 function nameProblem(name){
   const key = nameKey(name);
   if(!key) return '';
+  { const why = badNameReason(name); if(why && !(user && nameKey(user.name) === key)) return BAD_NAME_TEXT[why]; }   // v4.51
   if(user && nameKey(user.name) === key){
     if(!ticket){ fetchTicket(); return 'Még ellenőrizzük a fiókodat — próbáld újra egy pillanat múlva.'; }
     return '';
@@ -211,8 +212,14 @@ async function syncStats(opts = {}){
     remote = g.j.stats || {}; rev = N(g.j.rev);
     let merged = mergeStats(base, local, remote);
     for(let i = 0; i < 3 && JSON.stringify(merged) !== JSON.stringify(remote); i++){
-      const p = await call({ action:'stats-put', stats: merged, rev }, opts);
+      const p = await call({ action:'stats-put', stats: merged, rev, first: fresh || undefined }, opts);
       if(p.ok){ rev = N(p.j.rev); break; }
+      if(p.status === 400){
+        // v4.51: a szerver nem hitte el (pl. túl nagy ugrás) — a fiókban tárolt állapot az irányadó
+        ls.set(STATS_KEY, JSON.stringify(remote)); ls.set(BASE_KEY, JSON.stringify(remote)); ls.set(REV_KEY, String(rev)); ls.set(OWNER_KEY, me);
+        try{ hooks.onStats && hooks.onStats(); }catch(e){}
+        return;
+      }
       if(p.status !== 409) return;
       remote = p.j.stats || {}; rev = N(p.j.rev);
       merged = mergeStats(base, local, remote);
@@ -324,6 +331,7 @@ function checkTypedName(){
     note.className = 'name-note' + (taken ? ' bad' : '');
   };
   if(nameKey(v).length < 2){ show(false); return; }
+  { const why = badNameReason(v); if(why){ note.textContent = '🚫 ' + BAD_NAME_TEXT[why]; note.className = 'name-note bad'; return; } }   // v4.51
   const c = cachedTaken(v);
   if(c !== null){ show(c); return; }
   nameTimer = setTimeout(()=>nameTaken(v).then(show), 350);

@@ -1,8 +1,8 @@
-import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
+import { badNameReason, normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText, cleanName, nameKey, SAFE_COLOR_RE, MAX_STROKES, STROKE_TYPES, MAX_POINTS_PER_STROKE, MAX_TOTAL_POINTS, clampNum, cleanPeerId, sanitizeStrokes, makeSpamGuard } from './rules.js';
 import { Account } from './account.js';
-import { initProfile, openProfile, levelOf, levelTitle, milestones } from './profile.js';
+import { initProfile, openProfile, openTrophyBoard, levelOf, levelTitle, achievementsOf, TIERS } from './profile.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.50';
+const APP_VERSION = '4.51';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -615,6 +615,12 @@ try{
   function approveHelloName(data, peerId){
     const name = cleanName(isPlainObject(data) ? data.name : ''), k = nameKey(name), pk = peerId + '|' + k;
     if(namePending.has(pk)) return;
+    // v4.51: megtévesztő / vulgáris nevet a szobanyitó sem enged be (a regisztrált név már a fióknál átment a szűrőn)
+    if(badNameReason(name)){
+      clog('K13', `tiltott név: „${name}” — a belépőt visszaküldtük`);
+      try{ kickAction.send({ reason:'badname' }, { target: peerId }); }catch(e){}
+      return;
+    }
     namePending.add(pk);
     const thisRoom = room;
     const tkx = isPlainObject(data) && typeof data.tk === 'string' ? data.tk : '';
@@ -4259,6 +4265,8 @@ try{
         ? 'Ebbe a szobába (vagy az egész játékba) ki vagy tiltva, ezért nem léphetsz be.'
         : reason === 'update'
         ? 'A belépéshez frissítsd az oldalt (új verzió érhető el), aztán próbáld újra.'
+        : reason === 'badname'
+        ? 'Ez a név nem megengedett (megtévesztő vagy sértő). Válassz másik nevet.'
         : reason === 'regonly'
         ? 'Ebbe a szobába csak regisztrált játékosok léphetnek be. Lépj be a fiókodba (a neved fölötti gombbal), és próbáld újra.'
         : reason === 'nametaken'
@@ -11628,6 +11636,11 @@ try{
     return { games:0, wins:0, points:0, best:0 };
   }
   function savePersonalStats(st){
+    // v4.51: új trófea? — a régi és az új állapot összevetése, és értesítés játék közben
+    try{
+      const before = achievementsOf(loadPersonalStats()).ids, after = achievementsOf(st);
+      after.list.filter(a=>a.done && !before.has(a.id)).forEach(a=>queueTrophyToast(a));
+    }catch(e){}
     // v3.66: remember when this device started collecting statistics
     if(!st.since){ const known = [st.bestAt, st.lastPlayed].map(Number).filter(x=>x > 0); st.since = known.length ? Math.min(...known) : Date.now(); }
     try{ localStorage.setItem(STATS_KEY, JSON.stringify(st)); }catch(e){}
@@ -11785,20 +11798,45 @@ try{
     }
   }
   window.addEventListener('resize', ()=>{ if(!document.getElementById('stats-overlay').classList.contains('hidden')) fitStatsBox(); });
-  // v4.49: szint és mérföldkövek a Statisztikáim tetején
+  // v4.49 / v4.51: szint és trófeák a Statisztikáim tetején
   function paintStatsLevel(){
     try{
       const body = document.getElementById('stats-body'); if(!body) return;
       const st = loadPersonalStats();
-      if(!N(st.games) && !N(st.drawn)) return;
-      const L = levelOf(st), ms = milestones(st), done = ms.filter(m=>m.done);
-      const next = ms.find(m=>!m.done);
+      const L = levelOf(st), A = achievementsOf(st);
       const div = document.createElement('div');
       div.className = 'pf-level stats-level';
+      const groups = [['d','💎 Gyémánt'],['g','🥇 Arany'],['s','🥈 Ezüst'],['b','🥉 Bronz']];
       div.innerHTML = `<b>Szint ${L.level} · ${escapeHtml(levelTitle(L.level))}</b> <span class="pf-sub">${L.xp} XP — a következő szintig ${L.next - L.xp}</span><div class="pf-bar"><i style="width:${L.pct}%"></i></div>
-        <div class="pf-badges">${done.slice(-8).map(m=>`<span class="pf-badge">${m.em} ${escapeHtml(m.title)}</span>`).join('')}${next ? `<span class="pf-badge locked" title="${next.prog}/${next.of}">${next.em} ${escapeHtml(next.title)} (${next.prog}/${next.of})</span>` : ''}</div>`;
+        <details class="trophy-list"><summary>🏆 Trófeák: <b>${A.count}/${A.total}</b> · ${A.points} pont — mutasd mindet</summary>
+        ${groups.map(([t, label])=>`<p class="pf-sub" style="margin:8px 0 4px">${label}</p><div class="pf-badges">${A.list.filter(a=>a.tier === t).map(a=>`<span class="pf-badge t-${a.tier}${a.done ? '' : ' locked'}" title="${escapeHtml(a.desc)}${!a.done && a.n ? ` (${Math.floor(a.prog)}/${a.n})` : ''}">${a.em} ${escapeHtml(a.name)}${!a.done && a.n ? ` <small>${Math.floor(a.prog)}/${a.n}</small>` : ''}</span>`).join('')}</div>`).join('')}
+        <p style="text-align:center;margin:8px 0 0"><button type="button" class="ghost small" id="stats-trophy-board">🏆 Trófea-ranglista</button></p></details>`;
       body.prepend(div);
+      const tb = document.getElementById('stats-trophy-board'); if(tb) tb.addEventListener('click', ()=>openTrophyBoard());
     }catch(e){}
+  }
+  // v4.51: trófea-értesítés játék közben (egymás után, legfeljebb 3, a többi összevonva)
+  const trophyQueue = []; let trophyBusy = false;
+  function queueTrophyToast(a){ trophyQueue.push(a); if(!trophyBusy) nextTrophyToast(); }
+  function nextTrophyToast(){
+    if(!trophyQueue.length){ trophyBusy = false; return; }
+    trophyBusy = true;
+    let items = [trophyQueue.shift()];
+    if(trophyQueue.length >= 3){ items = items.concat(trophyQueue.splice(0)); }
+    const box = document.createElement('div');
+    box.className = 'trophy-toast t-' + items[0].tier; box.setAttribute('role', 'status');
+    const t = document.createElement('div');
+    if(items.length === 1){
+      const a = items[0];
+      t.innerHTML = `<span class="tt-em">${a.em}</span><span><b>🏆 Új trófea: ${escapeHtml(a.name)}</b><small>${escapeHtml(a.desc)} · ${TIERS[a.tier].em} ${TIERS[a.tier].name}, +${TIERS[a.tier].pts} pont</small></span>`;
+    } else {
+      t.innerHTML = `<span class="tt-em">🏆</span><span><b>${items.length} új trófea!</b><small>${items.map(a=>a.em + ' ' + escapeHtml(a.name)).join(' · ')}</small></span>`;
+    }
+    box.appendChild(t); document.body.appendChild(box);
+    try{ sndChatPing(); setTimeout(()=>{ try{ sndChatPing(); }catch(e){} }, 160); }catch(e){}
+    try{ navigator.vibrate && navigator.vibrate([30, 40, 30]); }catch(e){}
+    try{ if(room) addSystemChatMessage(items.length === 1 ? `🏆 Új trófeát szereztél: ${items[0].em} ${items[0].name}` : `🏆 ${items.length} új trófeát szereztél!`); }catch(e){}
+    setTimeout(()=>{ box.classList.add('out'); setTimeout(()=>{ box.remove(); nextTrophyToast(); }, 350); }, 3800);
   }
   function openStats(){
     flushPlayTime();

@@ -2,6 +2,12 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.51', changes:[
+    'Új: 86 trófea négy fokozatban (🥉 bronz, 🥈 ezüst, 🥇 arany, 💎 gyémánt) — játékok, győzelmek, rajzok, tippek, sorozatok, játékidő, különleges teljesítmények. Játék közben felugró értesítés jelzi, ha szereztél egyet; mindet a Statisztikáim ablakban és a profilodon látod, a még hiányzóknál a haladással együtt.',
+    'Új: trófea-ranglista — a regisztrált játékosok a trófeapontjaik alapján versenyeznek (a Statisztikáimból és bármelyik profilról elérhető).',
+    'Megtévesztő (pl. admin, root, moderátor, hivatalos — kicselezett írásmóddal sem) és vulgáris neveket nem lehet regisztrálni, és vendégként sem lehet velük játszani.',
+    'Regisztrálni (és e-mail címet cserélni) csak magánszemélyes e-mail címmel lehet (Gmail, Freemail, Citromail, Outlook/Hotmail, iCloud, Yahoo, Proton stb.) — céges vagy iskolai címmel nem.'
+  ]},
   { version:'4.50', changes:[
     'A kezdőképernyőn, a regisztrációs ablakban és a játék végén is látszik, milyen előnyökkel jár a (jelszó nélküli, ingyenes) regisztráció. A kezdőképernyő kártyája bezárható.',
     'Javítva: ha a játékszerver indulásakor épp nem érte el a fiókszolgáltatást, egy ideig vendégnek nézte a regisztrált játékosokat (a „csak regisztráltak” szobából ki is tette őket). Mostantól ilyenkor azonnal pótolja, és a belépés előtt a játék megvárja a névigazolást.'

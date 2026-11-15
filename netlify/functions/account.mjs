@@ -13,7 +13,7 @@
 //
 // Környezeti változók: a levélküldéshez ugyanaz kell, mint az értesítőhöz (GMAIL_USER, GMAIL_APP_PASSWORD).
 import { json, updateJSON, makeLimiter } from '../lib/util.mjs';
-import { esc, cleanEmail, page as basePage, sendMail as baseSendMail, mailWrap, btn, cleanPalette } from '../lib/mail.mjs';
+import { esc, cleanEmail, page as basePage, sendMail as baseSendMail, mailWrap, btn, cleanPalette, isPersonalEmail, PERSONAL_EMAIL_TEXT } from '../lib/mail.mjs';
 import {
   accountStore, sha, newToken, asObj, publicKey, makeTicket, signPayload, overLimit,
   sessionCookie, clearCookie, getUser, createSession, sessionUser,
@@ -21,7 +21,8 @@ import {
 } from '../lib/account.mjs';
 import { setAccountSub, accountSubOn, claimLegacySub, removeSubsOf, setSubPalette } from '../lib/subs.mjs';
 import { removePushOf } from '../lib/push.mjs';
-import { cleanName, nameKey, isPlainObject } from '../../js/rules.js';
+import { cleanName, nameKey, isPlainObject, badNameReason, BAD_NAME_TEXT } from '../../js/rules.js';
+import { achievementsOf } from '../../js/profile.js';
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
 
 const PENDING_MS = 24 * 3600_000;
@@ -45,6 +46,7 @@ function validName(raw) {
   const key = nameKey(s);
   if (key.replace(/[^a-z0-9]/g, '').length < 2) return { error: 'A névben legyen legalább két betű vagy szám.' };
   if (RESERVED.has(key) || /^vendeg\b/.test(key)) return { error: 'Ez a név nem választható.' };
+  { const why = badNameReason(s); if (why) return { error: BAD_NAME_TEXT[why] }; }   // v4.51: megtévesztő / vulgáris név
   return { name: s, key };
 }
 async function nameTaken(store, key) {
@@ -118,6 +120,38 @@ function cleanSettings(v) {
     out[k] = v[k];
   }
   return out;
+}
+
+// ---- v4.51: trófea-ranglista és a statisztika hihetőségének ellenőrzése ----
+// A statisztikát a böngésző számolja, ezért teljes biztonságot nem ad — de a nyilvánvaló csalást kiszűrjük:
+// az összefüggéseknek stimmelniük kell, és egy mentés csak keveset léphet előre.
+const Nn = v => Number(v) || 0;
+function implausible(st) {
+  if (Nn(st.wins) > Nn(st.games)) return 'több győzelem, mint játék';
+  if (Nn(st.podium) > Nn(st.games)) return 'több dobogó, mint játék';
+  if (Nn(st.drawnHit) > Nn(st.drawn)) return 'több kitalált rajz, mint rajz';
+  if (Nn(st.guessHit) > Nn(st.guessRounds)) return 'több jó tipp, mint tippkör';
+  if (Nn(st.firstHits) > Nn(st.guessHit)) return 'több első tipp, mint jó tipp';
+  if (Nn(st.best) > 5000 || Nn(st.points) > Nn(st.games) * 5000 + 5000) return 'túl sok pont';
+  if (Nn(st.bestStreak) > Nn(st.guessHit) + 1) return 'túl hosszú sorozat';
+  if (Nn(st.playMs) > (Nn(st.games) + 2) * 4 * 3600000) return 'túl sok játékidő';
+  return '';
+}
+const JUMP = { games: 3, wins: 3, podium: 3, drawn: 40, drawnHit: 40, guessRounds: 120, guessHit: 120, firstHits: 120, points: 12000, playMs: 3 * 3600000 };
+function jumpTooBig(a, b) {
+  for (const [k, max] of Object.entries(JUMP)) if (Nn(b[k]) - Nn(a[k]) > max) return k;
+  for (const k of Object.keys(asObj(b.badges))) if (Nn(b.badges[k]) - Nn(asObj(a.badges)[k]) > 3) return 'badges';
+  return '';
+}
+async function updateTrophyBoard(store, user, stats) {
+  const A = achievementsOf(stats);
+  await updateJSON(store, 'achtop', raw => {
+    const d = asObj(raw);
+    let rows = (Array.isArray(d.rows) ? d.rows : []).filter(r => r.uid !== user.uid);
+    if (user.profilePublic !== false && A.points > 0) rows.push({ uid: user.uid, name: user.name, count: A.count, points: A.points, at: Date.now() });
+    rows = rows.sort((x, y) => y.points - x.points || y.count - x.count || x.at - y.at).slice(0, 500);
+    return { value: { rows } };
+  });
 }
 
 const MAGIC_MS = 15 * 60_000;     // a belépőlink 15 percig él, egyszer használható
@@ -229,6 +263,16 @@ export default async (req) => {
     return page('Beléptél! 🎉', `<p>Szia, <b>${esc(owner.name)}</b>! Ezen az eszközön beléptél.</p>${hasPk ? '' : '<p>Tipp: a játékban adj hozzá egy <b>jelkulcsot</b>, és legközelebb ujjlenyomattal vagy arccal lépsz be.</p>'}<a class="b" href="${esc(site)}/?fiok=1${hasPk ? '' : '&uj=1'}">Irány a játék</a>`, 200, { 'set-cookie': sessionCookie(tok) });
   }
 
+  // ---------- v4.51: trófea-ranglista ----------
+  if (req.method === 'GET' && url.searchParams.has('achtop')) {
+    if (softLimit('at|' + ip, 120, 600_000)) return err('Lassabban!', 429);
+    const d = asObj(await store.get('achtop', { type: 'json' }).catch(() => null));
+    const rows = Array.isArray(d.rows) ? d.rows : [];
+    const viewer = await sessionUser(req, store).catch(() => null);
+    const i = viewer ? rows.findIndex(r => r.uid === viewer.user.uid) : -1;
+    return json({ rows: rows.slice(0, 50).map(r => ({ name: r.name, count: r.count, points: r.points })), mine: i >= 0 ? { rank: i + 1, count: rows[i].count, points: rows[i].points } : null });
+  }
+
   // ---------- v4.49: nyilvános profil ----------
   if (req.method === 'GET' && url.searchParams.has('profile')) {
     if (softLimit('pr|' + ip, 200, 600_000)) return err('Lassabban!', 429);
@@ -313,6 +357,7 @@ export default async (req) => {
     if (vn.error) return err(vn.error, 400, { field: 'name' });
     const email = cleanEmail(body.email);
     if (!email) return err('Ez nem tűnik érvényes e-mail címnek.', 400, { field: 'email' });
+    if (!isPersonalEmail(email)) return err(PERSONAL_EMAIL_TEXT, 400, { field: 'email' });   // v4.51
     const eh = sha('em|' + email);
     const nk = nameBlob(vn.key);
     const nb = await store.get(nk, { type: 'json' }).catch(() => null);
@@ -447,11 +492,23 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     const stats = cleanStats(body.stats);
     if (!stats) return err('hibás statisztika');
     const rev = Number(body.rev) || 0;
+    const bad = implausible(stats);
+    if (bad) return err('A statisztika nem hihető (' + bad + ').', 400);
+    // egy eszköz első szinkronja (az ott vendégként gyűjtött eredmények) nagyobbat ugorhat — fiókonként naponta legfeljebb 3-szor
+    const firstOfDevice = body.first === true && !(await overLimit(store, 'firstsync|' + user.uid, 3, 86400_000));
     const out = await updateJSON(store, 'st/' + user.uid, raw => {
       const cur = asObj(raw), curRev = Number(cur.rev) || 0;
       if (curRev !== rev) return { write: false, result: { conflict: true, stats: isPlainObject(cur.stats) ? cur.stats : null, rev: curRev } };
-      return { value: { stats, rev: curRev + 1, at: Date.now() }, result: { ok: true, rev: curRev + 1 } };
+      // v4.51: egy mentés legfeljebb ennyit léphet előre (az első szinkron — az eszközön addig gyűjtött adat — kivétel)
+      const prev = asObj(cur.stats);
+      if (cur.rev && Number(cur.firstAt) > 0 && !firstOfDevice) {
+        const jump = jumpTooBig(prev, stats);
+        if (jump) return { write: false, result: { error: 'A statisztika túl nagyot ugrott (' + jump + ').' } };
+      }
+      return { value: { stats, rev: curRev + 1, at: Date.now(), firstAt: Number(cur.firstAt) || Date.now() }, result: { ok: true, rev: curRev + 1 } };
     });
+    if (out.error) return err(out.error, 400);
+    if (out.ok) await updateTrophyBoard(store, user, stats).catch(() => {});
     return json(out, out.conflict ? 409 : 200);
   }
   if (action === 'settings-put') {
@@ -519,6 +576,7 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     const email = cleanEmail(body.email);
     if (!email) return err('Ez nem tűnik érvényes e-mail címnek.', 400, { field: 'email' });
     if (email === user.email) return err('Ez a mostani címed.', 400, { field: 'email' });
+    if (!isPersonalEmail(email)) return err(PERSONAL_EMAIL_TEXT, 400, { field: 'email' });   // v4.51
     if (!(await mailAllowed(store))) return err('Ma már túl sok levelet küldtünk ki, próbáld újra holnap.', 503);
     const done = json({ ok: true });      // foglalt címnél is ugyanez a válasz (nem derül ki, kinek van fiókja)
     if (await store.get('e/' + sha('em|' + email), { type: 'json' }).catch(() => null)) return done;
@@ -590,6 +648,7 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     if (typeof body.profilePublic === 'boolean') patch.profilePublic = body.profilePublic;
     if (typeof body.followMail === 'boolean') patch.followMail = body.followMail;
     await updateJSON(store, uk, raw => raw ? { value: Object.assign(raw, patch) } : { write: false });
+    if ('profilePublic' in patch) { const st = asObj(await store.get('st/' + user.uid, { type: 'json' }).catch(() => null)); await updateTrophyBoard(store, Object.assign({}, user, patch), asObj(st.stats)).catch(() => {}); }
     return json({ ok: true, user: await publicUser(await getUser(store, user.uid)) });
   }
   if (action === 'wordlists-put') {
@@ -680,6 +739,7 @@ ${btn(`${self}?confirm=${token}`, '✅ E-mail cím megerősítése')}
     { const g = asObj(await store.get('g/' + user.uid, { type: 'json' }).catch(() => null)); await Promise.all((g.items || []).map(x => store.delete('gi/' + user.uid + '/' + x.id).catch(() => {}))); }
     await store.delete('g/' + user.uid).catch(() => {});
     await store.delete('fw/' + user.uid).catch(() => {});
+    await updateJSON(store, 'achtop', raw => { const d = asObj(raw); return { value: { rows: (d.rows || []).filter(r => r.uid !== user.uid) } }; }).catch(() => {});
     if (user.roomCode) await store.delete('rc/' + user.roomCode).catch(() => {});
     for (const f of user.friends || []) await updateJSON(store, 'fw/' + f.uid, raw => { const d = asObj(raw); return { value: { uids: (d.uids || []).filter(x => x !== user.uid) } }; }).catch(() => {});
     await Promise.all((user.pk || []).map(k => store.delete(pkBlob(k.id)).catch(() => {})));

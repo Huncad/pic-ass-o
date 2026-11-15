@@ -13,6 +13,15 @@ const prep = '#btn-prep-reveal:visible, #prep-choices button:visible';
     const names = ['Anna', 'Bence', 'Cili'];
     const ps = [];
     for (const n of names) ps.push(await H.newPlayer(browser, servers, n, n === 'Cili' ? devices['Pixel 5'] : { viewport: { width: 1200, height: 850 } }));
+    // v4.51: mindenkinek 9 jó tippje van — a következő jó tipp a „Jó szem” trófea
+    for (const p of ps) await p.addInitScript(() => { try { if (!localStorage.getItem('picasso-stats')) localStorage.setItem('picasso-stats', JSON.stringify({ guessRounds: 9, guessHit: 9, since: Date.now() })); } catch (e) {} });
+    console.log('Tiltott név:');
+    await ps[0].goto(servers.base);
+    await ps[0].fill('#home-name', '4dm1n');
+    await ps[0].waitForTimeout(300);
+    check('vendégként sem választható megtévesztő név', /megtévesztő/.test(await ps[0].textContent('#home-name-note')), await ps[0].textContent('#home-name-note'));
+    await ps[0].click('#card-create');
+    check('…és nem nyithat vele szobát', /megtévesztő/.test(await ps[0].textContent('#home-warning')) && await ps[0].isVisible('#screen-home'));
     const code = await H.createRoom(ps[0], servers, { roomName: 'Reakció', name: 'Anna' });
     await H.joinRoom(ps[1], servers, code, 'Bence');
     await H.joinRoom(ps[2], servers, code, 'Cili');
@@ -46,6 +55,9 @@ const prep = '#btn-prep-reveal:visible, #prep-choices button:visible';
     await g[1].fill('#watch-guess-input', word); await g[1].press('#watch-guess-input', 'Enter');
     const ok = await g[0].waitForFunction(() => /eltalálta|kitalálta/.test(document.body.textContent), null, { timeout: 10000 }).then(() => true).catch(() => false);
     check('a jó tipp célba ér (elfogadja a játék)', ok);
+    console.log('Trófea:');
+    const toast = await g[1].waitForSelector('.trophy-toast', { timeout: 8000 }).then(t => t.textContent()).catch(() => '');
+    check('játék közben felugrik az új trófea', /Új trófea: Jó szem/.test(toast), toast);
     for (const p of ps) check(`nincs JavaScript-hiba (${p.label})`, p.pageErrors.length === 0, p.pageErrors.join(' | '));
   } catch (e) {
     check('a teszt lefutott', false, e.message.split('\n')[0]);

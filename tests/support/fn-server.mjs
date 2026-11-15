@@ -33,7 +33,7 @@ function fakeStore(name) {
 mock.module('@netlify/blobs', { namedExports: { getStore: ({ name }) => fakeStore(name) } });
 const mails = [];
 mock.module('nodemailer', { defaultExport: { createTransport: () => ({ async sendMail(msg) { mails.push({ to: msg.to, subject: msg.subject, html: msg.html }); return {}; } }) } });
-process.env.GMAIL_USER = 'jatek@gmail.com'; process.env.GMAIL_APP_PASSWORD = 'x';
+process.env.GMAIL_USER = 'jatek@gmail.com'; process.env.ACCOUNT_EXTRA_EMAIL_DOMAINS = 'pelda.hu'; process.env.GMAIL_APP_PASSWORD = 'x';
 process.env.GAME_SERVER_URL = 'http://127.0.0.1:' + SRV_PORT;
 
 const fns = {};

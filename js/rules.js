@@ -126,3 +126,32 @@ export function makeSpamGuard({ max = 5, windowMs = 10000, dupMs = 0, maxKeys = 
   function forget(key, text){ const s = seen.get(key); if(s) s.texts.delete(norm(text)); }
   return { check, reset, forget };
 }
+
+// ---- v4.51: tiltott (megtévesztő vagy vulgáris) nevek ----
+// A „csontváz” a név összehasonlítható formája: kisbetű, ékezet nélkül, a kicselezett betűk
+// (0→o, 1→i, 3→e, 4→a, 5→s, 7→t, 8→b, @→a, $→s) visszaírva, csak betűk, ismétlődés nélkül.
+const LEET = { '0':'o', '1':'i', '!':'i', '|':'i', '3':'e', '4':'a', '@':'a', '5':'s', '$':'s', '7':'t', '8':'b', '9':'g', '€':'e' };
+export function nameSkeleton(n){
+  const s = String(n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return s.replace(/[0-9!|@$€]/g, c => LEET[c] || '').replace(/[^a-z]/g, '').replace(/(.)\1+/g, '$1');
+}
+// megtévesztő: a játék, az üzemeltető, hatóság vagy cég nevében szólna.
+// _PART: a név bármely részén tiltott; _WORD: csak egész szóként (rövid szavak — különben „Navigátor”, „Bankó” is fennakadna)
+const IMPERSONATE_PART = ['admin','adminisztrator','administrator','moderator','moderalo','support','ugyfelszolgalat','official','hivatalos','uzemelteto','fejleszto','developer','picasso','huncraft','anthropic','claude','netlify','google','microsoft','facebook','instagram','tiktok','rendorseg','police','kormany','miniszter','minister','sysadmin','superuser','webmaster','tamogatas','helpdesk','rootuser'];
+const IMPERSONATE_WORD = ['root','mod','sysop','system','rendszer','szerver','server','staff','owner','tulajdonos','bot','robot','null','undefined','guest','vendeg','valaki','anonymous','anonim','nobody','senki','everyone','mindenki','te','en','teged','jatek','game','host','szobanyito','nav','bank','otp','posta','team','csapat','segitseg','help','info','teszt','test'];
+// vulgáris / sértő (magyar és angol)
+const VULGAR_PART = ['fasz','picsa','geci','kurva','buzi','kocsog','szopo','szopj','szopas','baszd','baszo','baszni','baszot','baszas','segfej','anyadat','nigger','fuck','shit','bitch','cunt','hitler','porno','pedofil','csicska','ribanc','kutyaszar','buzeran','motherf','asshole','bastard','bassza','baszkiv'];
+const VULGAR_WORD = ['dick','sex','sexy','szex','szexi','pisi','kaki','fing','penis','pussy','whore','slut','anyad','naci','nazi','zsido','cigany','hulye','idiota','retard','debil','nyomorek','kretin','rinya','szar','pina','punci','fos','segg','tetu','niger','porn','pedo','ass','anus','vagina','fosch'];
+const SK = list => [...new Set(list.map(nameSkeleton))];
+const IP = SK(IMPERSONATE_PART), IW = SK(IMPERSONATE_WORD), VP = SK(VULGAR_PART), VW = SK(VULGAR_WORD);
+/** A név gondja ('vulgar' / 'impersonate'), vagy '' ha mehet. */
+export function badNameReason(n){
+  const k = nameSkeleton(n);
+  if(!k) return '';
+  const words = String(n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9!|@$€]+/).map(nameSkeleton).filter(Boolean);
+  const word = list => list.includes(k) || words.some(w => list.includes(w));
+  if(VP.some(v => k.includes(v)) || word(VW)) return 'vulgar';
+  if(IP.some(v => k.includes(v)) || word(IW)) return 'impersonate';
+  return '';
+}
+export const BAD_NAME_TEXT = { vulgar: 'Ez a név nem megengedett (sértő vagy vulgáris). Válassz másikat.', impersonate: 'Ez a név megtévesztő lehet (hivatalos, üzemeltetői vagy foglalt kifejezés). Válassz másikat.' };

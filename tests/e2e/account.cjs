@@ -60,7 +60,7 @@ const ready = p => p.waitForFunction(() => !document.body.classList.contains('bo
     await a.click('#btn-create-room');
     await a.waitForFunction(() => /^[A-Z0-9]{5}$/.test((document.getElementById('lobby-code') || {}).textContent || ''), null, { timeout: 15000 });
     const code = (await a.textContent('#lobby-code')).trim();
-    await H.joinRoom(g, servers, code, 'Vendég Béla');
+    await H.joinRoom(g, servers, code, 'Béla');
     await g.waitForSelector('#screen-lobby:not(.hidden)', { timeout: 15000 });
     await g.waitForFunction(() => !!document.querySelector('#lobby-players .acct-badge'), null, { timeout: 8000 });
     const chips = await g.evaluate(() => [...document.querySelectorAll('#lobby-players .player-chip')].map(c => ({ t: c.textContent.replace(/\s+/g, ' ').trim(), b: !!c.querySelector('.acct-badge') })));
@@ -106,7 +106,7 @@ const ready = p => p.waitForFunction(() => !document.body.classList.contains('bo
     // egy másik eszközön szerzett eredmény megjelenik itt is
     await a.evaluate(async () => {
       const g1 = await (await fetch('/.netlify/functions/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stats-get' }) })).json();
-      await fetch('/.netlify/functions/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stats-put', rev: g1.rev, stats: { games: 7, wins: 3, points: 900, best: 250 } }) });
+      await fetch('/.netlify/functions/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stats-put', rev: g1.rev, first: true, stats: { games: 7, wins: 3, points: 900, best: 250 } }) });
     });
     if (await a.isVisible('#account-close-btn')) await a.click('#account-close-btn');
     await a.click('#btn-open-stats');

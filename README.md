@@ -80,6 +80,7 @@ node tests/tools/css-imp-trial.mjs elotte-menu elotte-jatek munka   # !important
 | `NETLIFY_API_TOKEN` | nem | Visszajelzések olvasása az adminban |
 | `PICASSO_SERVER_SECRET` | nem | A játékszerver szójelzései (ugyanaz, mint a szerver `WORDS_SECRET`-je) |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` | a regisztrációhoz és az e-mail értesítőhöz | Levélküldés (megerősítő, belépőlink- és értesítő levelek) |
+| `ACCOUNT_EXTRA_EMAIL_DOMAINS` | nem | Regisztrációnál csak magánszemélyes e-mail szolgáltatók címe fogadható el (lista: `netlify/lib/mail.mjs`); ezzel további domaineket engedhetsz meg, vesszővel elválasztva |
 | `ACCOUNT_MAIL_DAILY_CAP` | nem | A fiókkal kapcsolatos levelek napi plafonja (alapból 200) |
 | `MAIL_DAILY_CAP` | nem | Napi levélplafon (alapból 450; a Gmail kb. 500-at enged) |
 | `MUSIC_REPO` | nem | A zenés tároló (`felhasznalo/tarolo`); nélküle az admin nem írhat tárolóba |

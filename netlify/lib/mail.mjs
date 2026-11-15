@@ -68,3 +68,25 @@ export const mailWrap = (inner, unsubUrl) => `<div style="font-family:system-ui,
 <h2 style="color:#FFD166;margin:0 0 12px">PIC-ASS-O ✏️</h2>${inner}
 ${unsubUrl ? `<p style="font-size:12px;color:#BFD3C4;margin-top:24px">Azért kaptad, mert feliratkoztál az új szobák értesítőjére. <a href="${unsubUrl}" style="color:#5FB6DE">Leiratkozás</a></p>` : ''}</div>`;
 export const btn = (url, text) => `<p><a href="${url}" style="display:inline-block;background:#7BD389;color:#16302A;font-weight:800;padding:12px 22px;border-radius:12px;text-decoration:none">${text}</a></p>`;
+
+// ---- v4.51: csak magánszemélyes e-mail cím ----
+// Céges címet általánosan nem lehet felismerni, ezért fordítva: csak az ismert, bárki által ingyen
+// (vagy magánszemélyként) használható levelezőszolgáltatók címeit fogadjuk el.
+const PERSONAL = new Set([
+  'gmail.com','googlemail.com',
+  'outlook.com','outlook.hu','hotmail.com','hotmail.hu','hotmail.co.uk','hotmail.de','hotmail.fr','hotmail.it','live.com','live.hu','live.co.uk','live.de','msn.com',
+  'yahoo.com','yahoo.co.uk','yahoo.de','yahoo.fr','yahoo.it','yahoo.es','ymail.com','rocketmail.com',
+  'icloud.com','me.com','mac.com',
+  'proton.me','protonmail.com','protonmail.ch','pm.me','tutanota.com','tutanota.de','tuta.io','tuta.com',
+  'gmx.com','gmx.net','gmx.de','gmx.at','gmx.ch','gmx.hu','web.de','mail.com','email.com','aol.com','zoho.com','yandex.com','yandex.ru','mail.ru','inbox.lv','seznam.cz','centrum.cz','wp.pl','o2.pl','interia.pl','onet.pl','libero.it','free.fr','orange.fr','laposte.net','t-online.de','bluewin.ch','abv.bg','fastmail.com','hey.com',
+  // magyar ingyenes / internetszolgáltatói (magánszemélyes) levelezők
+  'freemail.hu','citromail.hu','indamail.hu','vipmail.hu','t-online.hu','upcmail.hu','chello.hu','invitel.hu','digikabel.hu','externet.hu','vodafone.hu','telenor.hu','tvnetwork.hu','mailbox.hu','postafiok.hu','hu.inter.net','axelero.hu','fibermail.hu','yettel.hu','one.hu'
+]);
+/** true, ha a cím ismert magánszemélyes szolgáltatónál van */
+export function isPersonalEmail(email) {
+  const d = String(email || '').toLowerCase().split('@')[1] || '';
+  // ACCOUNT_EXTRA_EMAIL_DOMAINS (nem kötelező): további elfogadott szolgáltatók, vesszővel elválasztva
+  const extra = String(process.env.ACCOUNT_EXTRA_EMAIL_DOMAINS || '').toLowerCase().split(/[\s,]+/).filter(Boolean);
+  return PERSONAL.has(d) || extra.includes(d);
+}
+export const PERSONAL_EMAIL_TEXT = 'Csak magánszemélyes e-mail címmel lehet regisztrálni (például Gmail, Freemail, Citromail, Outlook/Hotmail, iCloud, Yahoo, Proton) — céges vagy iskolai címmel nem. Ha a szolgáltatód nincs a listán, írj nekünk: picasso.ertesito@gmail.com';

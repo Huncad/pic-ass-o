@@ -227,6 +227,7 @@ test('wordused / wordblock: csak a játékszerver jelezhet, és párhuzamosan se
 
 // ---- fiókok (v4.40) ----
 const ACC = '/.netlify/functions/account';
+process.env.ACCOUNT_EXTRA_EMAIL_DOMAINS = 'pelda.hu, b.hu';   // a tesztek példa-domainjei
 let ipSeq = 0;
 const accPost = async (body, cookie = '', headers = {}) => {
   const { default: acc } = await import('../netlify/functions/account.mjs');
@@ -351,6 +352,47 @@ test('fiók: a régi jelszó-lenyomatok és 2FA-kulcsok az első induláskor tö
   assert.ok(!('pw' in u) && !('totp' in u) && !('backup' in u), JSON.stringify(u));
   assert.ok(!S.has('r/abc'));
   assert.ok(S.has('mig/nopw'));
+});
+
+test('v4.51: tiltott nevek és csak magánszemélyes e-mail cím', async () => {
+  for (const name of ['Admin', '4dm1n', 'R00T', 'Moderátor', 'Hivatalos Anna', 'PicassoTeam', 'Kurva', 'F4sz', 'Hitler', 'Szar'])
+    assert.equal((await accPost({ action: 'register', name, email: 'tilt' + (++ipSeq) + '@gmail.com', consent: true })).status, 400, name);
+  // a hétköznapi nevek átmennek (nem akadnak fenn tévesen)
+  for (const name of ['Navigátor', 'Szarvas Bence', 'Dickens', 'Pinokkió', 'Botond'])
+    assert.equal((await accPost({ action: 'register', name, email: 'ok' + (++ipSeq) + '@gmail.com', consent: true })).status, 200, name);
+  // céges cím: nem
+  const r = await accPost({ action: 'register', name: 'Cégesember', email: 'valaki@purina.nestle.com', consent: true });
+  assert.equal(r.status, 400); assert.match(r.body.error, /magánszemélyes/);
+  assert.equal((await accPost({ action: 'register', name: 'Freemailes', email: 'valaki@freemail.hu', consent: true })).status, 200);
+  const c = await makeAccount('Cserélő', 'cserelo@pelda.hu');
+  assert.equal((await accPost({ action: 'email-begin', email: 'cserelo@ceg.hu' }, c)).status, 400, 'e-mail csere céges címre sem');
+  assert.equal((await accPost({ action: 'rename', name: 'Adminka' }, c)).status, 400, 'névváltoztatásnál is szűr');
+});
+
+test('v4.51: trófea-ranglista és a statisztika hihetősége', async () => {
+  const a = await makeAccount('Trófeás', 'trofeas@pelda.hu');
+  const b = await makeAccount('Másik', 'masik@pelda.hu');
+  // első szinkron: nagy ugrás is mehet (az eszközön addig gyűjtött adat)
+  assert.equal((await accPost({ action: 'stats-put', stats: { games: 60, wins: 30, points: 20000, guessRounds: 100, guessHit: 90 }, rev: 0 }, a)).status, 200);
+  // utána csak kis lépés
+  assert.equal((await accPost({ action: 'stats-put', stats: { games: 500, wins: 30, points: 20000, guessRounds: 100, guessHit: 90 }, rev: 1 }, a)).status, 400);
+  assert.equal((await accPost({ action: 'stats-put', stats: { games: 61, wins: 31, points: 21000, guessRounds: 105, guessHit: 94 }, rev: 1 }, a)).status, 200);
+  // egy másik eszköz első szinkronja: mehet nagyobb ugrás, de naponta csak párszor
+  assert.equal((await accPost({ action: 'stats-put', first: true, stats: { games: 80, wins: 40, points: 30000, guessRounds: 150, guessHit: 130 }, rev: 2 }, a)).status, 200);
+  const revNow = async () => (await accPost({ action: 'stats-get' }, a)).body.rev;
+  for (let i = 0; i < 2; i++) await accPost({ action: 'stats-put', first: true, stats: { games: 80 + i, wins: 40, points: 30000, guessRounds: 150, guessHit: 130 }, rev: await revNow() }, a);
+  assert.equal((await accPost({ action: 'stats-put', first: true, stats: { games: 400, wins: 40, points: 30000, guessRounds: 150, guessHit: 130 }, rev: await revNow() }, a)).status, 400, 'a 4. „első szinkron” aznap már nem');
+  // ellentmondás: soha
+  assert.equal((await accPost({ action: 'stats-put', stats: { games: 1, wins: 5 }, rev: 0 }, b)).status, 400);
+  await accPost({ action: 'stats-put', stats: { games: 1 }, rev: 0 }, b);
+  const top = await accGet('?achtop=1', a);
+  assert.equal(top.rows[0].name, 'Trófeás');
+  assert.ok(top.rows[0].count >= 8 && top.rows[0].points > 100, JSON.stringify(top.rows[0]));
+  assert.equal(top.mine.rank, 1);
+  assert.equal(top.rows[1].name, 'Másik');
+  // nem nyilvános profil: lekerül a ranglistáról
+  await accPost({ action: 'prefs-put', profilePublic: false }, a);
+  assert.ok(!(await accGet('?achtop=1')).rows.some(r => r.name === 'Trófeás'));
 });
 
 test('v4.49: e-mail csere, névváltoztatás, eszközök, adatletöltés', async () => {

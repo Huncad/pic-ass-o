@@ -54,7 +54,7 @@ const prep = '#btn-prep-reveal:visible, #prep-choices button:visible';
     await a.waitForFunction(() => /^[A-Z0-9]{5}$/.test((document.getElementById('lobby-code') || {}).textContent || ''), null, { timeout: 15000 });
     check('a szoba a saját kóddal nyílt', (await a.textContent('#lobby-code')).trim() === 'ANNA5');
     const g = await H.newPlayer(browser, servers, 'vendég', view);
-    await H.joinRoom(g, servers, 'ANNA5', 'Vendég Vili');
+    await H.joinRoom(g, servers, 'ANNA5', 'Vili');
     await g.waitForFunction(() => /csak regisztrált/.test(document.getElementById('home-warning').textContent), null, { timeout: 15000 }).catch(() => {});
     check('vendég nem léphet be', /csak regisztrált/.test(await g.textContent('#home-warning')), await g.textContent('#home-warning'));
     await H.joinRoom(b, servers, 'ANNA5', 'Bence');

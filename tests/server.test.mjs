@@ -175,7 +175,7 @@ test('névvédelem: regisztrált névvel csak érvényes jeggyel lehet bemutatko
   fake.send('hello', { name: 'PETER ' });
   fake.send('chat', { text: 'utána' });
   // szabad név: átmegy
-  guest.send('hello', { name: 'Vendég Béla' });
+  guest.send('hello', { name: 'Béla' });
   await sleep(300);
   assert.equal(fake.errors[0] && fake.errors[0].e, 'name-taken');
   assert.ok(!host.msgs.some(m => m.f === 'fake0001' && m.a === 'hello'));
@@ -207,7 +207,7 @@ test('névvédelem: regisztrált névvel csak érvényes jeggyel lehet bemutatko
 
   // ranglista: csak a regisztrált játékos kerül fel név szerint
   await sleep(300);
-  const rows = [{ name: 'Péter', score: 120 }, { name: 'Vendég Béla', score: 200 }, { name: 'Hoszt', score: 10 }];
+  const rows = [{ name: 'Péter', score: 120 }, { name: 'Béla', score: 200 }, { name: 'Hoszt', score: 10 }];
   for (const c of [host, real, guest]) c.ws.send(JSON.stringify({ t: 'result', rows }));
   await sleep(200);
   assert.ok([host, real, guest].some(c => c.acks.includes('ok')), JSON.stringify([host.acks, real.acks, guest.acks]));
@@ -215,7 +215,7 @@ test('névvédelem: regisztrált névvel csak érvényes jeggyel lehet bemutatko
   assert.equal(lb.length, 1);
   assert.equal(lb[0].name, 'Péter'); assert.equal(lb[0].wins, 0, 'a vendég nyert, de ő nincs a listán');
   const html = await (await fetch(`http://127.0.0.1:${PORT}/ranglista`)).text();
-  assert.ok(!html.includes('Vendég Béla'), 'a vendég neve sehol nem jelenik meg');
+  assert.ok(!html.includes('Béla'), 'a vendég neve sehol nem jelenik meg');
   // fióktörlés: csak aláírt kérésre, utána a játékos eltűnik a ranglistáról
   const forget = body => fetch(`http://127.0.0.1:${PORT}/api/forget`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal((await forget({ proof: 'aaaa.bbbb' })).status, 403);
