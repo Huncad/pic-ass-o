@@ -353,6 +353,7 @@ function broadcastDir(d, fromId){
 const ACCOUNT_BASES = [...new Set([process.env.ACCOUNT_API_BASE, WORDS_API, ...ALLOWED_ORIGINS.filter(o => o.startsWith('https://'))]
   .filter(Boolean).map(b => String(b).replace(/\/+$/, '')))];
 const ACCOUNT_PATH = '/.netlify/functions/account';
+let keyLoading = null;   // v4.50: egyszerre csak egy kulcsletöltés
 let accountKey = null, accountBase = '';
 async function loadAccountKey(){
   for(const base of (process.env.ACCOUNT_API_BASE ? [String(process.env.ACCOUNT_API_BASE).replace(/\/+$/, '')] : ACCOUNT_BASES)){
@@ -370,7 +371,7 @@ async function loadAccountKey(){
   return false;
 }
 (function keepAccountKey(){
-  loadAccountKey().then(ok => { setTimeout(keepAccountKey, ok ? 6 * 3600_000 : 60_000).unref?.(); });
+  loadAccountKey().then(ok => { setTimeout(keepAccountKey, ok ? 6 * 3600_000 : 10_000).unref?.(); });   // v4.50: hiba után 10 mp múlva újra
 })();
 /** Aláírt "törzs.aláírás" ellenőrzése; a törzs tartalma, vagy null. */
 function verifySigned(str){
@@ -836,6 +837,11 @@ wss.on('connection', (ws, req) => {
     if(isBinary) return;
     let m; try{ m = JSON.parse(buf.toString()); }catch(e){ return; }
     if(!m || typeof m !== 'object') return;
+    handleMsg(m);
+  });
+
+  // v4.50: az üzenet feldolgozása külön függvényben (az igazolás kulcsletöltés után újra lefuthat)
+  function handleMsg(m){
 
     // --- bemutatkozás (új vagy visszatérő) ---
     if(m.t === 'hello'){
@@ -940,6 +946,12 @@ wss.on('connection', (ws, req) => {
         return;
       }
       case 'auth': {
+        // v4.50: ha a kulcs még nincs meg (pl. indulás után a Netlify nem válaszolt), most azonnal lekérjük, és utána ellenőrzünk
+        if(!accountKey && !m._retried){
+          const again = Object.assign({}, m, { _retried: true });
+          (keyLoading || (keyLoading = loadAccountKey().finally(() => { keyLoading = null; }))).then(() => { if(peer.ws === ws) handleMsg(again); });
+          return;
+        }
         // v4.40: névigazoló jegy — a Netlify írta alá, és ehhez a kapcsolat-azonosítóhoz szól
         const c = verifySigned(m.k);
         // a jegy a kapcsolat titkos kulcsához is kötött: aki csak látta a jegyet (pl. szobatársként), nem tudja felhasználni
@@ -998,7 +1010,7 @@ wss.on('connection', (ws, req) => {
         ws.send(JSON.stringify({ t:'pong', s: peer.inSeq }));
         return;
     }
-  });
+  }
 
   ws.on('close', () => {
     if(!peer || peer.ws !== ws || !peers.has(peer.id)) return;

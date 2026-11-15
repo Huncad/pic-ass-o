@@ -2,7 +2,7 @@ import { normalize, squash, editDistance, guessVerdict, isPlainObject, cleanText
 import { Account } from './account.js';
 import { initProfile, openProfile, levelOf, levelTitle, milestones } from './profile.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.49';
+const APP_VERSION = '4.50';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -8308,6 +8308,7 @@ try{
     try{
       // v4.11: give the game server a moment before deciding where the room lives
       if(SRV.enabled && !SRV.up){ try{ await SRV.ready(2500); }catch(e){} }
+      await ensureAccountTicket();
       await connect(roomCode);
       if(roomIsPublic){
         myHostedRoomAnnouncement = { code:roomCode, name:roomName, hostName:myName };
@@ -8427,6 +8428,7 @@ try{
           // network, depending on what the HOST could reach when it opened it.
           // Try the server first (it answers within seconds), then the direct way.
           if(SRV.enabled && !SRV.up){ try{ await SRV.ready(3000); }catch(e){} }
+          await ensureAccountTicket();   // v4.50: a névigazoló jegy a belépés ELŐTT legyen meg („csak regisztráltak” szoba, névvédelem)
           const firstMode = SRV.up ? 'srv' : 'p2p';
           let result = await connect(roomCode, { expectPeer:true, timeoutMs: firstMode === 'srv' ? 9000 : JOIN_WAIT_MS, mode:firstMode });
           if(!result.metPeer && firstMode === 'srv' && roomCode){
@@ -11901,6 +11903,43 @@ try{
     if(await Account.saveWordlists(lists)){ paintWordlists(); sel.value = String(i); addSystemChatMessage(`💾 Elmentve a(z) „${lists[i].name}” listádba (${lists[i].words.length} szó).`); }
     else askInfo('Nem sikerült menteni.');
   });
+  // v4.50: belépett játékosnál a jegy (és a szerver felé az igazolás) megvárása, legfeljebb 4 mp-ig
+  async function ensureAccountTicket(){
+    try{
+      await Promise.race([Account.ready, new Promise(r=>setTimeout(r, 3000))]);
+      if(!Account.user) return;
+      if(!Account.ticket) await Promise.race([Account.fetchTicket(), new Promise(r=>setTimeout(r, 4000))]);
+      if(Account.ticket) SRV.setAuth(Account.ticket);
+      await new Promise(r=>setTimeout(r, 150));   // az igazolás érjen a szerverre a belépés előtt
+    }catch(e){}
+  }
+  // ---- v4.50: a regisztráció előnyei a vendégeknek ----
+  const REG_PROMO_KEY = 'picasso-regpromo-closed';
+  function paintRegPromo(){
+    const box = document.getElementById('reg-promo'); if(!box) return;
+    let closedAt = 0; try{ closedAt = Number(localStorage.getItem(REG_PROMO_KEY)) || 0; }catch(e){}
+    const show = !Account.user && !Account.accountsOff && Date.now() - closedAt > 14 * 86400000;   // bezárva 14 napig nem jön elő
+    box.classList.toggle('hidden', !show);
+  }
+  document.getElementById('reg-promo-close').addEventListener('click', ()=>{
+    try{ localStorage.setItem(REG_PROMO_KEY, String(Date.now())); }catch(e){}
+    document.getElementById('reg-promo').classList.add('hidden');
+  });
+  document.getElementById('reg-promo-btn').addEventListener('click', ()=>{ try{ sndClick(); }catch(e){} Account.open('register'); });
+  function paintRegNudge(rows){
+    const el = document.getElementById('reg-nudge'); if(!el) return;
+    if(Account.user || Account.accountsOff || amSpectator){ el.classList.add('hidden'); return; }
+    const me = (rows || []).find(r=>r.id === selfId);
+    const won = me && rows.length > 1 && me.score === rows[0].score && me.score > 0;
+    document.getElementById('reg-nudge-text').textContent = won
+      ? 'Szép győzelem! Regisztrált játékosként ez felkerülne a közös ranglistára, és a havi szezonban 🏆 jelvényt is szerezhetnél.'
+      : 'Regisztrálj, és az eredményeid felkerülnek a közös ranglistára, a statisztikád pedig minden eszközödön megmarad.';
+    el.classList.remove('hidden');
+  }
+  document.getElementById('reg-nudge-btn').addEventListener('click', ()=>{ try{ sndClick(); }catch(e){} Account.open('register'); });
+  Account.ready.then(paintRegPromo);
+  Account.onChange(()=>{ try{ paintRegPromo(); if(Account.user) document.getElementById('reg-nudge').classList.add('hidden'); }catch(e){} });
+
   // ---- v4.49: profil ----
   initProfile({ serverBase: SRV.enabled ? SRV.base : '', account: Account, avatarEmoji: c=>{ try{ return avatarEmoji(c); }catch(e){ return ''; } },
     onFollow: (on, name, pid)=>Account.follow(on, name, pid) });
@@ -12013,6 +12052,7 @@ try{
     if(!quiet) rematchYesVotes = new Set();
     if(!quiet || !rematchDeadline) startRematchCountdown();
     showOnly(['screen-gameend']);
+    paintRegNudge(rows);
     const topScore = rows.length ? rows[0].score : 0;
     const winners = rows.filter(r=>r.score===topScore);
     let teamWin = -2;   // -2: no teams, -1: draw, 0/1: the winning team

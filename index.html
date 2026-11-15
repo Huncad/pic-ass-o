@@ -166,6 +166,22 @@
       <div id="home-warning" style="text-align:center;color:var(--red);font-weight:700;min-height:0;margin-top:10px;"></div>
     </section>
 
+    <section class="home-card reg-promo hidden" id="reg-promo">
+      <button type="button" class="ghost small reg-promo-x" id="reg-promo-close" aria-label="Bezárás">✕</button>
+      <b class="reg-promo-h">✨ Regisztrálj — ingyenes, jelszó nélküli</b>
+      <ul class="reg-benefits">
+          <li>🔒 <b>A neved csak a tiéd</b> — más nem játszhat vele, ✔ jelvény mellette</li>
+          <li>📊 <b>Statisztika és beállítások minden eszközödön</b> — telefonon, gépen ugyanaz</li>
+          <li>🏆 <b>Közös ranglista és havi szezon</b> — a legjobbak 🏆 jelvényt kapnak</li>
+          <li>⭐ <b>Szintek, mérföldkövek, saját profil</b></li>
+          <li>👥 <b>Kövesd a barátaidat</b> — szólunk, ha szobát nyitnak</li>
+          <li>🖼️ <b>Rajzgaléria, saját szólisták, állandó szobakód</b></li>
+          <li>🔔 <b>Értesítés új szobákról</b> és „csak regisztráltak” szobák</li>
+        </ul>
+      <button type="button" class="big" id="reg-promo-btn">✏️ Regisztrálok</button>
+      <p class="acct-why" style="text-align:center;margin:6px 0 0">Fiók nélkül is játszhatsz — a regisztráció csak extrákat ad. Egy név és egy e-mail cím, ennyi.</p>
+    </section>
+
     <section class="home-card" id="subscribe-box">
       <button type="button" class="sub-head" id="sub-toggle" aria-expanded="false" aria-controls="sub-body">
         <span class="sub-mail"><svg viewBox="0 0 32 24" aria-hidden="true"><rect x="1" y="1" width="30" height="22" rx="4" fill="var(--blue)"/><path d="M3 4l13 10L29 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -471,6 +487,7 @@
     <h2 id="gameend-winner" style="text-align:center;">Győztes: —</h2>
     <table class="scores" id="gameend-scores"></table>
     <div id="gameend-awards"></div>
+    <p class="reg-nudge hidden" id="reg-nudge">✨ <span id="reg-nudge-text"></span> <button type="button" class="ghost small" id="reg-nudge-btn">Regisztrálok</button></p>
     <div id="gameend-gallery-wrap" class="hidden">
       <h3>🖼️ A parti rajzai</h3>
       <div class="gallery-grid" id="gameend-gallery"></div>
@@ -679,6 +696,17 @@
     </section>
 
     <section id="acct-v-register" class="hidden">
+      <details class="reg-why"><summary>Mit kapok a regisztrációval?</summary>
+        <ul class="reg-benefits">
+          <li>🔒 <b>A neved csak a tiéd</b> — más nem játszhat vele, ✔ jelvény mellette</li>
+          <li>📊 <b>Statisztika és beállítások minden eszközödön</b> — telefonon, gépen ugyanaz</li>
+          <li>🏆 <b>Közös ranglista és havi szezon</b> — a legjobbak 🏆 jelvényt kapnak</li>
+          <li>⭐ <b>Szintek, mérföldkövek, saját profil</b></li>
+          <li>👥 <b>Kövesd a barátaidat</b> — szólunk, ha szobát nyitnak</li>
+          <li>🖼️ <b>Rajzgaléria, saját szólisták, állandó szobakód</b></li>
+          <li>🔔 <b>Értesítés új szobákról</b> és „csak regisztráltak” szobák</li>
+        </ul>
+      </details>
       <form id="acct-f-register" autocomplete="on">
         <label class="field-label" for="acct-reg-name">Játékosnév (3–16 karakter) — ezt látják a többiek</label>
         <input type="text" id="acct-reg-name" name="name" autocomplete="nickname" minlength="3" maxlength="16" required>

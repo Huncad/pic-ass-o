@@ -2715,3 +2715,13 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   .wordlist-row{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:6px 0; }
   .wordlist-row select{ flex:1; min-width:120px; }
   .acct-badge.clickable, .pf-link{ cursor:pointer; }
+  /* v4.50: a regisztráció előnyei */
+  .reg-promo{ position:relative; border:2px solid color-mix(in srgb, var(--yellow) 55%, transparent); }
+  .reg-promo-h{ display:block; color:var(--yellow); font-size:1.05rem; margin:0 28px 6px 0; }
+  .reg-promo-x{ position:absolute; top:8px; right:8px; min-height:0; padding:2px 8px; }
+  .reg-benefits{ list-style:none; margin:6px 0 10px; padding:0; display:grid; gap:4px; font-size:.9rem; }
+  .reg-benefits b{ color:var(--chalk); }
+  .reg-promo .big{ width:100%; }
+  .reg-why{ margin:0 0 10px; padding:8px 12px; border-radius:12px; background:rgba(0,0,0,.16); }
+  .reg-why summary{ cursor:pointer; font-weight:800; color:var(--yellow); }
+  .reg-nudge{ text-align:center; margin:10px auto; max-width:520px; font-size:.9rem; color:var(--chalk-dim); }

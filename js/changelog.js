@@ -2,6 +2,10 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.50', changes:[
+    'A kezdőképernyőn, a regisztrációs ablakban és a játék végén is látszik, milyen előnyökkel jár a (jelszó nélküli, ingyenes) regisztráció. A kezdőképernyő kártyája bezárható.',
+    'Javítva: ha a játékszerver indulásakor épp nem érte el a fiókszolgáltatást, egy ideig vendégnek nézte a regisztrált játékosokat (a „csak regisztráltak” szobából ki is tette őket). Mostantól ilyenkor azonnal pótolja, és a belépés előtt a játék megvárja a névigazolást.'
+  ]},
   { version:'4.49', changes:[
     'Új: profil — koppints egy játékos ✔ jelvényére: szint, mérföldkövek, kitüntetések, havi dobogós helyezések, statisztika és a galériája. A saját profilod nyilvánosságát a fiókodban állíthatod.',
     'Új: szintek és mérföldkövek (a Statisztikáim tetején is), és havi szezon a közös ranglistán: minden hónap elején újraindul, a hónap legjobb 3 játékosa 🏆 jelvényt kap.',
