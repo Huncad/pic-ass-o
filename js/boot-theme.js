@@ -6,4 +6,6 @@
   var d = document.documentElement, t = localStorage.getItem('picasso-theme') || 'graphite';
   if(t !== 'forest') d.setAttribute('data-theme', t);
   if(localStorage.getItem('picasso-dark-mode') === '1') d.classList.add('dark-mode');
+  // v4.53: volt-e belépett fiók ezen az eszközön — amíg a játék betölt, a fiókgomb nem mutat „Belépés”-t
+  if(localStorage.getItem('picasso-acct-hint')) d.classList.add('acct-hint');
 }catch(e){ document.documentElement.setAttribute('data-theme', 'graphite'); } })();

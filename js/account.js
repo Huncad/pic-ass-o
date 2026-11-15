@@ -62,9 +62,21 @@ async function call(body, opts = {}){
   if(r.status === 401 && j && j.login && user){ setUser(null); }   // a munkamenet közben megszűnt
   return { ok: r.ok, status: r.status, j: j || {} };
 }
+// v4.53: az utolsó ismert belépett név (csak megjelenítéshez — a jogosultságot a HttpOnly süti adja).
+// Ezzel az oldal azonnal a belépett nézettel jelenik meg, nem villan fel a „Belépés / Regisztráció”;
+// a szerver válasza utána megerősíti (vagy csendben visszavált vendégre, ha közben kiléptettek).
+const HINT_KEY = 'picasso-acct-hint';
+let verified = false;      // megjött-e már a szerver válasza
+function hintUser(){ const h = ls.json(HINT_KEY); return h && typeof h.name === 'string' && h.name ? { name: h.name.slice(0, 16), pending: true } : null; }
+function setHint(u){
+  if(u) ls.set(HINT_KEY, JSON.stringify({ name: u.name }));
+  else ls.del(HINT_KEY);
+  try{ document.documentElement.classList.toggle('acct-hint', !!u); }catch(e){}
+}
 function setUser(u){
   const was = user ? user.name : '';
   user = u || null;
+  setHint(user);
   if(!user){ ticket = ''; ticketExp = 0; }
   if((user ? user.name : '') !== was || user) listeners.forEach(f=>{ try{ f(user); }catch(e){} });
   paintHome();
@@ -306,17 +318,19 @@ setInterval(()=>pushSettings(), 15_000);
 // ---------- a kezdőképernyő ----------
 function paintHome(){
   const btn = $('btn-account'), nameEl = $('home-name'), note = $('home-name-note');
+  const shown = user || (!verified ? hintUser() : null);   // amíg a szerver nem válaszolt: az utolsó ismert név
   if(btn){
     btn.textContent = '';
-    const ico = document.createElement('span'); ico.textContent = user ? '✔' : '👤'; ico.className = user ? 'acct-badge' : '';
-    btn.append(ico, document.createTextNode(user ? ` ${user.name} — Fiókom` : ' Belépés / Regisztráció'));
-    btn.classList.toggle('logged-in', !!user);
+    const ico = document.createElement('span'); ico.textContent = shown ? '✔' : '👤'; ico.className = shown ? 'acct-badge' : '';
+    btn.append(ico, document.createTextNode(shown ? ` ${shown.name} — Fiókom` : ' Belépés / Regisztráció'));
+    btn.classList.toggle('logged-in', !!shown);
+    btn.dataset.painted = '1';
   }
   if(nameEl){
-    if(user){ nameEl.value = user.name; nameEl.readOnly = true; nameEl.classList.add('name-locked'); ls.set('picasso-name', user.name); }
+    if(shown){ nameEl.value = shown.name; nameEl.readOnly = true; nameEl.classList.add('name-locked'); if(user) ls.set('picasso-name', user.name); }
     else if(nameEl.readOnly){ nameEl.readOnly = false; nameEl.classList.remove('name-locked'); }
   }
-  if(note){ if(user){ note.textContent = '✔ Regisztrált név — csak te használhatod.'; note.className = 'name-note ok'; } else checkTypedName(); }
+  if(note){ if(shown){ note.textContent = '✔ Regisztrált név — csak te használhatod.'; note.className = 'name-note ok'; } else checkTypedName(); }
   paintSubBox();
 }
 let nameTimer = 0;
@@ -341,6 +355,7 @@ function checkTypedName(){
 function paintSubBox(){
   const out = $('sub-loggedout'), inn = $('sub-loggedin'), chk = $('sub-email-on'), addr = $('sub-email-addr');
   if(!out || !inn) return;
+  if(!user && !verified && hintUser()){ out.classList.add('hidden'); inn.classList.add('hidden'); return; }   // még nem tudjuk: egyiket sem villantjuk fel
   out.classList.toggle('hidden', !!user);
   inn.classList.toggle('hidden', !user);
   if(user && chk){ chk.checked = !!user.notifyEmail; if(addr) addr.textContent = user.email; }
@@ -366,6 +381,7 @@ let view = 'login';
 const VIEWS = ['login','register','registered','link-sent','profile','devices','gallery','delete'];
 function show(v){
   view = v;
+  { const box = document.querySelector('#account-overlay .acct-box'); if(box) box.classList.toggle('wide', ['profile','gallery','devices'].includes(v)); }   // v4.53: a fiók nézetek széles, kártyás elrendezésben
   VIEWS.forEach(x=>{ const el = $('acct-v-' + x); if(el) el.classList.toggle('hidden', x !== v); });
   document.querySelectorAll('#account-overlay .acct-msg').forEach(el=>{ el.textContent = ''; el.className = 'acct-msg'; });
   { const d = $('acct-del-name'); if(d) d.value = ''; const h = $('acct-del-name-hint'); if(h) h.textContent = user ? user.name : ''; }
@@ -548,7 +564,7 @@ function osName(){
 function noLocalText(){
   const os = osName();
   if(os === 'windows') return 'Ezen a gépen nincs beállítva Windows Hello, ezért ide nem lehet jelkulcsot tenni. Állítsd be (Beállítások → Fiókok → Bejelentkezési lehetőségek → PIN), vagy használd a telefonodat.';
-  if(os === 'linux') return 'Linuxon a rendszer maga nem tárol jelkulcsot, de egy jelszókezelő igen: a Chrome bejelentkezve a Google Jelszókezelőbe teszi, vagy egy bővítmény (Bitwarden, KeePassXC, 1Password, Proton Pass). Ha ilyened van, próbáld az „Ezen az eszközön” gombot; ha nincs, a „📱 A telefonomra” gombbal a telefonodra tehetsz jelkulcsot.';
+  if(os === 'linux') return 'Linuxon a gép magában nem tárol jelkulcsot — jelszókezelővel (Chrome / Google Jelszókezelő, Bitwarden, KeePassXC…) működik, vagy tedd a telefonodra.';
   return 'Ez a gép / böngésző nem tud jelkulcsot tárolni — használd a telefonodat a „📱 A telefonomra” gombbal.';
 }
 const isPhone = ()=> /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -631,7 +647,7 @@ function wire(){
     if(!fd.get('sure')){ msg('acct-m-delete', 'Pipáld be, hogy biztosan törölni szeretnéd.', 'bad'); return; }
     const r = await call({ action:'delete', confirmName: String(fd.get('confirmName') || '').trim() });
     if(!r.ok){ msg('acct-m-delete', r.j.error || 'Nem sikerült.', 'bad'); return; }
-    [STATS_KEY, BASE_KEY, REV_KEY, OWNER_KEY, SETTINGS_MARK, 'picasso-name', 'picasso-push-sync'].forEach(ls.del);
+    [STATS_KEY, BASE_KEY, REV_KEY, OWNER_KEY, SETTINGS_MARK, HINT_KEY, 'picasso-name', 'picasso-push-sync'].forEach(ls.del);
     location.reload();
   });
   // v4.49
@@ -672,7 +688,7 @@ function wire(){
     $('acct-btn-logout').disabled = true;
     try{ if(statsDirty()) await syncStats(); await pushSettings(); await call({ action:'logout' }); }catch(e){}
     // a fiók statisztikája nem marad ezen az eszközön (közös gépen más ne lássa, és újra belépve ne számolódjon duplán)
-    [STATS_KEY, BASE_KEY, REV_KEY, OWNER_KEY, SETTINGS_MARK, 'picasso-name'].forEach(ls.del);
+    [STATS_KEY, BASE_KEY, REV_KEY, OWNER_KEY, SETTINGS_MARK, HINT_KEY, 'picasso-name'].forEach(ls.del);
     location.reload();
   });
   $('acct-btn-logout-all').addEventListener('click', async ()=>{
@@ -705,8 +721,8 @@ async function init(opts){
   paintHome();
   try{
     const r = await fetch(API, { credentials:'same-origin', cache:'no-store' });
-    if(r.ok){ accountsOn = true; const j = await r.json(); if(j && j.user){ setUser(j.user); await fetchTicket(); if(pullSettings()){ location.reload(); return; } syncStats(); } }
-    else if(r.status === 404){ const b = $('btn-account'); if(b) b.classList.add('hidden'); }   // a fiókszolgáltatás nincs telepítve (pl. helyi próba)
+    if(r.ok){ accountsOn = true; const j = await r.json(); verified = true; if(j && j.user){ setUser(j.user); await fetchTicket(); if(pullSettings()){ location.reload(); return; } syncStats(); } else { setHint(null); paintHome(); } }
+    else if(r.status === 404){ verified = true; setHint(null); paintHome(); const b = $('btn-account'); if(b) b.classList.add('hidden'); }   // a fiókszolgáltatás nincs telepítve (pl. helyi próba)
   }catch(e){ if(location.protocol === 'file:'){ const b = $('btn-account'); if(b) b.classList.add('hidden'); } }
   readyResolve();
   handleUrl();
@@ -722,3 +738,6 @@ export const Account = {
   verifyTicket, nameTaken, mayUse, nameProblem, syncStats, resetStats, fetchTicket,
   follow, galleryAdd, saveWordlists, exportData
 };
+
+// v4.53: az első kirajzoláskor már az utolsó ismert állapot látszik (a modul a HTML feldolgozása után azonnal fut)
+try{ paintHome(); }catch(e){}

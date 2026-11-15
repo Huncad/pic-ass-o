@@ -2,6 +2,10 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.53', changes:[
+    'Belépett játékosnál betöltéskor már nem villan fel a „Belépés / Regisztráció”: a neved azonnal látszik, a háttérben a szerver megerősíti. Ha közben kiléptettek (pl. másik eszközről), a nézet csendben vendégre vált.',
+    'A fiók ablak új, reszponzív dizájnt kapott: nagy képernyőn széles, kártyás, kétoszlopos elrendezés (jelkulcsok, fiókadatok, követés, értesítések), telefonon egy oszlop. A hosszú magyarázatok a „Hogyan működik?” alá kerültek.'
+  ]},
   { version:'4.52', changes:[
     'A játékszerver sok egyidejű játékosnál is gyors marad: a szobalistát csak a kezdőképernyőn lévők kapják (és csak ha változott), a kapcsolatonkénti tömörítés sokkal kevesebb memóriát használ. Teszt: 960 egyidejű játékosnál az üzenetek átlagos késése 11,6 másodpercről 1 ezredmásodpercre csökkent; 4800 játékost is elvisz, üzenetvesztés nélkül.',
     'Ha a szerver memóriája fogyóban van, nem omlik össze: az új játékosok automatikusan a közvetlen kapcsolatra váltanak, a már játszók zavartalanul folytatják.',

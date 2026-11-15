@@ -119,7 +119,9 @@ async function createRoom(host, servers, { roomName = 'Teszt szoba', name = 'Ann
 
 async function joinRoom(guest, servers, code, name = 'Bence') {
   await guest.goto(servers.base + '?join=' + code);
-  await guest.fill('#home-name', name);
+  // v4.53: belépett (regisztrált) játékosnál a névmező azonnal zárolt a saját nevével — azt nem kell kitölteni
+  await guest.waitForSelector('#home-name');
+  if (!(await guest.evaluate(() => document.getElementById('home-name').readOnly))) await guest.fill('#home-name', name);
   await guest.click('#btn-invite-join');
 }
 

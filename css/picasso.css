@@ -2743,3 +2743,51 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   .trophy-board li.me{ outline:2px solid var(--yellow); }
   /* v4.52: nagy váróban a lebegő chat / reakció gombok ne takarják az utolsó játékosokat */
   @media (max-width: 720px){ #lobby-players{ padding-bottom: 96px; } }
+  /* v4.53: amíg a fiók állapota betölt (volt belépett fiók ezen az eszközön), ne villanjon fel a vendég nézet */
+  html.acct-hint #btn-account:not([data-painted]){ color:transparent; position:relative; min-width:11em; }
+  html.acct-hint #btn-account:not([data-painted])::after{ content:''; position:absolute; inset:7px 10px; border-radius:6px; background:linear-gradient(90deg, rgba(var(--line-rgb),.08), rgba(var(--line-rgb),.2), rgba(var(--line-rgb),.08)); background-size:200% 100%; animation:acctShimmer 1.1s linear infinite; }
+  html.acct-hint #sub-loggedout{ display:none; }
+  @keyframes acctShimmer{ from{ background-position:100% 0; } to{ background-position:-100% 0; } }
+  /* v4.53: reszponzív fiók ablak — nagy képernyőn széles, kártyás, több oszlopos */
+  #account-overlay .acct-box{ transition:max-width .2s; }
+  #account-overlay .acct-box.wide{ max-width:min(1120px, 96vw); }
+  .acct-hero{ display:flex; align-items:center; gap:16px; padding:14px 16px; border-radius:16px;
+    background:linear-gradient(135deg, color-mix(in srgb, var(--yellow) 14%, transparent), rgba(0,0,0,.18)); border:1px solid rgba(var(--line-rgb),.1); flex-wrap:wrap; }
+  .acct-hero-av{ width:56px; height:56px; border-radius:50%; background:var(--blue-fill, #3d9bd1); color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.6rem; font-weight:900; flex-shrink:0; box-shadow:0 0 0 3px rgba(255,255,255,.08); }
+  .acct-hero-txt{ flex:1; min-width:200px; }
+  .acct-hero-name{ font-family:'Kalam', cursive; font-size:1.7rem; line-height:1.1; color:var(--chalk); }
+  .acct-hero-dl{ grid-template-columns:auto 1fr; margin:4px 0 0 !important; gap:2px 12px !important; }
+  .acct-hero-dl dt, .acct-hero-dl dd{ font-size:.85rem !important; }
+  .acct-hero-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .acct-grid{ display:grid; grid-template-columns:1fr; gap:12px; margin-top:12px; }
+  .acct-card{ padding:14px 16px; border-radius:16px; background:rgba(0,0,0,.18); border:1px solid rgba(var(--line-rgb),.08); display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .acct-card.acct-pk{ margin:0; }
+  .acct-card-h{ margin:0 0 2px; font-size:1rem; color:var(--yellow); display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .acct-card-h small{ color:var(--chalk-dim); font-weight:600; font-size:.78rem; }
+  .acct-card-h2{ margin-top:10px; }
+  .acct-card .acct-why{ margin:0 !important; }
+  .acct-card .acct-msg:empty{ display:none; }
+  .acct-card .acct-sec-h span{ font-weight:700; }
+  .acct-subform{ display:flex; flex-direction:column; gap:6px; }
+  .acct-pk-btns{ display:flex; gap:8px; flex-wrap:wrap; }
+  .acct-note{ color:var(--yellow) !important; }
+  .acct-more summary{ cursor:pointer; color:var(--chalk-dim); font-size:.85rem; }
+  .acct-more[open] summary{ margin-bottom:6px; }
+  .acct-more .acct-why + .acct-why{ margin-top:6px !important; }
+  .acct-toggle{ display:flex; gap:10px; align-items:flex-start; font-size:.9rem; cursor:pointer; line-height:1.35; }
+  .acct-toggle input{ margin-top:2px; flex-shrink:0; width:18px; height:18px; }
+  .acct-footer{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:14px; padding-top:12px; border-top:1px solid rgba(var(--line-rgb),.1); }
+  .acct-footer-gap{ flex:1; }
+  .acct-footer .acct-danger{ margin-left:0; }
+  .acct-pk-list li{ padding:6px 10px; border-radius:10px; background:rgba(255,255,255,.04); }
+  @media (min-width: 760px){
+    .acct-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  }
+  @media (min-width: 1100px){
+    .acct-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; }
+    #account-overlay{ padding:32px 24px; }
+  }
+  @media (max-width: 520px){
+    .acct-footer > *{ flex:1 1 auto; }
+    .acct-footer-gap{ display:none; }
+  }

@@ -736,67 +736,89 @@
     </section>
 
     <section id="acct-v-profile" class="hidden">
+      <!-- v4.53: reszponzív, kártyás fiók nézet (nagy képernyőn több oszlop) -->
+      <div class="acct-hero">
+        <div class="acct-hero-av" aria-hidden="true">✔</div>
+        <div class="acct-hero-txt">
+          <div class="acct-hero-name"><b id="acct-p-name"></b></div>
+          <dl class="acct-dl acct-hero-dl">
+            <dt>E-mail</dt><dd id="acct-p-email"></dd>
+            <dt>Regisztráció</dt><dd id="acct-p-since"></dd>
+          </dl>
+        </div>
+        <div class="acct-hero-actions">
+          <button type="button" class="ghost small" id="acct-btn-myprofile">👤 Profilom</button>
+          <button type="button" class="ghost small" id="acct-btn-gallery">🖼️ Galériám</button>
+        </div>
+      </div>
       <p class="acct-msg" id="acct-m-profile" role="status"></p>
-      <dl class="acct-dl">
-        <dt>Játékosnév</dt><dd><span class="acct-badge">✔</span> <b id="acct-p-name"></b></dd>
-        <dt>E-mail cím</dt><dd id="acct-p-email"></dd>
-        <dt>Regisztráció</dt><dd id="acct-p-since"></dd>
-      </dl>
-      <div class="acct-pk hidden" id="acct-pk-box">
-        <div class="acct-pk-h"><b>🔑 Jelkulcsok</b><span class="acct-pk-btns"><button type="button" class="ghost small" id="acct-pk-add">+ Ezen az eszközön</button><button type="button" class="ghost small hidden" id="acct-pk-add-phone">📱 A telefonomra (QR-kóddal)</button></span></div>
-        <p class="acct-why hidden" id="acct-pk-nolocal" style="margin-top:4px;color:var(--yellow) !important"></p>
-        <p class="acct-why hidden" id="acct-pk-phone-hint" style="margin-top:4px">Gépen: a „📱 A telefonomra” gomb után a böngésző egy QR-kódot mutat. Olvasd be a telefonod kamerájával, erősítsd meg a telefonon (ujjlenyomat / arc), és kész — utána a gépen is a telefonoddal lépsz be (a belépésnél ugyanígy QR-kódot kapsz).</p>
-        <p class="acct-why" style="margin-top:4px">Jelkulccsal jelszó nélkül léphetsz be: a telefonod vagy géped ujjlenyomattal, arccal vagy a képernyőzár kódjával igazol. A kulcs az eszközödön marad, mi csak a nyilvános felét tároljuk.</p>
-        <ul id="acct-pk-list" class="acct-pk-list"></ul>
+
+      <div class="acct-grid">
+        <div class="acct-card acct-pk hidden" id="acct-pk-box">
+          <h3 class="acct-card-h">🔑 Jelkulcsok <small>belépés jelszó nélkül</small></h3>
+          <ul id="acct-pk-list" class="acct-pk-list"></ul>
+          <div class="acct-pk-btns">
+            <button type="button" class="secondary small" id="acct-pk-add">+ Ezen az eszközön</button>
+            <button type="button" class="ghost small hidden" id="acct-pk-add-phone">📱 A telefonomra (QR-kóddal)</button>
+          </div>
+          <p class="acct-why hidden acct-note" id="acct-pk-nolocal"></p>
+          <details class="acct-more">
+            <summary>Hogyan működik?</summary>
+            <p class="acct-why">Jelkulccsal jelszó nélkül léphetsz be: a telefonod vagy géped ujjlenyomattal, arccal vagy a képernyőzár kódjával igazol. A kulcs az eszközödön marad, mi csak a nyilvános felét tároljuk.</p>
+            <p class="acct-why">Linuxon és más rendszereken, ahol a gép maga nem tárol jelkulcsot, egy jelszókezelő igen: a Chrome bejelentkezve a Google Jelszókezelőbe teszi, vagy egy bővítmény (Bitwarden, KeePassXC, 1Password, Proton Pass). Ha nincs ilyened, tedd a jelkulcsot a telefonodra.</p>
+            <p class="acct-why hidden" id="acct-pk-phone-hint">Gépen: a „📱 A telefonomra” gomb után a böngésző egy QR-kódot mutat. Olvasd be a telefonod kamerájával, erősítsd meg a telefonon (ujjlenyomat / arc) — utána a gépen is a telefonoddal lépsz be (a belépésnél ugyanígy QR-kódot kapsz).</p>
+          </details>
+        </div>
+
+        <div class="acct-card">
+          <h3 class="acct-card-h">🪪 Fiókadatok</h3>
+          <div class="acct-sec-h"><span>✏️ Játékosnév</span><button type="button" class="ghost small" id="acct-btn-rename">Módosítás</button></div>
+          <form id="acct-f-rename" class="hidden acct-subform">
+            <div class="acct-inline"><input type="text" id="acct-rename-input" name="name" maxlength="16" minlength="3" autocomplete="off" required><button type="submit" class="small">Mentés</button></div>
+            <p class="acct-why">30 naponta egyszer. A régi neved még 30 napig a tiéd marad.</p>
+            <p class="acct-msg" id="acct-m-rename" role="status"></p>
+          </form>
+          <div class="acct-sec-h"><span>📧 E-mail cím</span><button type="button" class="ghost small" id="acct-btn-email">Módosítás</button></div>
+          <form id="acct-f-email" class="hidden acct-subform">
+            <div class="acct-inline"><input type="email" id="acct-email-input" name="email" maxlength="120" autocomplete="email" required placeholder="új e-mail címed"><button type="submit" class="small">Küldés</button></div>
+            <p class="acct-why">Az új címre megerősítő levelet küldünk; a régi címedre is szólunk.</p>
+            <p class="acct-msg" id="acct-m-email" role="status"></p>
+          </form>
+          <h3 class="acct-card-h acct-card-h2">🏷️ Állandó szobakódom</h3>
+          <form id="acct-f-roomcode" class="acct-inline">
+            <input type="text" id="acct-roomcode-input" name="code" maxlength="5" autocomplete="off" autocapitalize="characters" placeholder="pl. ADAM5" spellcheck="false">
+            <button type="submit" class="small">Mentés</button>
+          </form>
+          <p class="acct-why">5 karakter (O, I, 0 és 1 nélkül) — a barátaid mindig ezzel a kóddal találnak meg.</p>
+          <p class="acct-msg" id="acct-m-roomcode" role="status"></p>
+        </div>
+
+        <div class="acct-card">
+          <h3 class="acct-card-h">👥 Akiket követek</h3>
+          <ul id="acct-friends" class="acct-pk-list"></ul>
+          <form id="acct-f-follow" class="acct-inline">
+            <input type="text" id="acct-follow-input" name="name" maxlength="16" autocomplete="off" placeholder="regisztrált játékos neve">
+            <button type="submit" class="small">+ Követés</button>
+          </form>
+          <p class="acct-msg" id="acct-m-follow" role="status"></p>
+        </div>
+
+        <div class="acct-card">
+          <h3 class="acct-card-h">⚙️ Értesítések és adatvédelem</h3>
+          <label class="acct-toggle"><input type="checkbox" id="acct-p-followmail"><span>Szóljatok, ha valaki, akit követek, szobát nyit</span></label>
+          <label class="acct-toggle"><input type="checkbox" id="acct-p-notify"><span>E-mail, ha bárki nyilvános szobát nyit</span></label>
+          <label class="acct-toggle"><input type="checkbox" id="acct-p-public"><span>Nyilvános profil (statisztika, szint, jelvények, galéria)</span></label>
+          <p class="acct-why">A statisztikád és minden beállításod a fiókoddal együtt minden eszközödön ugyanaz.</p>
+        </div>
       </div>
-      <div class="acct-sec">
-        <div class="acct-sec-h"><b>✏️ Játékosnév</b><button type="button" class="ghost small" id="acct-btn-rename">Módosítás</button></div>
-        <form id="acct-f-rename" class="hidden">
-          <input type="text" id="acct-rename-input" name="name" maxlength="16" minlength="3" autocomplete="off" required>
-          <p class="acct-why">30 naponta egyszer változtathatsz. A régi neved még 30 napig a tiéd marad, senki más nem veheti fel.</p>
-          <p class="acct-msg" id="acct-m-rename" role="status"></p>
-          <button type="submit" class="small">Mentés</button>
-        </form>
-        <div class="acct-sec-h"><b>📧 E-mail cím</b><button type="button" class="ghost small" id="acct-btn-email">Módosítás</button></div>
-        <form id="acct-f-email" class="hidden">
-          <input type="email" id="acct-email-input" name="email" maxlength="120" autocomplete="email" required placeholder="új e-mail címed">
-          <p class="acct-why">Az új címre megerősítő levelet küldünk; a csere csak akkor történik meg, ha ott rákattintasz. A régi címedre is szólunk.</p>
-          <p class="acct-msg" id="acct-m-email" role="status"></p>
-          <button type="submit" class="small">Megerősítő levél küldése</button>
-        </form>
-      </div>
-      <div class="acct-sec">
-        <div class="acct-sec-h"><b>🏷️ Állandó szobakódom</b></div>
-        <form id="acct-f-roomcode" class="acct-inline">
-          <input type="text" id="acct-roomcode-input" name="code" maxlength="5" autocomplete="off" autocapitalize="characters" placeholder="pl. ADAM5" spellcheck="false">
-          <button type="submit" class="small">Mentés</button>
-        </form>
-        <p class="acct-why">5 karakter (betűk és számok, O, I, 0 és 1 nélkül). Szobanyitáskor választhatod ezt a kódot, így a barátaid mindig ugyanazzal a kóddal / linkkel találnak meg. Más nem foglalhatja el.</p>
-        <p class="acct-msg" id="acct-m-roomcode" role="status"></p>
-      </div>
-      <div class="acct-sec">
-        <div class="acct-sec-h"><b>👥 Akiket követek</b></div>
-        <ul id="acct-friends" class="acct-pk-list"></ul>
-        <form id="acct-f-follow" class="acct-inline">
-          <input type="text" id="acct-follow-input" name="name" maxlength="16" autocomplete="off" placeholder="regisztrált játékos neve">
-          <button type="submit" class="small">+ Követés</button>
-        </form>
-        <p class="acct-msg" id="acct-m-follow" role="status"></p>
-        <label class="sub-consent"><input type="checkbox" id="acct-p-followmail"><span>Szóljatok (push és e-mail), ha valaki, akit követek, szobát nyit</span></label>
-      </div>
-      <label class="sub-consent"><input type="checkbox" id="acct-p-public"><span>A profilom nyilvános (statisztika, jelvények, szint és a galériám — mások a nevemre koppintva látják)</span></label>
-      <label class="sub-consent"><input type="checkbox" id="acct-p-notify"><span>E-mail értesítés, ha valaki nyilvános szobát nyit</span></label>
-      <div class="acct-actions acct-actions-sm">
-        <button type="button" class="ghost small" id="acct-btn-myprofile">👤 Profilom</button>
-        <button type="button" class="ghost small" id="acct-btn-gallery">🖼️ Galériám</button>
+
+      <div class="acct-footer">
         <button type="button" class="ghost small" id="acct-btn-devices">💻 Eszközeim</button>
         <button type="button" class="ghost small" id="acct-btn-export">⬇️ Adataim letöltése</button>
-      </div>
-      <p class="acct-why">A statisztikád és a beállításaid (avatar, téma, hang) a fiókoddal együtt minden eszközödön ugyanazok.</p>
-      <div class="acct-actions">
-        <button type="button" class="secondary" id="acct-btn-logout-all">📵 Kiléptetés a többi eszközről</button>
-        <button type="button" class="secondary" id="acct-btn-logout">🚪 Kilépés</button>
+        <button type="button" class="ghost small" id="acct-btn-logout-all">📵 Kiléptetés a többi eszközről</button>
+        <span class="acct-footer-gap"></span>
         <button type="button" class="ghost small acct-danger" data-acct-go="delete">Fiók törlése…</button>
+        <button type="button" class="secondary" id="acct-btn-logout">🚪 Kilépés</button>
       </div>
     </section>
 
