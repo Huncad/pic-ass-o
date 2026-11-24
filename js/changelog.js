@@ -2,6 +2,9 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.60', changes:[
+    'Telefonon minden ablak Bezárás gombja kerek ✕ ikon lett, így a címek kiférnek egy sorba (a képernyőolvasók továbbra is „Bezárás”-t olvasnak fel).'
+  ]},
   { version:'4.59', changes:[
     'A Közös ranglista ablak szebb lett: nagy képernyőn nem nyúlik szét, a dobogós helyek (arany, ezüst, bronz) kiemelt sorban látszanak, görgetéskor a táblázat fejléce fent marad, a hosszú nevek nem tolják szét a sort. Telefonon a három időszak-fül egy sorban, kapcsolóként jelenik meg.'
   ]},

@@ -2885,3 +2885,11 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   }
   .rank-tabs .abbr{ display:none; }
   @media (max-width:600px){ .rank-tabs .full{ display:none; } .rank-tabs .abbr{ display:inline; } }
+  /* v4.60: telefonon az ablakok Bezárás gombja kerek ✕ ikon, hogy a cím kiférjen */
+  @media (max-width: 600px){
+    .admin-panel-header{ align-items:flex-start; gap:10px; }
+    .admin-panel-header > button.ghost.small[id$="close-btn"], .admin-panel-header > #admin-close-btn-2{
+      font-size:0 !important; width:40px; height:40px; min-width:40px; padding:0 !important; border-radius:50%;
+      display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .admin-panel-header > button.ghost.small[id$="close-btn"]::before, .admin-panel-header > #admin-close-btn-2::before{ content:'✕'; font-size:1.05rem; font-weight:800; line-height:1; }
+  }
