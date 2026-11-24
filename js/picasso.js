@@ -2389,21 +2389,21 @@ try{
     musicIdx = i;
   }
   function musicTarget(){ return musicMuted ? 0 : volCurve(musicVolume); }
-  // v4.61: a feltöltött zenék szép, magyar címet kapnak. Csak akkor lép életbe, ha a lista még a feltöltéskori
+  // v4.61: a feltöltött zenék rendes (angol) címet kapnak. Csak akkor lép életbe, ha a lista még a feltöltéskori
   // (fájlnévből képzett) nevet tartalmazza — egy későbbi kézi átnevezés mindig erősebb. A következő admin
   // mentéskor az új név bekerül a zenelistába is.
   const MUSIC_TITLES = {
-    'zene/muea7lmh-pixel-dreams.mp3':              ['Pixel Dreams', 'Pixelálmok'],
-    'zene/museotbu-pixel-dreams-2.mp3':            ['Pixel Dreams (2)', 'Pixelálmok – Második menet'],
-    'zene/museowbs-pixel-dreams-1.mp3':            ['Pixel Dreams (1)', 'Pixelálmok – Éjszakai rajz'],
-    'zene/mueayjaw-exploratory-pulse.mp3':         ['Exploratory Pulse', 'Felfedező ritmus'],
-    'zene/muhblf99-neon-horizon-menu-theme.mp3':   ['Neon Horizon Menu Theme', 'Neon horizont'],
-    'zene/muhbu4wv-neon-horizon-menu-theme-1.mp3': ['Neon Horizon Menu Theme (1)', 'Neon horizont – Hajnal'],
-    'zene/muhcofw6-ig2.mp3':                       ['IG2', 'Krétapor'],
-    'zene/muhd0erq-ig22.mp3':                      ['IG22', 'Krétapor – Újrarajzolva'],
-    'zene/museoz21-quiet-wonder.mp3':              ['Quiet Wonder', 'Csendes csoda'],
-    'zene/musep1zf-quiet-space.mp3':               ['Quiet Space', 'Üres vászon'],
-    'zene/musep4tw-vasto-e-speranzoso.mp3':        ['Vasto e Speranzoso', 'Tágas remény']
+    'zene/muea7lmh-pixel-dreams.mp3':              ['Pixel Dreams', 'Pixel Dreams'],
+    'zene/museotbu-pixel-dreams-2.mp3':            ['Pixel Dreams (2)', 'Pixel Dreams – Second Round'],
+    'zene/museowbs-pixel-dreams-1.mp3':            ['Pixel Dreams (1)', 'Pixel Dreams – Night Sketch'],
+    'zene/mueayjaw-exploratory-pulse.mp3':         ['Exploratory Pulse', 'Exploratory Pulse'],
+    'zene/muhblf99-neon-horizon-menu-theme.mp3':   ['Neon Horizon Menu Theme', 'Neon Horizon'],
+    'zene/muhbu4wv-neon-horizon-menu-theme-1.mp3': ['Neon Horizon Menu Theme (1)', 'Neon Horizon – Dawn'],
+    'zene/muhcofw6-ig2.mp3':                       ['IG2', 'Chalk Dust'],
+    'zene/muhd0erq-ig22.mp3':                      ['IG22', 'Chalk Dust – Redrawn'],
+    'zene/museoz21-quiet-wonder.mp3':              ['Quiet Wonder', 'Quiet Wonder'],
+    'zene/musep1zf-quiet-space.mp3':               ['Quiet Space', 'Blank Canvas'],
+    'zene/musep4tw-vasto-e-speranzoso.mp3':        ['Vasto e Speranzoso', 'Vast and Hopeful']
   };
   function sanitizeMusicManifest(raw){
     const out = { repo:'', tracks:[] };

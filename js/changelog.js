@@ -3,7 +3,7 @@
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
   { version:'4.61', changes:[
-    'A háttérzenék szép, magyar címet kaptak (pl. Pixelálmok, Neon horizont, Krétapor, Csendes csoda, Üres vászon, Tágas remény) a feltöltéskori fájlnevek helyett.'
+    'A háttérzenék rendes, egységes angol címet kaptak a feltöltéskori fájlnevek helyett (pl. Pixel Dreams – Night Sketch, Neon Horizon – Dawn, Chalk Dust, Blank Canvas, Vast and Hopeful).'
   ]},
   { version:'4.60', changes:[
     'Telefonon minden ablak Bezárás gombja kerek ✕ ikon lett, így a címek kiférnek egy sorba (a képernyőolvasók továbbra is „Bezárás”-t olvasnak fel).'
