@@ -2860,3 +2860,7 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
     #stats-overlay .stat-val{ font-size:1.1rem; }
     #stats-overlay .stat-sub{ font-size:.7rem; }
   }
+  /* v4.58: telefonon a páratlan utolsó kártya kitölti a sort */
+  @media (max-width: 600px){
+    #stats-overlay .stat-grid > .stat-card:last-child:nth-child(odd){ grid-column:1 / -1; }
+  }

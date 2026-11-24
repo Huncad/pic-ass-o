@@ -2,6 +2,9 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.58', changes:[
+    'Statisztikáim telefonon: ha egy szakaszban páratlan számú kártya van, az utolsó kitölti a teljes sort, így nem marad üres hely mellette.'
+  ]},
   { version:'4.57', changes:[
     'A Statisztikáim ablak illeszkedik a többihez: elválasztott, görgetéskor is látszó fejléc. Laptopon már nem kicsinyíti olvashatatlanra a szöveget (ha nem fér ki, görgethető), és üres statisztikánál nem nyúlik a képernyő teljes szélességére.'
   ]},
