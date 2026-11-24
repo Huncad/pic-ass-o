@@ -35,7 +35,10 @@ const wordsRe = /\/\*__WORDS__\*\/\{[^\n]*\};/;
 if(!html.includes('/*__FONTS__*/') || !wordsRe.test(html)) throw new Error('hiányzó helyőrző a sablonban');
 // a szólista JSON-ja nem tartalmazhat "</script"-et (szavak, nem kód — de biztosra megyünk)
 const wordsJson = JSON.stringify(words).replace(/</g, '\\u003c');
-html = html.replace('/*__FONTS__*/', () => fontCss).replace(wordsRe, () => `${wordsJson};`);
+if(!html.includes('/*__OFL__*/')) throw new Error('hiányzó licenc-helyőrző a sablonban');
+// a betűtípusok licence (SIL OFL 1.1) a fájlban is olvasható legyen
+const ofl = readFileSync(join(here, 'OFL.txt'), 'utf8').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+html = html.replace('/*__FONTS__*/', () => fontCss).replace(wordsRe, () => `${wordsJson};`).replace('/*__OFL__*/', () => ofl);
 
 const out = join(here, 'Picasso-offline.html');
 writeFileSync(out, html);

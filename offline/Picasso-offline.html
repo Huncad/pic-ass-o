@@ -173,8 +173,13 @@ body.has-aud .peek{ background:var(--yellow); }
 .tool.sel{ border-color:var(--yellow); background:rgba(255,209,102,.16); }
 .tool .sz{ display:block; border-radius:50%; background:var(--chalk); }
 .actionbar{ display:flex; gap:10px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:8px 10px; }
-.actionbar .ok{ flex:1 1 auto; font-size:1.25rem; padding:14px; }
-.actionbar .pass{ font-size:1.05rem; }
+.actionbar .pass{ font-size:1.05rem; flex:0 0 auto; }
+.guessers{ display:flex; flex-wrap:wrap; gap:8px; flex:1 1 auto; align-items:center; min-width:0; }
+.guessers .lbl{ font-weight:800; color:var(--chalk-dim); font-size:.85rem; }
+.guessers button{ padding:11px 16px; font-size:1.05rem; }
+.guessers button.ok{ flex:1 1 auto; font-size:1.2rem; }
+button.undo{ background:transparent; color:var(--yellow); border:2px dashed rgba(255,209,102,.65); box-shadow:none; flex:0 0 auto; }
+button.undo:hover{ box-shadow:none; }
 @media (max-width:700px), (max-height:520px) and (orientation:landscape){ .tools{ width:96px; } }
 
 /* felvillanó visszajelzés (+1 / passz) */
@@ -210,6 +215,23 @@ body.has-aud .peek{ background:var(--yellow); }
 .runs li{ display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; }
 .runs li:nth-child(odd){ background:rgba(0,0,0,.2); }
 .runs li .grow b{ color:var(--yellow); }
+.runs details{ flex:1 1 auto; min-width:0; }
+.runs summary{ color:var(--chalk); font-weight:700; }
+.log{ list-style:none; padding:0; margin:6px 0 4px; font-size:.86rem; }
+.log li{ padding:3px 0 !important; background:none !important; display:block !important; color:var(--chalk-dim); }
+.log li b{ color:var(--chalk); }
+.log .ok b{ color:var(--green); }
+.cols2{ display:grid; grid-template-columns:3fr 2fr; gap:18px; align-items:start; width:100%; }
+.cols2 h3{ margin-bottom:10px; }
+@media (max-width:900px){ .cols2{ grid-template-columns:1fr; } }
+.podium{ display:flex; align-items:flex-end; justify-content:center; gap:12px; margin:10px 0 18px; }
+.podium > div{ flex:0 1 170px; text-align:center; }
+.podium .blk{ border-radius:14px 14px 0 0; display:flex; align-items:flex-start; justify-content:center; padding-top:10px; font-family:'Kalam',cursive; font-size:2.2rem; font-weight:700; color:#1A1A1E; transform-origin:bottom; animation:growy .8s var(--bounce) both; }
+.podium .pnm{ font-weight:800; margin-bottom:6px; word-break:break-word; animation:enter .5s var(--ease) both; animation-delay:.6s; }
+.podium .ppt{ color:var(--chalk-dim); font-size:.9rem; margin-top:6px; }
+@keyframes growy{ from{ transform:scaleY(0); } }
+.licenses{ font-size:.8rem; color:var(--chalk-dim); }
+.licenses pre{ white-space:pre-wrap; font-size:.72rem; max-height:220px; overflow:auto; background:rgba(0,0,0,.25); padding:10px; border-radius:10px; }
 .runs li button{ padding:6px 10px; font-size:.85rem; }
 
 /* ---------- felugró ablakok ---------- */
@@ -238,7 +260,18 @@ body.has-aud .peek{ background:var(--yellow); }
 .aud .sub{ font-size:1.7rem; color:var(--chalk-dim); margin-top:10px; }
 .aud .chips{ margin-top:22px; font-size:1.5rem; max-width:1300px; }
 .aud .resnum{ font-size:11rem; }
-.aud .boardview{ width:100%; max-width:1300px; height:100%; display:flex; flex-direction:column; justify-content:center; }
+.aud .boardview{ width:100%; max-width:1700px; display:flex; flex-direction:column; text-align:left; }
+.aud .boardview .cols2 h3{ font-size:2rem; color:var(--yellow); }
+.aud .boardview.compact .board{ gap:5px; }
+.aud .boardview.compact .board li{ padding:5px 16px; }
+.aud .boardview.compact .board .mem, .aud .boardview.compact .board .pt small{ display:none; }
+.aud .boardview.compact .board .nm{ font-size:1.35rem; }
+.aud .boardview.compact .board .rk{ font-size:1.6rem; }
+.aud .boardview.compact .board .pt b{ font-size:1.9rem; }
+.aud .boardview.compact .board .bar{ height:6px; margin-top:3px; }
+.aud .boardview.compact .board .teamnum{ font-size:1.05rem; }
+.aud .boardview .podium .blk{ font-size:3.2rem; }
+.aud .boardview .podium .pnm{ font-size:1.6rem; }
 .aud .boardview h2{ font-size:3rem; text-align:center; margin-bottom:16px; }
 .aud .board li{ padding:12px 20px; text-align:left; }
 .aud .board .nm{ font-size:1.7rem; }
@@ -306,7 +339,16 @@ body.has-aud .peek{ background:var(--yellow); }
 
     <div class="card">
       <h3>Adatok</h3>
-      <p class="muted small">A csapatok és az eredmények ezen a gépen, a böngészőben maradnak meg (bezárás és újraindítás után is). Biztonság kedvéért időnként mentsétek fájlba.</p>
+      <p class="muted small">A csapatok és az eredmények csak ezen a gépen, a böngészőben tárolódnak (bezárás és újraindítás után is megmaradnak), és ha ennyi ideig senki nem használja a játékot, <b>maguktól törlődnek</b>:</p>
+      <div class="pills" data-opt="keep" style="margin-bottom:14px">
+        <button type="button" class="pill" data-v="12">12 óra</button>
+        <button type="button" class="pill" data-v="24">24 óra</button>
+        <button type="button" class="pill" data-v="48">48 óra</button>
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <button type="button" class="pink" id="close-btn">🏁 Rendezvény lezárása</button>
+        <span class="muted small grow">végeredmény, mentés, majd minden adat törlése</span>
+      </div>
       <div class="row">
         <button type="button" class="ghost" id="export-btn">💾 Mentés fájlba</button>
         <button type="button" class="ghost" id="import-btn">📂 Betöltés fájlból</button>
@@ -316,6 +358,109 @@ body.has-aud .peek{ background:var(--yellow); }
       </div>
       <p class="note" style="margin-top:12px">🔒 Ez a fájl nem használ internetet: nem tölt le és nem küld semmit, nincs benne zene, fiók, reklám vagy követés.</p>
     </div>
+    <details class="licenses" id="licenses">
+      <summary>Licencek</summary>
+      <p>Picasso offline — a játék kódja és szólistája a Picasso projekt saját anyaga. Beágyazott betűtípusok:<br>
+      <b>Nunito</b> — Copyright 2014 The Nunito Project Authors (github.com/googlefonts/nunito)<br>
+      <b>Kalam</b> — Copyright (c) 2014 Indian Type Foundry (info@indiantypefoundry.com)<br>
+      Mindkettő a SIL Open Font License 1.1 alatt használható, amelynek szövege:</p>
+      <pre>Nunito — Copyright 2014 The Nunito Project Authors (https://github.com/googlefonts/nunito)
+Kalam — Copyright (c) 2014 Indian Type Foundry (info@indiantypefoundry.com)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+https://openfontlicense.org
+
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded, 
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION &amp; CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) and the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+</pre>
+      <p>Az ikonok a gép saját emoji-betűtípusából jönnek; a fájl nem tartalmaz képet, hangot vagy más külső anyagot.</p>
+    </details>
   </div>
 </section>
 
@@ -383,7 +528,8 @@ body.has-aud .peek{ background:var(--yellow); }
   </div>
   <div class="actionbar">
     <button class="ghost pass" id="pass-btn">⏭ Passz</button>
-    <button class="green ok" id="ok-btn">✔ Kitalálták! +1</button>
+    <div class="guessers" id="guessers"></div>
+    <button class="undo hidden" id="undo-btn2"></button>
   </div>
 </section>
 
@@ -406,11 +552,36 @@ body.has-aud .peek{ background:var(--yellow); }
 
 <!-- ============ ÖSSZESÍTŐ ============ -->
 <section class="screen" id="s-board">
-  <div class="pagehead"><button class="ghost" data-home>← Vissza</button><h2>Összesítő</h2></div>
-  <div class="wrap">
-    <ol class="board" id="board-list"></ol>
-    <div class="card muted center hidden" id="board-empty">Még nincs csapat.</div>
-    <p class="muted small center">Egy csapatra kattintva látszanak a menetei (ott egy hibás menet törölhető is).</p>
+  <div class="pagehead" style="max-width:1100px"><button class="ghost" data-home>← Vissza</button><h2>Összesítő</h2></div>
+  <div class="wrap" style="max-width:1100px">
+    <div class="cols2">
+      <div><h3>Csapatok</h3><ol class="board" id="board-list"></ol>
+        <div class="card muted center hidden" id="board-empty">Még nincs csapat.</div>
+        <p class="muted small center">Egy csapatra kattintva látszanak a menetei és a naplójuk (ott egy hibás menet törölhető is).</p></div>
+      <div><h3>Legjobb tippelők (top 10)</h3><ol class="board" id="people-list"></ol>
+        <div class="card muted center small hidden" id="people-empty">Még senki nem talált ki rajzot.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RENDEZVÉNY LEZÁRÁSA ============ -->
+<section class="screen" id="s-final">
+  <div class="pagehead" style="max-width:1100px"><button class="ghost" data-home>← Vissza</button><h2>🏁 Végeredmény</h2></div>
+  <div class="wrap" style="max-width:1100px">
+    <div class="podium" id="final-podium"></div>
+    <div class="cols2">
+      <div><h3>Csapatok</h3><div id="final-teams"></div></div>
+      <div><h3>Legjobb tippelők (top 10)</h3><div id="final-people"></div></div>
+    </div>
+    <div class="card">
+      <h3>Lezárás</h3>
+      <p class="muted small">A végeredmény most a kivetítőn is látszik. Ha meg akarjátok őrizni, mentsétek fájlba (a fájl a résztvevők nevét is tartalmazza, kezeljétek ennek megfelelően). Utána töröljétek az adatokat erről a gépről.</p>
+      <div class="row">
+        <button class="ghost" id="final-export">💾 Végeredmény mentése fájlba</button>
+        <span class="grow"></span>
+        <button class="danger" id="final-wipe">🗑 Minden adat végleges törlése</button>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -427,8 +598,17 @@ body.has-aud .peek{ background:var(--yellow); }
 <div class="modal" id="m-picker" role="dialog" aria-modal="true" aria-labelledby="pk-title">
   <div class="card">
     <h2 id="pk-title">Ki rajzolja a következőt?</h2>
-    <p class="muted small">Az óra közben megy tovább.</p>
+    <p class="muted small" id="pk-sub">Az óra közben megy tovább.</p>
     <div class="who" id="pk-who"></div>
+    <button class="undo hidden" id="pk-undo" style="margin-top:8px"></button>
+  </div>
+</div>
+<div class="modal" id="m-fix" role="dialog" aria-modal="true" aria-labelledby="fix-title">
+  <div class="card">
+    <h2 id="fix-title">Javítás</h2>
+    <p class="muted" id="fix-sub"></p>
+    <div class="who" id="fix-who"></div>
+    <button class="ghost" id="fix-cancel" style="margin-top:8px">Mégse, maradjon így</button>
   </div>
 </div>
 <div class="modal" id="m-pause" role="dialog" aria-modal="true">
@@ -480,7 +660,8 @@ body.has-aud .peek{ background:var(--yellow); }
   const minutesLabel = s => s % 60 ? `${(s / 60).toLocaleString('hu-HU')} perc` : `${s / 60} perc`;
 
   /* ---------- tárolt adatok (csak ezen a gépen) ---------- */
-  function blank(){ return { v:1, teams:[], cfg:{ time:180, diff:'konnyu' }, runs:[], used:[], live:null }; }
+  function blank(){ return { v:1, teams:[], cfg:{ time:180, diff:'konnyu', keep:24 }, runs:[], used:[], live:null, last:0 }; }
+  const cleanWord = w => ({ w:w.w.slice(0, 60), ok:!!w.ok, fixed:!!w.fixed, by:typeof w.by === 'string' && w.ok ? w.by.slice(0, 24) : null, dr:typeof w.dr === 'string' ? w.dr.slice(0, 24) : null, t:Math.max(0, Math.floor(Number(w.t)) || 0) });
   function sanitize(raw){
     const d = blank();
     if(!raw || typeof raw !== 'object') return d;
@@ -497,19 +678,21 @@ body.has-aud .peek{ background:var(--yellow); }
     const ids = new Set(d.teams.map(t => t.id));
     (Array.isArray(raw.runs) ? raw.runs : []).forEach(r => {
       if(!r || typeof r !== 'object' || !ids.has(r.team)) return;
-      const words = (Array.isArray(r.words) ? r.words : []).filter(w => w && typeof w.w === 'string').map(w => ({ w:w.w.slice(0, 60), ok:!!w.ok })).slice(0, 500);
+      const words = (Array.isArray(r.words) ? r.words : []).filter(w => w && typeof w.w === 'string').map(cleanWord).slice(0, 500);
       d.runs.push({ id:typeof r.id === 'string' ? r.id.slice(0, 40) : uid(), team:r.team, at:Number(r.at) || Date.now(), time:Math.max(0, Math.floor(Number(r.time)) || 0), points:words.filter(w => w.ok).length, words });
     });
     if(raw.cfg && typeof raw.cfg === 'object'){
       const t = Math.round(Number(raw.cfg.time));
       if(t >= 30 && t <= 1800) d.cfg.time = t;
       if(['konnyu','kozepes','nehez','vegyes'].includes(raw.cfg.diff)) d.cfg.diff = raw.cfg.diff;
+      if([12, 24, 48].includes(Number(raw.cfg.keep))) d.cfg.keep = Number(raw.cfg.keep);
     }
+    d.last = Number(raw.last) || 0;
     if(Array.isArray(raw.used)) d.used = raw.used.filter(k => typeof k === 'string').slice(-20000);
     if(raw.live && typeof raw.live === 'object' && ids.has(raw.live.team)){
       const l = raw.live;
       d.live = { team:l.team, left:Math.max(0, Math.floor(Number(l.left)) || 0), time:Math.max(1, Math.floor(Number(l.time)) || d.cfg.time),
-        words:(Array.isArray(l.words) ? l.words : []).filter(w => w && typeof w.w === 'string').map(w => ({ w:w.w.slice(0, 60), ok:!!w.ok })), word:typeof l.word === 'string' ? l.word.slice(0, 60) : null,
+        words:(Array.isArray(l.words) ? l.words : []).filter(w => w && typeof w.w === 'string').map(cleanWord), word:typeof l.word === 'string' ? l.word.slice(0, 60) : null,
         drawer:typeof l.drawer === 'string' ? l.drawer.slice(0, 24) : null, at:Number(l.at) || Date.now() };
     }
     return d;
@@ -519,10 +702,22 @@ body.has-aud .peek{ background:var(--yellow); }
   let rev = 0;   // minden változásnál nő (a kivetítő ebből tudja, hogy újra kell rajzolni)
   function persist(){
     rev++;
+    data.last = Date.now();
     try{ localStorage.setItem(STORE_KEY, JSON.stringify(data)); storageOk = true; }
     catch(e){ storageOk = false; }
     $('store-warn').classList.toggle('hidden', storageOk);
   }
+
+  // automatikus lejárat: ha ennyi ideig senki nem használja, minden adat törlődik (a beállítások maradnak)
+  const KEEP_MS = () => data.cfg.keep * 3600e3;
+  function expired(){ return data.last && Date.now() - data.last > KEEP_MS(); }
+  function wipeAll(){
+    const cfg = data.cfg; data = blank(); data.cfg = cfg;
+    try{ localStorage.removeItem(STORE_KEY); }catch(e){}
+    persist();
+  }
+  let expiredNotice = false;
+  if(expired()){ wipeAll(); expiredNotice = true; }
 
   const teamById = id => data.teams.find(t => t.id === id);
   const teamColor = t => TEAM_COLORS[(t.num - 1) % TEAM_COLORS.length];
@@ -537,11 +732,30 @@ body.has-aud .peek{ background:var(--yellow); }
     return list;
   }
 
+  // személyes pontok: minden kitalált rajz 1 pont a kitalálónak (csapatonként, név szerint)
+  function personStandings(){
+    const map = new Map();
+    data.runs.forEach(r => {
+      const t = teamById(r.team); if(!t) return;
+      r.words.forEach(w => {
+        if(!w.ok || !w.by) return;
+        const k = t.id + '|' + nameKey(w.by);
+        const e = map.get(k) || { name:w.by, team:t, points:0 };
+        e.points++; map.set(k, e);
+      });
+    });
+    const list = [...map.values()].sort((a, b) => b.points - a.points || a.team.num - b.team.num || a.name.localeCompare(b.name, 'hu'));
+    let prev = null, rank = 0;
+    list.forEach((s, i) => { if(s.points !== prev){ rank = i + 1; prev = s.points; } s.rank = rank; });
+    return list.slice(0, 10);
+  }
+
   /* ---------- képernyők, értesítések ---------- */
   function show(id){
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
     window.scrollTo(0, 0);
     if(id === 's-home') renderHome();
+    if(id === 's-home' || id === 's-pick') play = null;
     if(id === 's-play') requestAnimationFrame(fitCanvas);
     audSync();
   }
@@ -575,9 +789,9 @@ body.has-aud .peek{ background:var(--yellow); }
   function flash(ok, word){
     const run = (doc) => {
       const f = doc.getElementById('fx'); if(!f) return;
-      doc.getElementById('fx-big').textContent = ok ? '✔ +1' : '⏭ Passz';
+      doc.getElementById('fx-big').textContent = ok === 'undo' ? '↶ Javítva' : ok ? '✔ +1' : '⏭ Passz';
       doc.getElementById('fx-w').textContent = word || '';
-      f.classList.toggle('passfx', !ok);
+      f.classList.toggle('passfx', ok !== true);
       f.classList.remove('run'); void f.offsetWidth; f.classList.add('run');
     };
     run(document);
@@ -638,7 +852,7 @@ body.has-aud .peek{ background:var(--yellow); }
   document.querySelectorAll('.pills[data-opt]').forEach(group => group.addEventListener('click', e => {
     const b = e.target.closest('.pill'); if(!b) return;
     const key = group.dataset.opt;
-    data.cfg[key] = key === 'time' ? +b.dataset.v : b.dataset.v;
+    data.cfg[key] = key === 'diff' ? b.dataset.v : +b.dataset.v;
     persist(); renderHome();
   }));
   $('time-custom').addEventListener('change', () => {
@@ -952,7 +1166,7 @@ body.has-aud .peek{ background:var(--yellow); }
     undoStack = []; drawing = null; setMode('pen');
     renderScore(false); renderTimer();
     show('s-play');
-    if(!play.word) nextWord(); else { clearBoard(); renderDrawer(); renderPeek(); }
+    if(!play.word) nextWord(); else { clearBoard(); renderDrawer(); renderGuessers(); renderPeek(); }
     clearInterval(tick);
     tick = setInterval(onTick, 1000);
     saveLive();
@@ -984,27 +1198,89 @@ body.has-aud .peek{ background:var(--yellow); }
     dr.append(team.name || `${team.num}. csapat`);
     if(play.drawer) dr.append(' · rajzol: ', el('b', { text:play.drawer }));
   }
+  const elapsed = () => play.time - play.left;
+  // A) a játékvezető a kitaláló nevére koppint (a rajzolóén kívül); tag nélküli csapatnál egy gomb
+  function renderGuessers(){
+    const box = $('guessers'); box.textContent = '';
+    const others = teamById(play.team).members.filter(m => m !== play.drawer);
+    if(!others.length){
+      const b = el('button', { type:'button', class:'green ok', id:'ok-btn', text:'✔ Kitalálták! +1' });
+      b.addEventListener('click', () => resolveWord(true, null));
+      box.appendChild(b); return;
+    }
+    box.appendChild(el('span', { class:'lbl', text:'Ki találta ki?' }));
+    others.forEach(m => {
+      const b = el('button', { type:'button', class:'green', text:m, 'data-guesser':m });
+      b.addEventListener('click', () => resolveWord(true, m));
+      box.appendChild(b);
+    });
+  }
   function nextWord(){
     play.word = nextWordFromPool();
     clearBoard(); undoStack = [];
-    renderDrawer(); renderPeek(); saveLive(); audSync();
+    renderDrawer(); renderGuessers(); renderPeek(); saveLive(); audSync();
   }
-  function resolveWord(ok){
-    if(!play || play.over || play.picking || play.paused) return;
-    play.words.push({ w:play.word, ok });
-    flash(ok, play.word);
+  function resolveWord(ok, by){
+    if(!play || play.over || play.picking || play.paused || !play.word) return;
+    const entry = { w:play.word, ok, by:ok ? by : null, dr:play.drawer || null, t:elapsed() };
+    play.words.push(entry);
+    play.undo = ok ? { entry, until:Date.now() + UNDO_MS } : null;
+    flash(ok, play.word + (ok && by ? ' — ' + by : ''));
     if(ok) renderScore(true);
     play.word = null; drawing = null;
+    renderUndo();
     openPicker();
   }
-  $('ok-btn').addEventListener('click', () => resolveWord(true));
-  $('pass-btn').addEventListener('click', () => resolveWord(false));
+  $('pass-btn').addEventListener('click', () => resolveWord(false, null));
+
+  // B) az utolsó pont 10 mp-ig javítható: másik kitaláló, vagy „senki, nincs pont”
+  const UNDO_MS = 10000;
+  let undoT = 0;
+  function renderUndo(){
+    clearTimeout(undoT);
+    const u = play && play.undo, left = u ? Math.ceil((u.until - Date.now()) / 1000) : 0;
+    const on = !!(u && left > 0 && !play.over && !play.paused);
+    ['undo-btn2', 'pk-undo'].forEach(id => {
+      const b = $(id); b.classList.toggle('hidden', !on);
+      if(on) b.textContent = `↶ Javítás: ${u.entry.by || 'kitalálták'} (${left})`;
+    });
+    if(on) undoT = setTimeout(renderUndo, 250);
+    else if(play && !$('m-fix').classList.contains('open')) play.undo = null;
+  }
+  function openFix(){
+    const u = play && play.undo;
+    if(!u || play.over || play.paused || Date.now() > u.until) return;
+    clearTimeout(undoT);
+    $('fix-title').textContent = `Javítás: „${u.entry.w}”`;
+    $('fix-sub').textContent = u.entry.by ? `Most ${u.entry.by} kapta a pontot. Ki találta ki valójában?` : 'Valóban kitalálták?';
+    const who = $('fix-who'); who.textContent = '';
+    const apply = by => {
+      const e = u.entry;
+      e.fixed = true;
+      if(by === null){ e.ok = false; e.by = null; } else { e.ok = true; e.by = by; }
+      play.undo = null; $('m-fix').classList.remove('open');
+      flash('undo', e.ok ? `${e.w} — ${e.by || 'kitalálták'}` : `${e.w} — nincs pont`);
+      renderScore(false); renderUndo(); saveLive(); audSync();
+    };
+    teamById(play.team).members.filter(m => m !== u.entry.dr && m !== u.entry.by).forEach(m => {
+      const b = el('button', { type:'button', class:'green', text:m }); b.addEventListener('click', () => apply(m)); who.appendChild(b);
+    });
+    const none = el('button', { type:'button', class:'danger', text:'Senki — nincs pont' });
+    none.addEventListener('click', () => apply(null)); who.appendChild(none);
+    $('m-fix').classList.add('open');
+    audSync();
+  }
+  $('fix-cancel').addEventListener('click', () => { $('m-fix').classList.remove('open'); if(play) play.undo = null; renderUndo(); audSync(); });
+  $('undo-btn2').addEventListener('click', openFix);
+  $('pk-undo').addEventListener('click', openFix);
 
   // a csapat dönti el, ki rajzol: minden szó után egy koppintás (1 tagnál magától megy)
   function openPicker(){
     const team = teamById(play.team);
     if(team.members.length <= 1){ play.drawer = team.members[0] || null; nextWord(); return; }
     play.picking = true; renderPeek();
+    $('pk-title').textContent = 'Ki rajzolja a következőt?';
+    $('pk-sub').textContent = 'Az óra közben megy tovább.';
     const who = $('pk-who'); who.textContent = '';
     team.members.forEach(m => {
       const b = el('button', { type:'button', class:m === play.drawer ? 'secondary' : '', text:m === play.drawer ? `${m} (megint)` : m });
@@ -1021,7 +1297,7 @@ body.has-aud .peek{ background:var(--yellow); }
     canvas.style.visibility = on ? 'hidden' : '';
     $('m-pause').classList.toggle('open', on);
     if(on) drawing = null;
-    renderPeek(); audSync();
+    renderPeek(); renderUndo(); audSync();
   }
   $('pause-btn').addEventListener('click', () => setPaused(true));
   $('resume-btn').addEventListener('click', () => setPaused(false));
@@ -1033,26 +1309,36 @@ body.has-aud .peek{ background:var(--yellow); }
     const was = play.paused; play.paused = true; audSync();
     confirmBox('Megszakítod a menetet? Az eddigi pontjai NEM számítanak bele az összesítőbe.', () => {
       clearInterval(tick); play = null; data.live = null; persist();
-      $('m-picker').classList.remove('open'); canvas.style.visibility = '';
+      ['m-picker','m-fix'].forEach(id => $(id).classList.remove('open')); canvas.style.visibility = '';
       show('s-home');
     }, () => { if(play){ play.paused = was; audSync(); } }, { yes:'Megszakítom', no:'Folytatjuk' });
   });
 
   function timeUp(){
     play.over = true; clearInterval(tick); drawing = null;
-    $('m-picker').classList.remove('open');
-    renderTimer();
+    ['m-picker','m-fix'].forEach(id => $(id).classList.remove('open'));
+    renderUndo(); renderTimer();
     if(play.picking || !play.word){ finishRun(); return; }   // épp rajzolót választottak: nincs nyitott szó
-    confirmBox(`Lejárt az idő! ⏰ Az utolsó rajzot („${play.word}”) még kitalálták?`,
-      () => { play.words.push({ w:play.word, ok:true }); finishRun(); },
-      () => { play.words.push({ w:play.word, ok:false }); finishRun(); },
-      { yes:'Igen, +1', no:'Nem' });
+    const last = { w:play.word, dr:play.drawer || null, t:elapsed() };
+    const end = (ok, by) => { $('m-picker').classList.remove('open'); play.words.push({ ...last, ok, by }); finishRun(); };
+    const others = teamById(play.team).members.filter(m => m !== play.drawer);
+    if(!others.length){
+      confirmBox(`Lejárt az idő! ⏰ Az utolsó rajzot („${play.word}”) még kitalálták?`, () => end(true, null), () => end(false, null), { yes:'Igen, +1', no:'Nem' });
+      return;
+    }
+    $('pk-title').textContent = 'Lejárt az idő! ⏰';
+    $('pk-sub').textContent = `Kitalálta valaki még időben az utolsót („${play.word}”)?`;
+    const who = $('pk-who'); who.textContent = '';
+    others.forEach(m => { const b = el('button', { type:'button', class:'green', text:m }); b.addEventListener('click', () => end(true, m)); who.appendChild(b); });
+    const no = el('button', { type:'button', class:'ghost', text:'Senki' }); no.addEventListener('click', () => end(false, null)); who.appendChild(no);
+    $('m-picker').classList.add('open');
+    audSync();
   }
   function finishRun(){
     clearInterval(tick);
     const run = { id:uid(), team:play.team, at:Date.now(), time:play.time, points:points(), words:play.words.slice() };
     data.runs.push(run); data.live = null; persist();
-    play = null; canvas.style.visibility = '';
+    play = null; canvas.style.visibility = ''; clearTimeout(undoT);
     showResult(run);
   }
   function showResult(run){
@@ -1062,7 +1348,7 @@ body.has-aud .peek{ background:var(--yellow); }
     const s = standings().find(x => x.team.id === t.id);
     $('rs-rank').textContent = `Összesen ${s.points} pont · jelenleg ${s.rank}. hely az összesítőben (${data.teams.length} csapatból)`;
     const ul = $('rs-words'); ul.textContent = '';
-    run.words.forEach((w, i) => { const li = el('li', { class:w.ok ? 'ok' : 'no', text:(w.ok ? '✔ ' : '') + w.w }); li.style.animationDelay = Math.min(i, 30) * 0.05 + 's'; ul.appendChild(li); });
+    run.words.forEach((w, i) => { const li = el('li', { class:w.ok ? 'ok' : 'no', text:(w.ok ? '✔ ' : '') + w.w + (w.ok && w.by ? ' · ' + w.by : '') }); li.style.animationDelay = Math.min(i, 30) * 0.05 + 's'; ul.appendChild(li); });
     if(!run.words.length) ul.appendChild(el('li', { class:'no', text:'nem volt szó' }));
     show('s-result');
     if(run.points > 0){ confetti(window); if(audOn()) confetti(aud.win); }
@@ -1093,11 +1379,62 @@ body.has-aud .peek{ background:var(--yellow); }
     });
     return ol;
   }
-  function renderBoard(){
-    const old = $('board-list'), nw = boardList(document, true); nw.id = 'board-list';
-    old.replaceWith(nw);
-    $('board-empty').classList.toggle('hidden', data.teams.length > 0);
+  function peopleList(doc){
+    const ol = doc.createElement('ol'); ol.className = 'board';
+    personStandings().forEach((s, i) => {
+      const li = doc.createElement('li');
+      li.style.animationDelay = Math.min(i, 12) * 0.04 + 's';
+      const rk = doc.createElement('span'); rk.className = 'rk'; rk.textContent = s.rank + '.';
+      const mid = doc.createElement('div'); mid.style.minWidth = '0';
+      const nm = doc.createElement('div'); nm.className = 'nm'; nm.textContent = s.name;
+      const mem = doc.createElement('div'); mem.className = 'mem'; mem.textContent = s.team.name || `${s.team.num}. csapat`;
+      mid.append(nm, mem);
+      const pt = doc.createElement('div'); pt.className = 'pt';
+      const b = doc.createElement('b'); b.textContent = s.points;
+      const sm = doc.createElement('small'); sm.textContent = 'kitalált';
+      pt.append(b, sm);
+      li.append(rk, numBadge(s.team, doc), mid, pt);
+      ol.appendChild(li);
+    });
+    return ol;
   }
+  function podium(doc){
+    const box = doc.createElement('div'); box.className = 'podium';
+    const st = standings().filter(s => s.runs), heights = [170, 125, 90];
+    [1, 0, 2].forEach(i => {
+      const s = st[i]; if(!s) return;
+      const col = doc.createElement('div');
+      const nm = doc.createElement('div'); nm.className = 'pnm'; nm.textContent = teamLabel(s.team);
+      const blk = doc.createElement('div'); blk.className = 'blk'; blk.style.height = heights[i] + 'px'; blk.style.background = teamColor(s.team); blk.textContent = s.rank + '.';
+      blk.style.animationDelay = (i === 0 ? .5 : i === 1 ? .25 : 0) + 's';
+      const pt = doc.createElement('div'); pt.className = 'ppt'; pt.textContent = s.points + ' pont';
+      col.append(nm, blk, pt); box.appendChild(col);
+    });
+    return box;
+  }
+  function renderBoard(){
+    const nw = boardList(document, true); nw.id = 'board-list'; $('board-list').replaceWith(nw);
+    const pl = peopleList(document); pl.id = 'people-list'; $('people-list').replaceWith(pl);
+    $('board-empty').classList.toggle('hidden', data.teams.length > 0);
+    $('people-empty').classList.toggle('hidden', pl.children.length > 0);
+  }
+
+  /* ---------- rendezvény lezárása ---------- */
+  function renderFinal(){
+    $('final-podium').replaceWith(Object.assign(podium(document), { id:'final-podium' }));
+    const t = $('final-teams'); t.textContent = ''; t.appendChild(boardList(document, false));
+    const pp = $('final-people'); pp.textContent = ''; pp.appendChild(peopleList(document));
+    if(!pp.firstChild.children.length) pp.appendChild(el('p', { class:'muted small', text:'Nincs személyes pont.' }));
+  }
+  $('close-btn').addEventListener('click', () => {
+    if(!data.teams.length && !data.runs.length){ toast('Nincs mit lezárni — nincs tárolt adat.'); return; }
+    renderFinal(); show('s-final');
+    if(data.runs.length){ confetti(window); if(audOn()) confetti(aud.win); }
+  });
+  $('final-export').addEventListener('click', () => $('export-btn').click());
+  $('final-wipe').addEventListener('click', () => confirmBox('Minden adat végleges törlése erről a gépről: csapatok, nevek, eredmények. Ez nem vonható vissza. (A mentett fájlt ez nem érinti.)', () => {
+    wipeAll(); show('s-home'); toast('🗑 Minden adat törölve erről a gépről.');
+  }, null, { yes:'Végleges törlés', no:'Mégse' }));
   function openTeam(t){
     $('mt-title').textContent = teamLabel(t);
     $('mt-members').textContent = t.members.length ? 'Tagok: ' + t.members.join(', ') : 'Nincsenek megadott tagok.';
@@ -1109,7 +1446,15 @@ body.has-aud .peek{ background:var(--yellow); }
       del.addEventListener('click', () => confirmBox(`Törlöd ezt a menetet? (${fmtClock(r.at)}, ${r.points} pont)`, () => {
         data.runs = data.runs.filter(x => x !== r); persist(); renderBoard(); openTeam(t); toast('Menet törölve.');
       }, () => openTeam(t), { yes:'Törlés', no:'Mégse' }));
-      ul.appendChild(el('li', null, [el('span', { class:'grow' }, [`${i + 1}. menet · ${fmtClock(r.at)} · `, el('b', { text:`${r.points} pont` }), ` · ${minutesLabel(r.time)}, ${r.words.filter(w => !w.ok).length} passz`]), del]));
+      const log = el('ol', { class:'log' });
+      r.words.forEach(w => log.appendChild(el('li', { class:w.ok ? 'ok' : '' }, [
+        `${fmtTime(w.t || 0)} · `, el('b', { text:w.w }),
+        w.ok ? ` — ✔ ${w.by || 'kitalálták'}` : ' — nem találták ki / passz',
+        w.dr ? ` · rajzolta: ${w.dr}` : '', w.fixed ? ' · (javítva)' : ''
+      ])));
+      if(!r.words.length) log.appendChild(el('li', { text:'nem volt szó' }));
+      const det = el('details', null, [el('summary', null, [`${i + 1}. menet · ${fmtClock(r.at)} · `, el('b', { text:`${r.points} pont` }), ` · ${minutesLabel(r.time)}, ${r.words.filter(w => !w.ok).length} passz`]), log]);
+      ul.appendChild(el('li', null, [det, del]));
     });
     $('m-team').classList.add('open'); $('mt-close').focus();
   }
@@ -1135,7 +1480,8 @@ body.has-aud .peek{ background:var(--yellow); }
       <div class="view" id="a-msg"><div class="msg" id="a-msg-t"></div><div class="sub" id="a-msg-s"></div><div class="chips" id="a-chips"></div></div>
       <div class="view" id="a-draw"><canvas id="a-canvas" width="${W}" height="${H}"></canvas></div>
       <div class="view" id="a-result"><div class="msg" id="a-rs-t" style="font-size:3.2rem"></div><div class="resnum" id="a-rs-n"></div><div class="sub" id="a-rs-s"></div><ul class="wordlist" id="a-rs-w"></ul></div>
-      <div class="view" id="a-board"><div class="boardview"><h2>🏆 Összesítő</h2><div id="a-board-list"></div></div></div>
+      <div class="view" id="a-board"><div class="boardview" id="a-boardview"><h2 id="a-board-h">🏆 Összesítő</h2><div id="a-pod"></div>
+        <div class="cols2"><div><h3>Csapatok</h3><div id="a-board-list"></div></div><div><h3>Legjobb tippelők (top 10)</h3><div id="a-people"></div></div></div></div></div>
     </main>
     <div class="fx" id="fx"><div class="big" id="fx-big"></div><div class="w" id="fx-w"></div></div>
     <button class="fs secondary" id="a-fs">⛶ Teljes képernyő</button>
@@ -1152,7 +1498,7 @@ body.has-aud .peek{ background:var(--yellow); }
     aud.win = w; aud.d = d; aud.key = '';
     aud.ctx = d.getElementById('a-canvas').getContext('2d');
     d.getElementById('a-fs').addEventListener('click', () => { const r = d.documentElement; if(r.requestFullscreen) r.requestFullscreen().catch(() => {}); });
-    w.addEventListener('resize', audFit);
+    w.addEventListener('resize', () => { audFit(); audFitBoard(); });
     w.addEventListener('pagehide', () => setTimeout(audStatus, 50));
     audStatus(); audSync(); audCanvas(); setTimeout(audFit, 50);
   }
@@ -1162,6 +1508,14 @@ body.has-aud .peek{ background:var(--yellow); }
     const r = v.getBoundingClientRect(); if(!r.width || !r.height) return;
     const k = Math.min(r.width / W, r.height / H);
     c.style.width = Math.floor(W * k) + 'px'; c.style.height = Math.floor(H * k) + 'px';
+  }
+  // a kivetítőn az összesítő mindig kiférjen (sok csapatnál kicsinyít)
+  function audFitBoard(){
+    if(!audOn()) return;
+    const bv = aud.d.getElementById('a-boardview'), main = bv.parentElement.parentElement;
+    bv.style.zoom = 1;
+    const k = Math.min(1, (main.clientHeight - 10) / bv.scrollHeight);
+    bv.style.zoom = String(Math.max(0.4, k));
   }
   function audStatus(){
     const on = audOn();
@@ -1196,7 +1550,7 @@ body.has-aud .peek{ background:var(--yellow); }
     A('a-timer').classList.toggle('low', !!(play && play.left <= 10 && !play.over));
     if(play){ const sc = A('a-score'); if(sc.dataset.n !== String(points())){ if(sc.dataset.n !== undefined){ sc.classList.remove('bump'); void sc.offsetWidth; sc.classList.add('bump'); } sc.dataset.n = String(points()); } }
     // a nézet csak akkor épül újra, ha tényleg változott
-    const key = [scr, rev, play && play.paused, play && play.over, play && play.picking, play && play.words.length, readyTeam && readyTeam.id].join('/');
+    const key = [scr, rev, play && play.paused, play && play.over, play && play.picking, play && play.words.length, readyTeam && readyTeam.id, $('m-fix').classList.contains('open')].join('/');
     if(key === aud.key) return;
     aud.key = key;
     const msg = (t, sub, chips) => {
@@ -1208,6 +1562,7 @@ body.has-aud .peek{ background:var(--yellow); }
     if(scr === 's-play' && play){
       if(play.paused) msg('Szünet', 'Az óra áll.');
       else if(play.over) msg('Lejárt az idő! ⏰', 'Kitalálták még az utolsót?');
+      else if($('m-fix').classList.contains('open')) msg('Javítás…', 'A játékvezető ellenőrzi az utolsó pontot.');
       else if(play.picking) msg('Ki rajzol következőnek?', `Eddig ${points()} kitalált rajz`);
       else { audView('a-draw'); audCanvas(); }
     } else if(scr === 's-ready' && readyTeam){
@@ -1219,18 +1574,29 @@ body.has-aud .peek{ background:var(--yellow); }
       A('a-rs-n').textContent = last.points;
       A('a-rs-s').textContent = $('rs-rank').textContent;
       const ul = A('a-rs-w'); ul.textContent = '';
-      last.words.forEach((w, i) => { const li = aud.d.createElement('li'); li.className = w.ok ? 'ok' : 'no'; li.textContent = (w.ok ? '✔ ' : '') + w.w; li.style.animationDelay = Math.min(i, 30) * 0.05 + 's'; ul.appendChild(li); });
+      last.words.forEach((w, i) => { const li = aud.d.createElement('li'); li.className = w.ok ? 'ok' : 'no'; li.textContent = (w.ok ? '✔ ' : '') + w.w + (w.ok && w.by ? ' · ' + w.by : ''); li.style.animationDelay = Math.min(i, 30) * 0.05 + 's'; ul.appendChild(li); });
       audView('a-result');
     } else if(data.teams.length && data.runs.length){
+      const fin = scr === 's-final';
+      A('a-board-h').textContent = fin ? '🏁 Végeredmény' : '🏆 Összesítő';
+      A('a-boardview').classList.toggle('compact', data.teams.length > 8);
+      const pod = A('a-pod'); pod.textContent = ''; if(fin) pod.appendChild(podium(aud.d));
       const box = A('a-board-list'); box.textContent = ''; box.appendChild(boardList(aud.d, false));
-      audView('a-board');
+      const pp = A('a-people'); pp.textContent = ''; pp.appendChild(peopleList(aud.d));
+      audView('a-board'); audFitBoard();
     } else {
       msg('Picasso', 'rajzolós csapatverseny · hamarosan kezdünk!', data.teams.slice().sort((a, b) => a.num - b.num).map(t => teamLabel(t)));
     }
   }
 
-  /* ---------- indulás: félbeszakadt menet? ---------- */
+  /* ---------- indulás: lejárt adatok? félbeszakadt menet? ---------- */
+  setInterval(() => {   // nyitva hagyott gépen is lejár (ha közben senki nem használja)
+    if(!expired() || play) return;
+    wipeAll(); ['m-confirm','m-team','m-fix','m-picker'].forEach(id => $(id).classList.remove('open')); confirmCbs = null;
+    show('s-home'); toast(`Az adatok ${data.cfg.keep} óra tétlenség után automatikusan törlődtek.`);
+  }, 60000);
   renderHome();
+  if(expiredNotice) setTimeout(() => toast(`Az előző adatok ${data.cfg.keep} óra tétlenség után automatikusan törlődtek.`), 300);
   clearBoard();
   if(!storageOk) $('store-warn').classList.remove('hidden');
   if(data.live){
