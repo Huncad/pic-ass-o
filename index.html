@@ -569,7 +569,7 @@
 </form>
 <div id="sr-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 <div id="lastround-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="lastround-title">
-  <div class="admin-box" style="max-width:520px;">
+  <div class="admin-box dlg dlg-md">
     <div class="admin-panel-header">
       <h2 id="lastround-title">📋 Az előző kör</h2>
       <button class="ghost small" id="lastround-close-btn" aria-label="Bezárás">Bezárás ✕</button>
@@ -588,7 +588,7 @@
   </div>
 </div>
 <div id="rank-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="rank-title">
-  <div class="admin-box stats-box">
+  <div class="admin-box dlg dlg-lg">
     <div class="admin-panel-header">
       <div><h2 id="rank-title">🏆 Közös ranglista</h2><div class="stats-since">Minden befejezett, legalább kétfős játék számít. Sorrend: győzelmek, aztán átlagpont.</div></div>
       <button class="ghost small" id="rank-close-btn" aria-label="Bezárás">Bezárás ✕</button>
@@ -602,11 +602,12 @@
   </div>
 </div>
 <div id="privacy-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
-  <div class="admin-box" style="max-width:560px;">
+  <div class="admin-box dlg dlg-lg">
     <div class="admin-panel-header">
       <h2 id="privacy-title">🔒 Adatvédelem</h2>
       <button class="ghost small" id="privacy-close-btn" aria-label="Adatvédelmi tájékoztató bezárása">Bezárás ✕</button>
     </div>
+    <div class="dlg-cols">
     <p style="font-size:.8rem;color:var(--chalk-dim);">Hatályos: 2026. november 15-től · v4.51</p>
     <h3 class="pv-h">Ki kezeli az adatokat?</h3>
     <p><b>Adatkezelő:</b> Ádám, magánszemély, a PIC-ASS-O hobbiprojekt fejlesztője és üzemeltetője.<br>
@@ -665,6 +666,7 @@
     <p>Kérheted, hogy megmondjuk, milyen adatot tárolunk rólad (hozzáférés), kijavítsuk vagy töröljük, korlátozzuk a kezelését, és tiltakozhatsz a jogos érdeken alapuló kezelés ellen. A hozzájárulásodat bármikor visszavonhatod. A fiókod adatait a „Fiók” ablakban magad is megnézheted és törölheted. Írj a fenti címre — legkésőbb 30 napon belül válaszolunk. Ha úgy érzed, megsértettük a jogaidat, panaszt tehetsz a <b>Nemzeti Adatvédelmi és Információszabadság Hatóságnál</b> (NAIH, <a href="https://naih.hu" target="_blank" rel="noopener" style="color:var(--blue);">naih.hu</a>), vagy bírósághoz fordulhatsz.</p>
     <p>Automatizált döntéshozatal, profilalkotás nincs. A játék telepíthető webalkalmazásként (a főmenü „Telepítés” gombjával): ez csak egy ikont tesz a kezdőképernyődre, ugyanazt az oldalt nyitja meg, és nem jár további adatkezeléssel vagy engedéllyel. A „Gyakorlás egyedül” mód teljesen az eszközödön fut: semmit nem küld sehova.</p>
     <p>Az eszközödön tárolt adatokat törölheted a böngésző „webhelyadatok törlése” funkciójával, vagy az alábbi gombbal. A fiókodat (ha van) a „Fiók” ablakban, a „Fiók törlése…” gombbal törölheted.</p>
+    </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px;">
       <button class="secondary small" id="privacy-clear-btn">🧹 Helyi adataim törlése</button>
     </div>
@@ -852,7 +854,7 @@
 
 <!-- v4.49: játékos profilja -->
 <div id="profile-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="profile-title">
-  <div class="admin-box acct-box">
+  <div class="admin-box acct-box dlg dlg-lg">
     <div class="admin-panel-header">
       <h2 id="profile-title">👤 Profil</h2>
       <button class="ghost small" id="profile-close-btn" aria-label="Profil bezárása">Bezárás ✕</button>
@@ -863,7 +865,7 @@
 
 <!-- Feedback dialog, opened from the home screen -->
 <div id="feedback-overlay" class="hidden">
-  <div class="admin-box" style="max-width:520px;">
+  <div class="admin-box dlg dlg-md fb-box">
     <div class="admin-panel-header">
       <h2>💬 Visszajelzés</h2>
       <button class="ghost small" id="feedback-close-btn" aria-label="Visszajelzés bezárása">Bezárás ✕</button>
@@ -903,7 +905,7 @@
 
 <!-- Release notes / changelog overlay, opened by clicking the version number -->
 <div id="changelog-overlay" class="hidden">
-  <div class="admin-box" style="max-width:520px;">
+  <div class="admin-box dlg dlg-lg">
     <div class="admin-panel-header">
       <h2>📜 Kiadási napló</h2>
       <button class="ghost small" id="changelog-close-btn" aria-label="Kiadási napló bezárása">Bezárás ✕</button>
@@ -1124,7 +1126,7 @@
 
 <button id="settings-fab" class="ghost small hidden" type="button" title="Beállítások" aria-label="Hangerő és sötét mód beállítása">⚙️</button>
 <div id="ingame-menu-overlay" class="hidden">
-  <div class="admin-box" style="text-align:center;max-width:340px;">
+  <div class="admin-box dlg dlg-md menu-box">
     <div class="admin-panel-header">
       <h2>☰ Menü</h2>
       <button class="ghost small" id="menu-close-btn" aria-label="Menü bezárása">Bezárás ✕</button>

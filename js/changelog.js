@@ -2,6 +2,9 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.54', changes:[
+    'Minden ablak reszponzív lett, a fiók ablakhoz illő dizájnnal: nagy képernyőn szélesebbek és többoszloposak (adatvédelem két hasábban, kiadási napló kártyarácsban, visszajelzés és játék közbeni menü két oszlopban, profil tágasabb statisztikával), a fejléc görgetéskor is látszik. Telefonon változatlanul egy oszlop.'
+  ]},
   { version:'4.53', changes:[
     'Belépett játékosnál betöltéskor már nem villan fel a „Belépés / Regisztráció”: a neved azonnal látszik, a háttérben a szerver megerősíti. Ha közben kiléptettek (pl. másik eszközről), a nézet csendben vendégre vált.',
     'A fiók ablak új, reszponzív dizájnt kapott: nagy képernyőn széles, kártyás, kétoszlopos elrendezés (jelkulcsok, fiókadatok, követés, értesítések), telefonon egy oszlop. A hosszú magyarázatok a „Hogyan működik?” alá kerültek.'
