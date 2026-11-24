@@ -2,7 +2,7 @@ import { badNameReason, normalize, squash, editDistance, guessVerdict, isPlainOb
 import { Account } from './account.js';
 import { initProfile, openProfile, openTrophyBoard, levelOf, levelTitle, achievementsOf, TIERS } from './profile.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.60';
+const APP_VERSION = '4.61';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -2389,6 +2389,22 @@ try{
     musicIdx = i;
   }
   function musicTarget(){ return musicMuted ? 0 : volCurve(musicVolume); }
+  // v4.61: a feltöltött zenék szép, magyar címet kapnak. Csak akkor lép életbe, ha a lista még a feltöltéskori
+  // (fájlnévből képzett) nevet tartalmazza — egy későbbi kézi átnevezés mindig erősebb. A következő admin
+  // mentéskor az új név bekerül a zenelistába is.
+  const MUSIC_TITLES = {
+    'zene/muea7lmh-pixel-dreams.mp3':              ['Pixel Dreams', 'Pixelálmok'],
+    'zene/museotbu-pixel-dreams-2.mp3':            ['Pixel Dreams (2)', 'Pixelálmok – Második menet'],
+    'zene/museowbs-pixel-dreams-1.mp3':            ['Pixel Dreams (1)', 'Pixelálmok – Éjszakai rajz'],
+    'zene/mueayjaw-exploratory-pulse.mp3':         ['Exploratory Pulse', 'Felfedező ritmus'],
+    'zene/muhblf99-neon-horizon-menu-theme.mp3':   ['Neon Horizon Menu Theme', 'Neon horizont'],
+    'zene/muhbu4wv-neon-horizon-menu-theme-1.mp3': ['Neon Horizon Menu Theme (1)', 'Neon horizont – Hajnal'],
+    'zene/muhcofw6-ig2.mp3':                       ['IG2', 'Krétapor'],
+    'zene/muhd0erq-ig22.mp3':                      ['IG22', 'Krétapor – Újrarajzolva'],
+    'zene/museoz21-quiet-wonder.mp3':              ['Quiet Wonder', 'Csendes csoda'],
+    'zene/musep1zf-quiet-space.mp3':               ['Quiet Space', 'Üres vászon'],
+    'zene/musep4tw-vasto-e-speranzoso.mp3':        ['Vasto e Speranzoso', 'Tágas remény']
+  };
   function sanitizeMusicManifest(raw){
     const out = { repo:'', tracks:[] };
     if(!isPlainObject(raw)) return out;
@@ -2396,8 +2412,9 @@ try{
     (Array.isArray(raw.tracks) ? raw.tracks : []).slice(0,50).forEach(t=>{
       if(!isPlainObject(t) || typeof t.url !== 'string') return;
       if(!/^https:\/\/(raw\.githubusercontent\.com|cdn\.jsdelivr\.net)\//.test(t.url)) return;
+      const nice = MUSIC_TITLES[t.path];
       out.tracks.push({
-        name: cleanText(t.name || 'Zene', 80) || 'Zene',
+        name: (nice && t.name === nice[0]) ? nice[1] : (cleanText(t.name || 'Zene', 80) || 'Zene'),
         url: t.url.slice(0, 500),
         path: cleanText(t.path || '', 300),
         sha: cleanText(t.sha || '', 80),

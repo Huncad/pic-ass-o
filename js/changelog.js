@@ -2,6 +2,9 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.61', changes:[
+    'A háttérzenék szép, magyar címet kaptak (pl. Pixelálmok, Neon horizont, Krétapor, Csendes csoda, Üres vászon, Tágas remény) a feltöltéskori fájlnevek helyett.'
+  ]},
   { version:'4.60', changes:[
     'Telefonon minden ablak Bezárás gombja kerek ✕ ikon lett, így a címek kiférnek egy sorba (a képernyőolvasók továbbra is „Bezárás”-t olvasnak fel).'
   ]},
