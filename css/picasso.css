@@ -2864,3 +2864,24 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   @media (max-width: 600px){
     #stats-overlay .stat-grid > .stat-card:last-child:nth-child(odd){ grid-column:1 / -1; }
   }
+  /* v4.59: ranglista — nem nyúlik szét, dobogós sorok kiemelve, telefonon egysoros fülek */
+  #rank-overlay .rank-box{ max-width:min(820px, 96vw); }
+  .rank-tabs{ display:grid !important; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px; background:rgba(0,0,0,.18); padding:4px; border-radius:999px; }
+  .rank-tabs .pill{ margin:0; justify-content:center; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-left:6px; padding-right:6px; }
+  .rank-table thead th{ position:sticky; top:0; background:var(--panel); z-index:1; }
+  .rank-table tr.podium td{ font-weight:800; }
+  .rank-table tr.p1 td{ background:rgba(255,200,60,.10); }
+  .rank-table tr.p2 td{ background:rgba(200,210,225,.07); }
+  .rank-table tr.p3 td{ background:rgba(220,140,70,.08); }
+  .rank-table .rank-n{ text-align:center !important; font-size:1.05em; }
+  .rank-table td:nth-child(2){ max-width:0; width:45%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rank-table .abbr{ display:none; }
+  @media (max-width:600px){
+    .rank-table .full{ display:none; } .rank-table .abbr{ display:inline; }
+    .rank-table th{ font-size:.68rem; letter-spacing:0; }
+    .rank-tabs .pill{ font-size:.82rem; }
+    #rank-overlay .admin-panel-header{ align-items:flex-start; gap:10px; }
+    #rank-close-btn{ white-space:nowrap; flex-shrink:0; }
+  }
+  .rank-tabs .abbr{ display:none; }
+  @media (max-width:600px){ .rank-tabs .full{ display:none; } .rank-tabs .abbr{ display:inline; } }

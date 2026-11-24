@@ -2,7 +2,7 @@ import { badNameReason, normalize, squash, editDistance, guessVerdict, isPlainOb
 import { Account } from './account.js';
 import { initProfile, openProfile, openTrophyBoard, levelOf, levelTitle, achievementsOf, TIERS } from './profile.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.58';
+const APP_VERSION = '4.59';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -12049,8 +12049,8 @@ try{
         if(!Array.isArray(rows) || !rows.length){ body.innerHTML = '<p class="rank-empty">Még nincs befejezett játék ebben az időszakban.</p>'; return; }
         const medal = i => i===0?'🥇':i===1?'🥈':i===2?'🥉':String(i+1);
         const n = v => Number.isFinite(Number(v)) ? Number(v) : 0;
-        body.innerHTML = '<table class="rank-table"><thead><tr><th class="rank-n">#</th><th>Név</th><th>Győzelem</th><th>Játék</th><th>Átlag</th><th class="hide-s">Legjobb</th></tr></thead><tbody>'
-          + rows.slice(0, 200).map((e,i)=>`<tr><td class="rank-n">${medal(i)}</td><td>${escapeHtml(String(e.name||'').slice(0,24))}</td><td>${n(e.wins)}</td><td>${n(e.games)}</td><td>${n(e.avg)}</td><td class="hide-s">${n(e.best)}</td></tr>`).join('')
+        body.innerHTML = '<table class="rank-table"><thead><tr><th class="rank-n">#</th><th>Név</th><th><span class="full">Győzelem</span><span class="abbr" aria-hidden="true">Győz.</span></th><th>Játék</th><th>Átlag</th><th class="hide-s">Legjobb</th></tr></thead><tbody>'
+          + rows.slice(0, 200).map((e,i)=>`<tr${i<3?` class="podium p${i+1}"`:''}><td class="rank-n">${medal(i)}</td><td>${escapeHtml(String(e.name||'').slice(0,24))}</td><td>${n(e.wins)}</td><td>${n(e.games)}</td><td>${n(e.avg)}</td><td class="hide-s">${n(e.best)}</td></tr>`).join('')
           + '</tbody></table>';
       }catch(e){
         if(my !== reqId) return;
