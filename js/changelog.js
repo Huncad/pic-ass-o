@@ -2,6 +2,9 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.56', changes:[
+    'A profil ablakban nagy képernyőn görgetéskor a bal oszlop (szint, statisztika, kitüntetések) a helyén marad, így a trófeák és a galéria böngészése közben is látszik.'
+  ]},
   { version:'4.55', changes:[
     'A profil ablak nagy képernyőn két oszlopban jelenik meg: balra a szint, a statisztika és a kitüntetések, jobbra a trófeák és a galéria. Telefonon marad egy oszlop.'
   ]},

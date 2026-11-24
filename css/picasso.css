@@ -2845,3 +2845,7 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
     .pf-cols .pf-col:last-child > p:first-child{ margin-top:0 !important; }
     .pf-cols .gallery-grid{ grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); }
   }
+  /* v4.56: görgetéskor a profil bal oszlopa (szint, statisztika) a fejléc alatt marad */
+  @media (min-width: 900px){
+    .pf-cols > .pf-col:first-child{ position:sticky; top:var(--pf-stick, 64px); }
+  }
