@@ -17,6 +17,7 @@ Ingyenes, magyar rajzolós-kitalálós party játék a böngészőben, regisztr�
 | `netlify/functions/` | Szerveroldali függvények: fiókok (`account`), kitiltás, admin, Gist-proxy, értesítők, szójelzések, TURN |
 | `netlify/lib/` | Közös segédfüggvények (ütközésbiztos Blobs-írás, munkamenet, szólista, fiókok magja, levélküldő) |
 | `server/` | Saját játékszerver (WebSocket-továbbító, szobalista, ranglista) — telepítés: `server/TELEPITES.md` |
+| `offline/` | **Picasso offline változat**: egyetlen önálló HTML-fájl (internet, webszerver és zene nélkül, kivetítős közönségablakkal) — lásd `offline/README.md` |
 | `szavak-*.txt` | Tartalék szólista (az élő lista a Gistben van) |
 | `tests/` | Tesztek |
 

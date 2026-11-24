@@ -8,7 +8,9 @@
     "test:visual": "node tests/visual/snap.cjs",
     "test:visual:game": "node tests/visual/game.cjs",
     "test:load": "node tests/load/load.mjs 100 8 45",
-    "test:crowd": "node tests/e2e/crowd.cjs"
+    "test:crowd": "node tests/e2e/crowd.cjs",
+    "build:offline": "node offline/build.mjs",
+    "test:offline": "node offline/build.mjs && node tests/e2e/offline.cjs"
   },
   "dependencies": {
     "@netlify/blobs": "^10.7.13",

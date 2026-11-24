@@ -11,3 +11,6 @@
 /px              /404  404!
 /_headers        /404  404!
 /vendor/README.md /404 404!
+/offline/src/*   /404  404!
+/offline/build.mjs /404 404!
+/offline/README.md /404 404!

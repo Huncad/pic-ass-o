@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!-- Offline változat: semmilyen hálózati kapcsolatot nem nyithat (connect-src 'none'),
+     külső fájlt nem tölt be, minden (betű, szólista, kód) ebben a fájlban van. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#16302A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Picasso offline</title>
+<style>
+/*__FONTS__*/
+:root{
+  --bg:#16302A; --bg2:#1E3E2E; --panel:#20452F; --paper:#FBF7EC;
+  --chalk:#F4F1E6; --chalk-dim:#BFD3C4;
+  --pink:#FF6FA0; --yellow:#FFD166; --blue:#5FB6DE; --red:#FF6B5B; --green:#7BD389; --purple:#C79CF0;
+  --line:rgba(244,241,230,.16);
+}
+*{ box-sizing:border-box; }
+html,body{ margin:0; height:100%; }
+body{
+  background:radial-gradient(circle at 15% 20%, rgba(255,255,255,.03), transparent 40%), radial-gradient(circle at 85% 80%, rgba(255,255,255,.03), transparent 40%), var(--bg);
+  color:var(--chalk); font-family:'Nunito',system-ui,sans-serif; font-size:16px; line-height:1.4;
+  -webkit-tap-highlight-color:transparent; overscroll-behavior:none;
+}
+h1,h2,h3,.hand{ font-family:'Kalam','Comic Sans MS',cursive; font-weight:700; }
+h1{ margin:0; font-size:2.4rem; color:var(--yellow); text-shadow:0 3px 0 rgba(0,0,0,.25); line-height:1.1; }
+h2{ margin:0 0 6px; font-size:1.7rem; color:var(--yellow); line-height:1.15; }
+h3{ margin:0 0 8px; font-size:1.2rem; color:var(--chalk); }
+p{ margin:0 0 10px; }
+.screen{ display:none; min-height:100%; padding:16px; padding-top:max(16px, env(safe-area-inset-top)); padding-bottom:max(16px, env(safe-area-inset-bottom)); }
+.screen.active{ display:flex; flex-direction:column; align-items:center; }
+.card{ width:100%; max-width:720px; background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+.card + .card{ margin-top:14px; }
+.center{ text-align:center; }
+.muted{ color:var(--chalk-dim); }
+.small{ font-size:.88rem; }
+.row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.grow{ flex:1 1 auto; }
+.badge{ display:inline-block; padding:3px 10px; border-radius:999px; background:rgba(255,209,102,.16); color:var(--yellow); font-weight:800; font-size:.8rem; letter-spacing:.04em; }
+
+button{
+  font:inherit; font-weight:800; border:0; border-radius:12px; padding:12px 18px; cursor:pointer;
+  background:var(--yellow); color:#2b2200; box-shadow:0 4px 0 rgba(0,0,0,.25); touch-action:manipulation;
+  transition:transform .1s ease, box-shadow .1s ease;
+}
+button:active{ transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.25); }
+button:disabled{ opacity:.45; cursor:not-allowed; }
+button.secondary{ background:var(--blue); color:#06202d; }
+button.pink{ background:var(--pink); color:#3a0f22; }
+button.green{ background:var(--green); color:#0b2a13; }
+button.ghost{ background:transparent; color:var(--chalk); border:2px solid rgba(244,241,230,.35); box-shadow:none; }
+button.big{ font-size:1.15rem; padding:15px 22px; }
+button.block{ width:100%; }
+:focus-visible{ outline:3px solid var(--yellow); outline-offset:2px; }
+
+input[type=text]{
+  font:inherit; width:100%; padding:11px 14px; border-radius:12px; border:2px solid rgba(244,241,230,.25);
+  background:rgba(0,0,0,.18); color:var(--chalk);
+}
+input[type=text]:focus{ border-color:var(--yellow); outline:none; }
+label.field{ display:block; font-weight:800; margin:14px 0 8px; color:var(--chalk-dim); font-size:.9rem; }
+.pills{ display:flex; flex-wrap:wrap; gap:8px; }
+.pill{ padding:9px 15px; border-radius:999px; background:transparent; color:var(--chalk); border:2px solid rgba(244,241,230,.3); box-shadow:none; font-weight:700; }
+.pill.active{ background:var(--pink); border-color:var(--pink); color:#3a0f22; }
+
+/* --- kezdőképernyő --- */
+.logo{ text-align:center; margin:6px 0 14px; }
+.logo .sub{ color:var(--chalk-dim); margin-top:4px; }
+.players{ list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:8px; }
+.players li{ display:flex; align-items:center; gap:6px; padding:6px 6px 6px 12px; border-radius:999px; background:rgba(0,0,0,.2); border:1px solid var(--line); font-weight:700; }
+.players li .dot{ width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
+.players li button{ padding:2px 9px; border-radius:999px; background:transparent; color:var(--chalk-dim); box-shadow:none; font-size:1rem; line-height:1.2; }
+.players li button:hover{ color:var(--red); }
+.how ol{ margin:6px 0 0; padding-left:20px; }
+.how li{ margin-bottom:4px; }
+.note{ border-left:3px solid var(--green); padding:8px 12px; background:rgba(0,0,0,.15); border-radius:0 10px 10px 0; font-size:.88rem; color:var(--chalk-dim); }
+.err{ color:var(--red); font-weight:700; min-height:1.3em; margin-top:6px; font-size:.92rem; }
+
+/* --- átadás / szóválasztás --- */
+.handover{ justify-content:center; }
+.handover .card{ text-align:center; max-width:520px; }
+.who{ font-size:2.6rem; color:var(--pink); margin:6px 0 4px; word-break:break-word; }
+.words{ display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; margin:14px 0; }
+.words button{ font-family:'Kalam',cursive; font-size:1.5rem; padding:22px 12px; background:var(--paper); color:#1F2A26; word-break:break-word; hyphens:auto; }
+
+/* --- rajzolás --- */
+#s-draw{ padding:8px; padding-top:max(8px, env(safe-area-inset-top)); padding-bottom:max(8px, env(safe-area-inset-bottom)); height:100%; }
+#s-draw.active{ display:flex; flex-direction:column; align-items:stretch; gap:8px; }
+.topbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.topbar .drawer{ font-weight:800; }
+.topbar .drawer b{ color:var(--pink); }
+.timer{ font-family:'Kalam',cursive; font-weight:700; font-size:1.7rem; min-width:3.2ch; text-align:center; color:var(--yellow); line-height:1; }
+.timer.low{ color:var(--red); animation:pulse 1s infinite; }
+@keyframes pulse{ 50%{ opacity:.45; } }
+.peek{ background:var(--paper); color:#1F2A26; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+.peek .w{ font-family:'Kalam',cursive; }
+.mid{ flex:1 1 auto; min-height:0; display:flex; gap:8px; }
+.canvas-wrap{ flex:1 1 auto; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; }
+#board{ background:#fff; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.3); touch-action:none; display:block; cursor:crosshair; max-width:100%; max-height:100%; }
+.tools{ display:flex; flex-direction:column; gap:8px; flex:0 0 auto; width:116px; overflow-y:auto; }
+.swatches{ display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+.swatch{ width:100%; aspect-ratio:1; border-radius:50%; padding:0; border:3px solid rgba(0,0,0,.25); box-shadow:none; }
+.swatch.sel{ border-color:var(--yellow); transform:scale(1.08); }
+.toolrow{ display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+.tool{ padding:8px 0; border-radius:10px; background:rgba(0,0,0,.22); color:var(--chalk); box-shadow:none; border:2px solid transparent; font-size:1.05rem; min-height:40px; display:flex; align-items:center; justify-content:center; }
+.tool.sel{ border-color:var(--yellow); background:rgba(255,209,102,.18); }
+.tool .sz{ display:block; border-radius:50%; background:var(--chalk); }
+.guessbar{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:8px 10px; }
+.guessbar .lbl{ font-weight:800; color:var(--chalk-dim); font-size:.85rem; margin-right:4px; }
+.guessbar .row{ gap:6px; }
+.guessbar button{ padding:9px 14px; }
+
+@media (max-width:700px), (max-height:520px) and (orientation:landscape){
+  .tools{ width:96px; }
+}
+@media (max-width:560px) and (orientation:portrait){
+  .mid{ flex-direction:column; }
+  .tools{ width:auto; flex-direction:row; flex-wrap:wrap; overflow:visible; }
+  .swatches{ grid-template-columns:repeat(11, 1fr); flex:1 1 100%; }
+  .toolrow{ grid-template-columns:repeat(6, 1fr); flex:1 1 100%; }
+  .swatch{ border-width:2px; }
+}
+
+/* --- eredmény --- */
+.reveal-word{ font-family:'Kalam',cursive; font-weight:700; font-size:2.4rem; color:#1F2A26; background:var(--paper); display:inline-block; padding:4px 22px; border-radius:12px; margin:6px 0 10px; transform:rotate(-1.5deg); word-break:break-word; }
+.scores{ list-style:none; padding:0; margin:8px 0 0; }
+.scores li{ display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:10px; }
+.scores li:nth-child(odd){ background:rgba(0,0,0,.14); }
+.scores .pos{ width:1.8em; text-align:center; font-weight:800; color:var(--chalk-dim); }
+.scores .nm{ flex:1 1 auto; font-weight:800; word-break:break-word; }
+.scores .pt{ font-weight:800; color:var(--yellow); }
+.scores .plus{ color:var(--green); font-weight:800; font-size:.85rem; min-width:3.4em; text-align:right; }
+.podium{ display:flex; align-items:flex-end; justify-content:center; gap:10px; margin:16px 0 6px; }
+.podium div{ flex:0 1 150px; text-align:center; }
+.podium .blk{ border-radius:12px 12px 0 0; display:flex; align-items:flex-start; justify-content:center; padding-top:8px; font-family:'Kalam',cursive; font-size:2rem; font-weight:700; color:#2b2200; }
+.podium .nm{ font-weight:800; margin-bottom:6px; word-break:break-word; }
+.podium .pt{ color:var(--chalk-dim); font-size:.9rem; }
+
+/* --- felugró ablak --- */
+.modal{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; padding:16px; z-index:20; }
+.modal.open{ display:flex; }
+.modal .card{ max-width:440px; text-align:center; }
+.toast{ position:fixed; left:50%; top:16px; transform:translateX(-50%); background:var(--paper); color:#1F2A26; font-weight:800; padding:10px 18px; border-radius:12px; box-shadow:0 6px 20px rgba(0,0,0,.35); z-index:30; opacity:0; pointer-events:none; transition:opacity .2s; max-width:calc(100% - 32px); text-align:center; }
+.toast.show{ opacity:1; }
+/* --- kivetítő (közönség) ablak --- */
+.projbox{ border:2px dashed rgba(95,182,222,.55); border-radius:14px; padding:14px; background:rgba(95,182,222,.07); }
+.projbox.on{ border-style:solid; border-color:var(--green); background:rgba(123,211,137,.08); }
+.projbox ol{ margin:6px 0 10px; padding-left:20px; font-size:.92rem; }
+.projstate{ font-weight:800; }
+.projbox.on .projstate{ color:var(--green); }
+body.has-aud .peek{ background:var(--yellow); }
+.aud-only{ display:none; }
+body.has-aud .aud-only{ display:block; }
+body.has-aud .no-aud{ display:none; }
+.aud{ height:100vh; display:grid; grid-template-rows:auto 1fr; gap:12px; padding:18px 24px; overflow:hidden; }
+.aud header{ display:flex; align-items:center; gap:18px; }
+.aud .logo-s{ font-family:'Kalam',cursive; font-weight:700; color:var(--yellow); font-size:2rem; }
+.aud .info{ flex:1 1 auto; font-weight:800; font-size:1.5rem; }
+.aud .info b{ color:var(--pink); }
+.aud .timer{ font-size:3.2rem; }
+.aud main{ min-height:0; display:flex; align-items:center; justify-content:center; position:relative; }
+.aud .view{ display:none; width:100%; height:100%; align-items:center; justify-content:center; flex-direction:column; text-align:center; }
+.aud .view.on{ display:flex; }
+.aud canvas{ background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.35); display:block; }
+.aud .msg{ font-family:'Kalam',cursive; font-weight:700; font-size:4rem; line-height:1.15; color:var(--chalk); word-break:break-word; }
+.aud .msg b{ color:var(--pink); }
+.aud .sub{ font-size:1.6rem; color:var(--chalk-dim); margin-top:10px; }
+.aud .reveal-word{ font-size:4.4rem; }
+.aud .cols{ display:flex; gap:40px; align-items:flex-start; justify-content:center; width:100%; max-width:1500px; }
+.aud .cols > div{ flex:1 1 0; min-width:0; }
+.aud .scores{ font-size:1.5rem; text-align:left; }
+.aud .scores li{ padding:6px 16px; }
+.aud .podium .blk{ font-size:3rem; }
+.aud .podium .nm{ font-size:1.6rem; }
+.aud .podium .pt{ font-size:1.2rem; }
+.aud .players{ justify-content:center; font-size:1.5rem; margin-top:24px; max-width:1200px; }
+.aud .fs{ position:fixed; right:16px; bottom:16px; opacity:.85; }
+:fullscreen .aud .fs{ display:none; }
+@media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+
+<!-- ============ KEZDŐKÉPERNYŐ ============ -->
+<section class="screen active" id="s-setup">
+  <div class="logo">
+    <h1>Picasso</h1>
+    <div class="sub">offline party változat · egy eszközön, internet nélkül</div>
+  </div>
+
+  <div class="card">
+    <h3>Játékosok</h3>
+    <form id="add-form" class="row" autocomplete="off">
+      <input type="text" id="name-in" class="grow" maxlength="16" placeholder="Név (pl. Anna)" aria-label="Játékos neve" style="width:auto">
+      <button type="submit" class="secondary">+ Hozzáad</button>
+    </form>
+    <div class="err" id="setup-err" role="alert"></div>
+    <ul class="players" id="players"></ul>
+    <p class="muted small" id="players-hint" style="margin-top:8px">Legalább 2, legfeljebb 12 játékos (csapatnevek is jók).</p>
+
+    <label class="field">Szavak nehézsége</label>
+    <div class="pills" data-opt="diff">
+      <button type="button" class="pill" data-v="konnyu">Könnyű</button>
+      <button type="button" class="pill" data-v="kozepes">Közepes</button>
+      <button type="button" class="pill" data-v="nehez">Nehéz</button>
+      <button type="button" class="pill" data-v="vegyes">Vegyes</button>
+    </div>
+
+    <label class="field">Rajzolási idő</label>
+    <div class="pills" data-opt="time">
+      <button type="button" class="pill" data-v="45">45 mp</button>
+      <button type="button" class="pill" data-v="60">60 mp</button>
+      <button type="button" class="pill" data-v="90">90 mp</button>
+      <button type="button" class="pill" data-v="120">2 perc</button>
+      <button type="button" class="pill" data-v="0">Nincs időkorlát</button>
+    </div>
+
+    <label class="field">Hányszor rajzol mindenki?</label>
+    <div class="pills" data-opt="rounds">
+      <button type="button" class="pill" data-v="1">1×</button>
+      <button type="button" class="pill" data-v="2">2×</button>
+      <button type="button" class="pill" data-v="3">3×</button>
+      <button type="button" class="pill" data-v="4">4×</button>
+    </div>
+
+    <div class="projbox" id="projbox" style="margin-top:20px">
+      <div class="row"><span class="grow"><b>📽 Kivetítő</b> · <span class="projstate" id="proj-state">nincs megnyitva</span></span>
+        <button type="button" class="secondary" id="proj-btn">Kivetítő ablak megnyitása</button></div>
+      <ol>
+        <li>Windowson nyomd meg a <b>Win + P</b> billentyűt, és válaszd a <b>Kiterjesztés</b> lehetőséget (ne a Másolást/Tükrözést!).</li>
+        <li>Nyisd meg a kivetítő ablakot, húzd át a kivetítő képernyőjére, és kattints benne a <b>Teljes képernyő</b> gombra.</li>
+        <li>A laptop képernyőjét csak a rajzoló látja: itt jelenik meg a szó. A kivetítőn csak a rajz, az idő és az állás látszik.</li>
+      </ol>
+      <p class="muted small" style="margin:0">Kivetítő nélkül (egy képernyőn) is játszhattok: ilyenkor a szót nyomva tartott gombbal lehet megnézni.</p>
+    </div>
+
+    <div style="margin-top:20px">
+      <button class="big block" id="start-btn">Indulhat a játék! 🎨</button>
+    </div>
+  </div>
+
+  <div class="card how">
+    <h3>Hogyan játsszatok?</h3>
+    <ol>
+      <li>Egy laptopon játszotok, ideális esetben kivetítővel (lásd fent).</li>
+      <li>A soron következő rajzoló a laptophoz lép, és titokban választ egy szót.</li>
+      <li>Rajzol — a többiek hangosan tippelnek. Betűt, számot írni tilos! 😉</li>
+      <li>Aki kitalálja, annak a nevére koppint a rajzoló. Minél gyorsabb, annál több pont; a rajzoló is kap pontot.</li>
+    </ol>
+    <p class="note" style="margin-top:10px">🔒 Ez a fájl nem használ internetet: nem tölt le és nem küld semmit, nincs benne zene, fiók, reklám vagy követés. A beállításokat és a neveket csak ennek az eszköznek a böngészője jegyzi meg.</p>
+  </div>
+</section>
+
+<!-- ============ ÁTADÁS ============ -->
+<section class="screen handover" id="s-handover">
+  <div class="card">
+    <span class="badge" id="ho-round"></span>
+    <p class="muted" style="margin-top:12px">Add át az eszközt neki:</p>
+    <div class="who hand" id="ho-name"></div>
+    <p class="muted no-aud">A többiek most ne nézzenek a képernyőre! 🙈</p>
+    <p class="muted aud-only">📽 A kivetítőn a szó nem látszik — csak ez a képernyő mutatja.</p>
+    <button class="big block" id="ho-go" style="margin-top:10px"></button>
+    <button class="ghost block" id="ho-scores" style="margin-top:10px">Állás megtekintése</button>
+    <button class="ghost block no-aud" id="ho-proj" style="margin-top:10px">📽 Kivetítő ablak megnyitása</button>
+  </div>
+</section>
+
+<!-- ============ SZÓVÁLASZTÁS ============ -->
+<section class="screen handover" id="s-choose">
+  <div class="card">
+    <h2>Mit rajzolsz?</h2>
+    <p class="muted">Válassz egyet — csak te láthatod.</p>
+    <div class="words" id="word-choices"></div>
+    <button class="ghost" id="reroll">🔄 Másik három szót kérek</button>
+  </div>
+</section>
+
+<!-- ============ RAJZOLÁS ============ -->
+<section class="screen" id="s-draw">
+  <div class="topbar">
+    <button class="ghost" id="quit-btn" aria-label="Kilépés a játékból" title="Kilépés">✕</button>
+    <div class="drawer grow">✏️ <b id="d-name"></b> rajzol <span class="muted small" id="d-round"></span></div>
+    <button class="peek" id="peek" title="Nyomd és tartsd lenyomva a szó megtekintéséhez">👁 <span class="w" id="peek-w">Szó (tartsd lenyomva)</span></button>
+    <button class="ghost" id="pause-btn" title="Szünet (megállítja az órát)">Szünet</button>
+    <div class="timer" id="timer" aria-live="off"></div>
+  </div>
+
+  <div class="mid">
+    <div class="canvas-wrap" id="canvas-wrap">
+      <canvas id="board" width="1200" height="900" aria-label="Rajzlap"></canvas>
+    </div>
+    <div class="tools" id="tools">
+      <div class="swatches" id="swatches"></div>
+      <div class="toolrow">
+        <button class="tool sel" data-size="5" title="Vékony"><span class="sz" style="width:6px;height:6px"></span></button>
+        <button class="tool" data-size="12" title="Közepes"><span class="sz" style="width:11px;height:11px"></span></button>
+        <button class="tool" data-size="28" title="Vastag"><span class="sz" style="width:18px;height:18px"></span></button>
+        <button class="tool" data-mode="eraser" title="Radír">🧽</button>
+        <button class="tool" data-mode="fill" title="Kitöltés">🪣</button>
+        <button class="tool" id="undo-btn" title="Visszavonás">↶</button>
+      </div>
+      <button class="tool" id="clear-btn" title="Lap törlése" style="font-size:.85rem;font-weight:800">🗑 Törlés</button>
+    </div>
+  </div>
+
+  <div class="guessbar">
+    <div class="row">
+      <span class="lbl">Ki találta ki?</span>
+      <div class="row grow" id="guessers"></div>
+      <button class="ghost" id="giveup-btn">Senki / feladjuk</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ KÖR VÉGE ============ -->
+<section class="screen" id="s-reveal">
+  <div class="card center">
+    <div id="rv-title" class="hand" style="font-size:1.6rem"></div>
+    <div class="reveal-word" id="rv-word"></div>
+    <h3 style="text-align:left;margin-top:14px">Állás</h3>
+    <ul class="scores" id="rv-scores"></ul>
+    <button class="big block" id="rv-next" style="margin-top:16px"></button>
+  </div>
+</section>
+
+<!-- ============ JÁTÉK VÉGE ============ -->
+<section class="screen" id="s-end">
+  <div class="card center">
+    <h2>Vége a játéknak! 🏆</h2>
+    <div class="podium" id="podium"></div>
+    <ul class="scores" id="end-scores" style="text-align:left"></ul>
+    <div class="row" style="margin-top:16px;justify-content:center">
+      <button class="big" id="again-btn">Új játék ugyanezekkel</button>
+      <button class="ghost big" id="home-btn">Beállítások</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FELUGRÓ ABLAKOK ============ -->
+<div class="modal" id="m-confirm" role="dialog" aria-modal="true" aria-labelledby="mc-text">
+  <div class="card">
+    <p id="mc-text" style="font-weight:800;font-size:1.1rem"></p>
+    <div class="row" style="justify-content:center;margin-top:12px">
+      <button class="ghost" id="mc-no">Mégse</button>
+      <button class="pink" id="mc-yes">Igen</button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="m-pause" role="dialog" aria-modal="true">
+  <div class="card">
+    <h2>Szünet</h2>
+    <p class="muted">Az óra áll. A rajz el van takarva.</p>
+    <button class="big block" id="resume-btn">Folytatás</button>
+  </div>
+</div>
+<div class="modal" id="m-scores" role="dialog" aria-modal="true">
+  <div class="card" style="text-align:left">
+    <h2>Állás</h2>
+    <ul class="scores" id="ms-list"></ul>
+    <button class="block" id="ms-close" style="margin-top:12px">Bezár</button>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+'use strict';
+(function(){
+  /* ---------- szólisták (a build illeszti be) ---------- */
+  const WORDS = /*__WORDS__*/{konnyu:['alma','ház','kutya','nap','fa'],kozepes:['hóember','bicikli'],nehez:['szivárvány']};
+
+  const PLAYER_COLORS = ['#FF6FA0','#FFD166','#5FB6DE','#7BD389','#C79CF0','#FF6B5B','#4FD6E8','#F5A623','#A8D96B','#FF8F6B','#7EA7FF','#E4A0F7'];
+  const SWATCHES = ['#222222','#8b5a2b','#e63946','#f4a300','#ffd166','#2fa84f','#2a9d8f','#457b9d','#7b2cbf','#f77fbe','#ffffff'];
+  const STORE_KEY = 'picasso-offline-v1';
+  const MAX_PLAYERS = 12;
+
+  const $ = id => document.getElementById(id);
+  const el = (tag, props, kids) => {
+    const n = document.createElement(tag);
+    if(props) for(const k in props){
+      if(k === 'class') n.className = props[k];
+      else if(k === 'text') n.textContent = props[k];
+      else if(k === 'style') n.style.cssText = props[k];
+      else n.setAttribute(k, props[k]);
+    }
+    (kids || []).forEach(c => n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
+    return n;
+  };
+  const nameKey = n => String(n||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+  const shuffle = a => { for(let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+  /* ---------- beállítások (csak ezen az eszközön) ---------- */
+  const settings = { players:[], diff:'konnyu', time:'60', rounds:'2' };
+  try{
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    if(saved && typeof saved === 'object'){
+      if(Array.isArray(saved.players)) settings.players = saved.players.filter(p => typeof p === 'string').map(p => p.slice(0,16)).slice(0, MAX_PLAYERS);
+      ['diff','time','rounds'].forEach(k => { if(typeof saved[k] === 'string') settings[k] = saved[k]; });
+    }
+  }catch(e){}
+  function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(settings)); }catch(e){} }
+
+  /* ---------- képernyők ---------- */
+  function show(id){
+    document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+    window.scrollTo(0, 0);
+    if(id === 's-draw') requestAnimationFrame(fitCanvas);
+    audSync();
+  }
+  let toastT = 0;
+  function toast(msg){
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+  // Megerősítő ablak: onYes / onNo, opcionális gombfeliratok
+  let confirmCbs = null;
+  function confirmBox(text, onYes, onNo, labels){
+    $('mc-text').textContent = text;
+    $('mc-yes').textContent = (labels && labels.yes) || 'Igen';
+    $('mc-no').textContent = (labels && labels.no) || 'Mégse';
+    confirmCbs = { onYes, onNo };
+    $('m-confirm').classList.add('open'); $('mc-yes').focus();
+  }
+  function closeConfirm(yes){
+    if(!confirmCbs) return;
+    const cb = yes ? confirmCbs.onYes : confirmCbs.onNo;
+    confirmCbs = null; $('m-confirm').classList.remove('open');
+    if(cb) cb();
+  }
+  $('mc-no').addEventListener('click', () => closeConfirm(false));
+  $('mc-yes').addEventListener('click', () => closeConfirm(true));
+
+  /* ---------- kezdőképernyő ---------- */
+  function renderPlayers(){
+    const ul = $('players'); ul.textContent = '';
+    settings.players.forEach((p, i) => {
+      const rm = el('button', { type:'button', 'aria-label':`${p} törlése`, title:'Törlés', text:'✕' });
+      rm.addEventListener('click', () => { settings.players.splice(i, 1); save(); renderPlayers(); });
+      ul.appendChild(el('li', null, [el('span', { class:'dot', style:`background:${PLAYER_COLORS[i % PLAYER_COLORS.length]}` }), p, rm]));
+    });
+    $('players-hint').textContent = settings.players.length < 2
+      ? 'Legalább 2, legfeljebb 12 játékos (csapatnevek is jók).'
+      : `${settings.players.length} játékos${settings.players.length >= MAX_PLAYERS ? ' (ennyi a legtöbb)' : ''}`;
+    audSync();
+  }
+  $('add-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const inp = $('name-in'), name = inp.value.replace(/\s+/g, ' ').trim().slice(0, 16), err = $('setup-err');
+    err.textContent = '';
+    if(!name) return;
+    if(settings.players.length >= MAX_PLAYERS){ err.textContent = 'Legfeljebb 12 játékos lehet.'; return; }
+    if(settings.players.some(p => nameKey(p) === nameKey(name))){ err.textContent = 'Ez a név már szerepel.'; return; }
+    settings.players.push(name); save(); renderPlayers(); inp.value = ''; inp.focus();
+  });
+  document.querySelectorAll('.pills[data-opt]').forEach(group => {
+    const key = group.dataset.opt;
+    const sync = () => group.querySelectorAll('.pill').forEach(b => { const on = b.dataset.v === settings[key]; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on); });
+    group.addEventListener('click', e => { const b = e.target.closest('.pill'); if(!b) return; settings[key] = b.dataset.v; save(); sync(); });
+    if(!group.querySelector(`.pill[data-v="${settings[key]}"]`)) settings[key] = group.querySelector('.pill').dataset.v;
+    sync();
+  });
+  $('start-btn').addEventListener('click', () => {
+    const pending = $('name-in').value.trim();
+    if(pending) $('add-form').requestSubmit ? $('add-form').requestSubmit() : $('add-form').dispatchEvent(new Event('submit', { cancelable:true }));
+    if(settings.players.length < 2){ $('setup-err').textContent = 'Legalább két játékos kell.'; $('name-in').focus(); return; }
+    startGame();
+  });
+
+  /* ---------- játékállapot ---------- */
+  let game = null;
+  function startGame(){
+    const order = shuffle(settings.players.map((name, i) => ({ name, color:PLAYER_COLORS[i % PLAYER_COLORS.length], score:0 })));
+    game = {
+      players: order, rounds: +settings.rounds, time: +settings.time, diff: settings.diff,
+      turn: 0, used: new Set(), lastGain: {}
+    };
+    nextTurn();
+  }
+  const totalTurns = () => game.players.length * game.rounds;
+  const drawerOf = t => game.players[t % game.players.length];
+  function roundLabel(){
+    return `${Math.floor(game.turn / game.players.length) + 1}. kör / ${game.rounds} · ${game.turn + 1}. rajz / ${totalTurns()}`;
+  }
+
+  function nextTurn(){
+    const d = drawerOf(game.turn);
+    $('ho-round').textContent = roundLabel();
+    $('ho-name').textContent = d.name;
+    $('ho-name').style.color = d.color;
+    $('ho-go').textContent = `Én vagyok ${d.name} — mutasd a szavakat`;
+    show('s-handover');
+    $('ho-go').focus();
+  }
+  $('ho-go').addEventListener('click', () => { game.rerolled = false; pickWords(); show('s-choose'); });
+  $('ho-scores').addEventListener('click', () => openScores());
+
+  function wordPool(){
+    if(game.diff === 'vegyes') return WORDS.konnyu.concat(WORDS.kozepes, WORDS.nehez);
+    return WORDS[game.diff] || WORDS.konnyu;
+  }
+  function pickWords(){
+    const pool = wordPool(), picks = [], seen = new Set();
+    for(let tries = 0; picks.length < 3 && tries < 400; tries++){
+      const w = pool[Math.floor(Math.random() * pool.length)];
+      const k = nameKey(w);
+      if(seen.has(k) || (game.used.has(k) && tries < 300)) continue;
+      seen.add(k); picks.push(w);
+    }
+    const box = $('word-choices'); box.textContent = '';
+    picks.forEach(w => {
+      const b = el('button', { type:'button', text:w });
+      b.addEventListener('click', () => beginDrawing(w));
+      box.appendChild(b);
+    });
+    $('reroll').disabled = !!game.rerolled;
+  }
+  $('reroll').addEventListener('click', () => { game.rerolled = true; pickWords(); });
+
+  /* ---------- rajzolás ---------- */
+  const canvas = $('board'), ctx = canvas.getContext('2d', { willReadFrequently:true });
+  const W = canvas.width, H = canvas.height;
+  const tool = { color:SWATCHES[0], size:5, mode:'pen' };
+  let undoStack = [], drawing = null;
+
+  function clearBoard(){ ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H); ctx.restore(); audCanvas(); }
+  function pushUndo(){ undoStack.push(ctx.getImageData(0, 0, W, H)); if(undoStack.length > 25) undoStack.shift(); }
+
+  function fitCanvas(){
+    const wrap = $('canvas-wrap'), r = wrap.getBoundingClientRect();
+    if(!r.width || !r.height) return;
+    const scale = Math.min(r.width / W, r.height / H);
+    canvas.style.width = Math.floor(W * scale) + 'px';
+    canvas.style.height = Math.floor(H * scale) + 'px';
+  }
+  window.addEventListener('resize', () => { if($('s-draw').classList.contains('active')) fitCanvas(); });
+
+  const swBox = $('swatches');
+  SWATCHES.forEach((c, i) => {
+    const b = el('button', { type:'button', class:'swatch' + (i === 0 ? ' sel' : ''), style:`background:${c}`, title:c, 'aria-label':`Szín ${c}` });
+    b.addEventListener('click', () => {
+      tool.color = c;
+      if(tool.mode === 'eraser') setMode('pen');
+      swBox.querySelectorAll('.swatch').forEach(s => s.classList.toggle('sel', s === b));
+    });
+    swBox.appendChild(b);
+  });
+  function setMode(m){
+    tool.mode = m;
+    document.querySelectorAll('.tool[data-mode]').forEach(b => b.classList.toggle('sel', b.dataset.mode === m));
+  }
+  document.querySelectorAll('.tool[data-size]').forEach(b => b.addEventListener('click', () => {
+    tool.size = +b.dataset.size;
+    document.querySelectorAll('.tool[data-size]').forEach(x => x.classList.toggle('sel', x === b));
+    if(tool.mode === 'fill') setMode('pen');
+  }));
+  document.querySelectorAll('.tool[data-mode]').forEach(b => b.addEventListener('click', () => setMode(tool.mode === b.dataset.mode ? 'pen' : b.dataset.mode)));
+  $('undo-btn').addEventListener('click', () => { const s = undoStack.pop(); if(s){ ctx.putImageData(s, 0, 0); audCanvas(); } });
+  $('clear-btn').addEventListener('click', () => { pushUndo(); clearBoard(); });
+
+  function pos(e){
+    const r = canvas.getBoundingClientRect();
+    return { x:(e.clientX - r.left) * W / r.width, y:(e.clientY - r.top) * H / r.height };
+  }
+  function strokeStyle(){
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.lineWidth = tool.mode === 'eraser' ? Math.max(tool.size * 2.2, 22) : tool.size;
+    ctx.strokeStyle = tool.mode === 'eraser' ? '#ffffff' : tool.color;
+    ctx.fillStyle = ctx.strokeStyle;
+  }
+  canvas.addEventListener('pointerdown', e => {
+    if(!game || game.paused || game.over || drawing) return;
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    const p = pos(e);
+    pushUndo();
+    if(tool.mode === 'fill'){ floodFill(Math.floor(p.x), Math.floor(p.y), tool.color); return; }
+    try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
+    drawing = { id:e.pointerId, last:p, mid:p };
+    strokeStyle();
+    ctx.beginPath(); ctx.arc(p.x, p.y, ctx.lineWidth / 2, 0, Math.PI * 2); ctx.fill();
+    audCanvas();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if(!drawing || e.pointerId !== drawing.id) return;
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    strokeStyle();
+    for(const ev of (evs.length ? evs : [e])){
+      const p = pos(ev), mid = { x:(drawing.last.x + p.x) / 2, y:(drawing.last.y + p.y) / 2 };
+      ctx.beginPath(); ctx.moveTo(drawing.mid.x, drawing.mid.y);
+      ctx.quadraticCurveTo(drawing.last.x, drawing.last.y, mid.x, mid.y); ctx.stroke();
+      drawing.last = p; drawing.mid = mid;
+    }
+    audCanvas();
+  });
+  const endStroke = e => {
+    if(!drawing || e.pointerId !== drawing.id) return;
+    strokeStyle();
+    ctx.beginPath(); ctx.moveTo(drawing.mid.x, drawing.mid.y); ctx.lineTo(drawing.last.x, drawing.last.y); ctx.stroke();
+    drawing = null;
+    audCanvas();
+  };
+  canvas.addEventListener('pointerup', endStroke);
+  canvas.addEventListener('pointercancel', endStroke);
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  function floodFill(x0, y0, hex){
+    if(x0 < 0 || y0 < 0 || x0 >= W || y0 >= H) return;
+    const img = ctx.getImageData(0, 0, W, H), d = img.data;
+    const fr = parseInt(hex.slice(1,3),16), fg = parseInt(hex.slice(3,5),16), fb = parseInt(hex.slice(5,7),16);
+    const i0 = (y0 * W + x0) * 4, tr = d[i0], tg = d[i0+1], tb = d[i0+2];
+    if(Math.abs(tr-fr) + Math.abs(tg-fg) + Math.abs(tb-fb) < 8){ undoStack.pop(); return; }
+    const TOL = 96;   // az élsimított szélek is kitöltődnek
+    const match = i => Math.abs(d[i]-tr) + Math.abs(d[i+1]-tg) + Math.abs(d[i+2]-tb) <= TOL;
+    const seen = new Uint8Array(W * H), stack = [x0, y0];
+    while(stack.length){
+      const y = stack.pop(); let x = stack.pop();
+      while(x >= 0 && !seen[y*W+x] && match((y*W+x)*4)) x--;
+      x++;
+      let up = false, down = false;
+      for(; x < W; x++){
+        const p = y*W + x, i = p*4;
+        if(seen[p] || !match(i)) break;
+        seen[p] = 1; d[i] = fr; d[i+1] = fg; d[i+2] = fb; d[i+3] = 255;
+        if(y > 0){ const q = p - W; const ok = !seen[q] && match(q*4); if(ok && !up){ stack.push(x, y-1); up = true; } else if(!ok) up = false; }
+        if(y < H-1){ const q = p + W; const ok = !seen[q] && match(q*4); if(ok && !down){ stack.push(x, y+1); down = true; } else if(!ok) down = false; }
+      }
+    }
+    // a vonalak szélén maradt halvány pixeleket is ráhúzzuk (1 px tágítás)
+    for(let y = 1; y < H-1; y++) for(let x = 1; x < W-1; x++){
+      const p = y*W + x;
+      if(seen[p]) continue;
+      if(seen[p-1] || seen[p+1] || seen[p-W] || seen[p+W]){
+        const i = p*4, lum = d[i] + d[i+1] + d[i+2];
+        if(lum > 600){ d[i] = fr; d[i+1] = fg; d[i+2] = fb; }
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    audCanvas();
+  }
+
+  /* --- a szó megtekintése: csak lenyomva tartva látszik --- */
+  const peek = $('peek');
+  const peekOn = e => { if(e) e.preventDefault(); if(game && game.word) $('peek-w').textContent = game.word; };
+  // kivetítővel a laptop képernyőjét csak a rajzoló látja → a szó végig kint lehet
+  const peekOff = () => { $('peek-w').textContent = audOn() && game && game.word ? game.word : 'Szó (tartsd lenyomva)'; };
+  peek.addEventListener('pointerdown', peekOn);
+  ['pointerup','pointerleave','pointercancel','blur'].forEach(ev => peek.addEventListener(ev, peekOff));
+  peek.addEventListener('keydown', e => { if(e.key === ' ' || e.key === 'Enter') peekOn(e); });
+  peek.addEventListener('keyup', peekOff);
+  peek.addEventListener('contextmenu', e => e.preventDefault());
+
+  /* --- óra --- */
+  let tick = 0;
+  function beginDrawing(word){
+    game.word = word; game.used.add(nameKey(word));
+    game.left = game.time; game.paused = false; game.over = false; game.late = false;
+    undoStack = []; drawing = null; clearBoard(); setMode('pen');
+    const d = drawerOf(game.turn);
+    $('d-name').textContent = d.name; $('d-name').style.color = d.color;
+    $('d-round').textContent = '· ' + roundLabel();
+    const gbox = $('guessers'); gbox.textContent = '';
+    game.players.forEach(p => {
+      if(p === d) return;
+      const b = el('button', { type:'button', class:'green', text:p.name, style:`background:${p.color}` });
+      b.addEventListener('click', () => {
+        if(game.late) return endTurn(p);   // lejárt idő után már nem kérdezünk vissza
+        if(game.over) return;
+        confirmBox(`${p.name} kitalálta, hogy „${game.word}”?`, () => endTurn(p));
+      });
+      gbox.appendChild(b);
+    });
+    $('pause-btn').style.display = game.time ? '' : 'none';
+    renderTimer();
+    show('s-draw');
+    peekOff();
+    clearInterval(tick);
+    if(game.time) tick = setInterval(() => {
+      if(game.paused || game.over) return;
+      game.left = Math.max(0, game.left - 1);
+      renderTimer();
+      if(game.left === 0) timeUp();
+    }, 1000);
+  }
+  function renderTimer(){
+    const t = $('timer');
+    if(!game.time){ t.textContent = '∞'; t.classList.remove('low'); audSync(); return; }
+    t.textContent = game.left;
+    t.classList.toggle('low', game.left <= 10);
+    audSync();
+  }
+  function timeUp(){
+    game.over = true; clearInterval(tick); drawing = null; audSync();
+    confirmBox('Lejárt az idő! ⏰ Kitalálta valaki az utolsó pillanatban?',
+      () => { game.late = true; audSync(); toast('Koppints annak a nevére, aki kitalálta.'); },
+      () => endTurn(null),
+      { yes:'Igen, kiválasztom', no:'Nem, senki' });
+  }
+  $('giveup-btn').addEventListener('click', () => {
+    if(game.late) return endTurn(null);
+    if(game.over) return;
+    confirmBox('Senki nem találta ki? A szó felfedése és tovább.', () => endTurn(null));
+  });
+  $('pause-btn').addEventListener('click', () => { if(game.over) return; game.paused = true; canvas.style.visibility = 'hidden'; $('m-pause').classList.add('open'); audSync(); });
+  $('resume-btn').addEventListener('click', () => { game.paused = false; canvas.style.visibility = ''; $('m-pause').classList.remove('open'); audSync(); });
+  $('quit-btn').addEventListener('click', () => {
+    const wasPaused = game.paused; game.paused = true; audSync();
+    confirmBox('Biztosan kilépsz? A játék állása elvész.',
+      () => { clearInterval(tick); game = null; show('s-setup'); },
+      () => { if(game){ game.paused = wasPaused; audSync(); } },
+      { yes:'Kilépek', no:'Maradok' });
+  });
+  document.addEventListener('visibilitychange', () => {   // ha elkapcsolnak az alkalmazásról, az óra megáll
+    if(document.hidden && game && $('s-draw').classList.contains('active') && !game.over && game.time && !game.paused){
+      game.paused = true; canvas.style.visibility = 'hidden'; $('m-pause').classList.add('open'); audSync();
+    }
+  });
+
+  /* ---------- pontozás és kör vége ---------- */
+  function endTurn(guesser){
+    clearInterval(tick); game.over = true; game.late = false; drawing = null;
+    const d = drawerOf(game.turn), gain = {};
+    if(guesser){
+      const frac = game.time ? game.left / game.time : 1;
+      const g = 50 + Math.round(50 * frac / 5) * 5;   // 50–100 pont, 5-ös lépésben
+      guesser.score += g; gain[guesser.name] = g;
+      d.score += 50; gain[d.name] = 50;
+    }
+    game.lastGain = gain;
+
+    $('rv-title').textContent = guesser ? `🎉 ${guesser.name} kitalálta!` : '😅 Ezt most senki nem találta ki';
+    $('rv-word').textContent = game.word;
+    renderScores($('rv-scores'), gain);
+    const last = game.turn + 1 >= totalTurns();
+    $('rv-next').textContent = last ? 'Eredményhirdetés 🏆' : `Tovább: ${drawerOf(game.turn + 1).name} rajzol`;
+    show('s-reveal');
+    $('rv-next').focus();
+  }
+  $('rv-next').addEventListener('click', () => {
+    if(!game) return;
+    game.turn++;
+    if(game.turn >= totalTurns()) finish(); else nextTurn();
+  });
+
+  function ranked(){ return game.players.slice().sort((a, b) => b.score - a.score); }
+  function renderScores(ul, gain){
+    ul.textContent = '';
+    let prev = null, rank = 0;
+    ranked().forEach((p, i) => {
+      if(p.score !== prev){ rank = i + 1; prev = p.score; }
+      ul.appendChild(el('li', null, [
+        el('span', { class:'pos', text:rank + '.' }),
+        el('span', { class:'dot', style:`width:12px;height:12px;border-radius:50%;background:${p.color}` }),
+        el('span', { class:'nm', text:p.name }),
+        el('span', { class:'plus', text:gain && gain[p.name] ? '+' + gain[p.name] : '' }),
+        el('span', { class:'pt', text:p.score + ' p' })
+      ]));
+    });
+  }
+  function openScores(){ renderScores($('ms-list'), game.lastGain); $('m-scores').classList.add('open'); $('ms-close').focus(); }
+  $('ms-close').addEventListener('click', () => $('m-scores').classList.remove('open'));
+
+  function finish(){
+    const r = ranked(), pod = $('podium'); pod.textContent = '';
+    const heights = [150, 110, 80], colors = ['var(--yellow)', '#d9dde3', '#e0a26b'];
+    [1, 0, 2].forEach(i => {
+      const p = r[i]; if(!p) return;
+      pod.appendChild(el('div', null, [
+        el('div', { class:'nm', text:p.name }),
+        el('div', { class:'blk', style:`height:${heights[i]}px;background:${colors[i]}`, text:String(i + 1) }),
+        el('div', { class:'pt', text:p.score + ' pont' })
+      ]));
+    });
+    renderScores($('end-scores'), null);
+    show('s-end');
+  }
+  $('again-btn').addEventListener('click', startGame);
+  $('home-btn').addEventListener('click', () => { game = null; show('s-setup'); });
+
+  document.addEventListener('keydown', e => {
+    if(e.key !== 'Escape') return;
+    if($('m-scores').classList.contains('open')) $('m-scores').classList.remove('open');
+    else if($('m-confirm').classList.contains('open')) closeConfirm(false);
+  });
+
+  /* ---------- kivetítő (közönség) ablak ----------
+     Egy about:blank felugró ablak, amit ez az oldal tölt fel és frissít közvetlenül
+     (ugyanaz a gép, ugyanaz a böngésző — semmilyen hálózat nem kell hozzá).
+     A szó itt csak a kör végén jelenik meg. */
+  const aud = { win:null, d:null, ctx:null, raf:0, key:'' };
+  function audOn(){ return !!(aud.win && !aud.win.closed && aud.d); }
+  const AUD_BODY = `<div class="aud">
+    <header><span class="logo-s">Picasso</span><span class="info" id="a-info"></span><span class="timer" id="a-timer"></span></header>
+    <main>
+      <div class="view" id="a-msg"><div class="msg" id="a-msg-t"></div><div class="sub" id="a-msg-s"></div><ul class="players" id="a-players"></ul></div>
+      <div class="view" id="a-draw"><canvas id="a-canvas" width="${W}" height="${H}"></canvas></div>
+      <div class="view" id="a-reveal"><div class="msg" id="a-rv-t" style="font-size:3rem"></div><div class="reveal-word" id="a-rv-w"></div>
+        <div class="cols"><div><ul class="scores" id="a-rv-s"></ul></div></div></div>
+      <div class="view" id="a-end"><div class="msg" style="font-size:3.2rem">Vége a játéknak! 🏆</div>
+        <div class="cols"><div><div class="podium" id="a-pod"></div></div><div><ul class="scores" id="a-end-s"></ul></div></div></div>
+    </main>
+    <button class="fs secondary" id="a-fs">⛶ Teljes képernyő</button>
+  </div>`;
+  function audOpen(){
+    if(audOn()){ aud.win.focus(); return; }
+    const w = window.open('', 'picasso-kivetito', 'popup=yes,width=1280,height=760');
+    if(!w){ toast('A böngésző letiltotta az új ablakot — engedélyezd a felugró ablakot ennél a fájlnál.'); return; }
+    let d;
+    try{ d = w.document; d.open(); d.write('<!DOCTYPE html><html lang="hu"><head><meta charset="UTF-8"><title>Picasso — kivetítő</title></head><body></body></html>'); d.close(); }
+    catch(e){ toast('A kivetítő ablakot nem sikerült megnyitni.'); try{ w.close(); }catch(x){} return; }
+    const st = d.createElement('style'); st.textContent = document.querySelector('style').textContent; d.head.appendChild(st);
+    d.body.innerHTML = AUD_BODY;
+    aud.win = w; aud.d = d; aud.key = '';
+    aud.ctx = d.getElementById('a-canvas').getContext('2d');
+    d.getElementById('a-fs').addEventListener('click', () => { const r = d.documentElement; if(r.requestFullscreen) r.requestFullscreen().catch(() => {}); });
+    w.addEventListener('resize', audFit);
+    w.addEventListener('pagehide', () => setTimeout(audStatus, 50));
+    audStatus(); audSync(); audCanvas(); setTimeout(audFit, 50);
+  }
+  function audFit(){
+    if(!audOn()) return;
+    const v = aud.d.getElementById('a-draw'), c = aud.d.getElementById('a-canvas');
+    const r = v.getBoundingClientRect(); if(!r.width || !r.height) return;
+    const k = Math.min(r.width / W, r.height / H);
+    c.style.width = Math.floor(W * k) + 'px'; c.style.height = Math.floor(H * k) + 'px';
+  }
+  function audStatus(){
+    const on = audOn();
+    if(!on){ aud.win = null; aud.d = null; aud.ctx = null; }
+    document.body.classList.toggle('has-aud', on);
+    $('projbox').classList.toggle('on', on);
+    $('proj-state').textContent = on ? 'megnyitva ✔' : 'nincs megnyitva';
+    $('proj-btn').textContent = on ? 'Kivetítő ablak előtérbe' : 'Kivetítő ablak megnyitása';
+    if($('s-draw').classList.contains('active')) peekOff();
+  }
+  $('proj-btn').addEventListener('click', audOpen);
+  $('ho-proj').addEventListener('click', audOpen);
+  setInterval(() => { if(aud.win && aud.win.closed) audStatus(); }, 1000);
+  window.addEventListener('pagehide', () => { if(audOn()) aud.win.close(); });
+
+  function audCanvas(){
+    if(!audOn() || aud.raf) return;
+    aud.raf = requestAnimationFrame(() => { aud.raf = 0; if(audOn()) aud.ctx.drawImage(canvas, 0, 0); });
+  }
+  const copyList = (from, to) => { to.textContent = ''; Array.from(from.children).forEach(li => to.appendChild(aud.d.importNode(li, true))); };
+  function audView(id){ ['a-msg','a-draw','a-reveal','a-end'].forEach(v => aud.d.getElementById(v).classList.toggle('on', v === id)); if(id === 'a-draw') audFit(); }
+  function audSync(){
+    if(!audOn()) return;
+    const A = id => aud.d.getElementById(id);
+    const scr = document.querySelector('.screen.active').id;
+    const d = game && game.players && game.players.length ? drawerOf(game.turn) : null;
+    const timeTxt = scr === 's-draw' && game ? $('timer').textContent : '';
+    A('a-timer').textContent = timeTxt;
+    A('a-timer').classList.toggle('low', $('timer').classList.contains('low') && scr === 's-draw');
+    A('a-info').textContent = '';
+    if(game && d && scr !== 's-setup' && scr !== 's-end'){
+      A('a-info').append('✏️ ', Object.assign(aud.d.createElement('b'), { textContent:d.name }), ` rajzol · ${roundLabel()}`);
+    }
+    const msg = (t, sub) => { A('a-msg-t').textContent = t; A('a-msg-s').textContent = sub || ''; A('a-players').textContent = ''; audView('a-msg'); };
+    // csak akkor rajzolunk újra, ha más a nézet (az óra fent külön frissül)
+    const key = [scr, game && game.turn, game && game.paused, game && game.over, game && game.late, settings.players.join('|')].join('/');
+    if(key === aud.key) return;
+    aud.key = key;
+    if(!game || scr === 's-setup'){
+      msg('Picasso', 'rajzolós-kitalálós játék · hamarosan kezdünk!');
+      settings.players.forEach((p, i) => A('a-players').appendChild(aud.d.importNode(el('li', null, [el('span', { class:'dot', style:`background:${PLAYER_COLORS[i % PLAYER_COLORS.length]}` }), p]), true)));
+    } else if(scr === 's-handover'){
+      msg(`${d.name} következik!`, 'Gyere a laptophoz, és válassz szót. 🤫');
+    } else if(scr === 's-choose'){
+      msg(`${d.name} szót választ…`, 'Készüljetek a tippeléssel!');
+    } else if(scr === 's-draw'){
+      if(game.paused) msg('Szünet ⏸', 'Az óra áll.');
+      else if(game.over && !game.late) msg('Lejárt az idő! ⏰', 'Kitalálta valaki az utolsó pillanatban?');
+      else { audView('a-draw'); audCanvas(); }
+    } else if(scr === 's-reveal'){
+      A('a-rv-t').textContent = $('rv-title').textContent;
+      A('a-rv-w').textContent = game.word;
+      copyList($('rv-scores'), A('a-rv-s'));
+      audView('a-reveal');
+    } else if(scr === 's-end'){
+      copyList($('podium'), A('a-pod'));
+      copyList($('end-scores'), A('a-end-s'));
+      audView('a-end');
+    }
+  }
+
+  renderPlayers();
+  clearBoard();
+})();
+</script>
+</body>
+</html>
