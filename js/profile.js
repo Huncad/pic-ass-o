@@ -117,7 +117,7 @@ export async function openProfile(name){
   const A = achievementsOf(st);
   const badges = Object.entries(st.badges || {}).filter(([k, v]) => BADGE_NAMES[k] && v > 0);
   const gallery = Array.isArray(p.gallery) ? p.gallery : [];
-  body.innerHTML = head + `
+  body.innerHTML = head + `<div class="pf-cols"><div class="pf-col">
     <div class="pf-level"><b>Szint ${L.level} · ${esc(levelTitle(L.level))}</b> <span class="pf-sub">${L.xp} XP — a következő szintig ${L.next - L.xp}</span><div class="pf-bar"><i style="width:${L.pct}%"></i></div></div>
     ${pod}
     <div class="pf-stats">
@@ -125,9 +125,11 @@ export async function openProfile(name){
       <div><b>${N(st.drawnHit)}</b><span>kitalált rajz</span></div><div><b>${N(st.guessHit)}</b><span>jó tipp</span></div><div><b>${esc(fmtHours(st.playMs))}</b><span>játékidő</span></div>
     </div>
     ${badges.length ? `<p class="pf-sub" style="margin:8px 0 4px">Kör végi kitüntetések</p><div class="pf-badges">${badges.map(([k, v])=>`<span class="pf-badge">${esc(BADGE_NAMES[k])} ×${N(v)}</span>`).join('')}</div>` : ''}
+    </div><div class="pf-col">
     <p class="pf-sub" style="margin:8px 0 4px">🏆 Trófeák: <b>${A.count}/${A.total}</b> · ${A.points} trófeapont</p>
     <div class="pf-badges">${A.list.filter(a=>a.done).map(a=>`<span class="pf-badge t-${a.tier}" title="${esc(a.desc)} (${TIERS[a.tier].name})">${a.em} ${esc(a.name)}</span>`).join('') || '<span class="pf-sub">Még nincs.</span>'}</div>
     ${gallery.length ? `<p class="pf-sub" style="margin:10px 0 4px">Galéria</p><div class="gallery-grid">${gallery.map(g=>`<figure><img loading="lazy" alt="${esc(g.word || 'rajz')}" src="${API}?img=${encodeURIComponent(p.pid + '.' + g.id)}"><figcaption><span>${esc(g.word || '')}</span><span>${esc(new Date(g.at).toLocaleDateString('hu-HU'))}</span></figcaption></figure>`).join('')}</div>` : ''}
+    </div></div>
     <div style="text-align:center;margin-top:10px">${followBtn} <button type="button" class="ghost small" id="pf-board">🏆 Trófea-ranglista</button></div>`;
   { const tb = $('pf-board'); if(tb) tb.addEventListener('click', ()=>openTrophyBoard()); }
   wireFollow();

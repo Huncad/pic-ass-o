@@ -2,7 +2,7 @@ import { badNameReason, normalize, squash, editDistance, guessVerdict, isPlainOb
 import { Account } from './account.js';
 import { initProfile, openProfile, openTrophyBoard, levelOf, levelTitle, achievementsOf, TIERS } from './profile.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.54';
+const APP_VERSION = '4.55';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different

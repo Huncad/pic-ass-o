@@ -2836,3 +2836,12 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   @media (min-width: 1300px){
     #changelog-list{ grid-template-columns:repeat(3, minmax(0, 1fr)); }
   }
+  /* v4.55: profil két oszlopban nagy képernyőn (balra szint és statisztika, jobbra trófeák és galéria) */
+  @media (min-width: 900px){
+    #profile-overlay .admin-box{ max-width:min(1180px, 95vw); }
+    .pf-cols{ display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.25fr); gap:28px; align-items:start; }
+    .pf-cols > .pf-col + .pf-col{ border-left:1px solid rgba(var(--line-rgb),.08); padding-left:28px; }
+    .pf-cols .pf-stats{ grid-template-columns:repeat(3, minmax(0, 1fr)) !important; }
+    .pf-cols .pf-col:last-child > p:first-child{ margin-top:0 !important; }
+    .pf-cols .gallery-grid{ grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); }
+  }
