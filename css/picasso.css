@@ -2849,3 +2849,14 @@ body.practice #chat-toggle-btn, body.practice #reaction-toggle-btn, body.practic
   @media (min-width: 900px){
     .pf-cols > .pf-col:first-child{ position:sticky; top:var(--pf-stick, 64px); }
   }
+  /* v4.57: Statisztikáim — a többi ablakhoz illő fejléc, hosszú szavak nem törnek ketté */
+  #stats-overlay .admin-panel-header{ padding-bottom:12px; margin-bottom:14px; border-bottom:1px solid rgba(var(--line-rgb),.08); }
+  #stats-overlay .stats-box{ border-radius:20px; }
+  #stats-overlay .stat-val{ overflow-wrap:normal; word-break:normal; hyphens:manual; font-size:clamp(.95rem, 1.6vw, 1.45rem); max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #stats-overlay #stats-close-btn{ white-space:nowrap; flex-shrink:0; }
+  @media (max-width: 600px){
+    #stats-overlay .stat-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)) !important; gap:8px; }
+    #stats-overlay .stat-card{ padding:10px 8px; }
+    #stats-overlay .stat-val{ font-size:1.1rem; }
+    #stats-overlay .stat-sub{ font-size:.7rem; }
+  }

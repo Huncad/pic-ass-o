@@ -2,6 +2,9 @@
 // Minden új verzió ide kerül, ÉS a js/picasso.js APP_VERSION értéke is átírandó
 // (a tesztek ellenőrzik, hogy a kettő egyezik).
 export const CHANGELOG = [
+  { version:'4.57', changes:[
+    'A Statisztikáim ablak illeszkedik a többihez: elválasztott, görgetéskor is látszó fejléc. Laptopon már nem kicsinyíti olvashatatlanra a szöveget (ha nem fér ki, görgethető), és üres statisztikánál nem nyúlik a képernyő teljes szélességére.'
+  ]},
   { version:'4.56', changes:[
     'A profil ablakban nagy képernyőn görgetéskor a bal oszlop (szint, statisztika, kitüntetések) a helyén marad, így a trófeák és a galéria böngészése közben is látszik.'
   ]},

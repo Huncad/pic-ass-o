@@ -2,7 +2,7 @@ import { badNameReason, normalize, squash, editDistance, guessVerdict, isPlainOb
 import { Account } from './account.js';
 import { initProfile, openProfile, openTrophyBoard, levelOf, levelTitle, achievementsOf, TIERS } from './profile.js';
 // v4.30: the game's version (the release notes in js/changelog.js must start with it)
-const APP_VERSION = '4.56';
+const APP_VERSION = '4.57';
 // Pinned to an exact version on purpose: Trystero picks its signalling relays
 // from a list that changes between releases, so an unpinned import can leave
 // two devices (e.g. a phone with a cached older copy and a PC) using different
@@ -11796,10 +11796,12 @@ try{
     let z = Math.min(1.25, parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-z')) || 1);
     for(let k = 0; k < 4; k++){
       box.style.zoom = z.toFixed(3);
-      box.style.width = Math.floor(Math.min(1400, (W - 60) / z)) + 'px';
+      // v4.57: üres statisztikánál keskeny ablak; telefonnál kisebbre nem kicsinyítünk (inkább görgethető)
+      const empty = !document.querySelector('#stats-body .stat-grid');
+      box.style.width = Math.floor(Math.min(empty ? 720 : 1400, (W - 60) / z)) + 'px';
       const h = box.getBoundingClientRect().height;
       if(h <= H - 40) break;
-      z = Math.max(0.6, z * (H - 40) / h);
+      z = Math.max(0.9, z * (H - 40) / h);
     }
   }
   window.addEventListener('resize', ()=>{ if(!document.getElementById('stats-overlay').classList.contains('hidden')) fitStatsBox(); });
